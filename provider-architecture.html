@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Pool Architecture</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 40px;
+        }
+        h3 {
+            color: #666;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        .architecture-box {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        .current {
+            border-color: #ff6b6b;
+        }
+        .proposed {
+            border-color: #51cf66;
+        }
+        .benefits {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .benefit-card {
+            background: #f0f8ff;
+            border: 1px solid #007acc;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .benefit-card h4 {
+            color: #007acc;
+            margin-top: 0;
+        }
+        .metrics {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            padding: 20px;
+            background: #e8f4f8;
+            border-radius: 8px;
+        }
+        .metric {
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #007acc;
+        }
+        .metric-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Provider Pool Architecture Design</h1>
+        
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-value">100</div>
+                <div class="metric-label">Current Windows</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">→</div>
+                <div class="metric-label"></div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">5-10</div>
+                <div class="metric-label">Proposed Windows</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">90%</div>
+                <div class="metric-label">Resource Reduction</div>
+            </div>
+        </div>
+
+        <h2>Architecture Comparison</h2>
+        
+        <div class="comparison">
+            <div class="architecture-box current">
+                <h3>❌ Current: One Window Per Provider</h3>
+                <ul>
+                    <li>Each datasource gets its own window</li>
+                    <li>100 datasources = 100 windows</li>
+                    <li>No connection sharing</li>
+                    <li>High resource usage</li>
+                    <li>OS window handle limits</li>
+                </ul>
+                <div class="warning">
+                    <strong>Problem:</strong> With 100 providers, this architecture consumes ~5-10GB RAM and may hit OS limits.
+                </div>
+            </div>
+            
+            <div class="architecture-box proposed">
+                <h3>✅ Proposed: Provider Pool</h3>
+                <ul>
+                    <li>5-10 worker windows total</li>
+                    <li>Each worker handles 10-20 providers</li>
+                    <li>Connection sharing and multiplexing</li>
+                    <li>Load balancing across workers</li>
+                    <li>Centralized management</li>
+                </ul>
+                <div class="success">
+                    <strong>Solution:</strong> Efficient resource usage with better scalability and management.
+                </div>
+            </div>
+        </div>
+
+        <h2>Current Architecture Diagram</h2>
+        <div class="mermaid">
+            <pre class="mermaid">
+graph TB
+    subgraph "100 Separate Provider Windows"
+        DT1[DataTable 1] -->|Channel 1| PW1[Provider Window 1]
+        DT2[DataTable 2] -->|Channel 2| PW2[Provider Window 2]
+        DT3[DataTable 3] -->|Channel 3| PW3[Provider Window 3]
+        DT100[DataTable 100] -->|Channel 100| PW100[Provider Window 100]
+        
+        PW1 -->|WebSocket| S1[STOMP Server A]
+        PW2 -->|WebSocket| S1
+        PW3 -->|WebSocket| S2[STOMP Server B]
+        PW100 -->|WebSocket| S2
+    end
+    
+    style PW1 fill:#ff9999
+    style PW2 fill:#ff9999
+    style PW3 fill:#ff9999
+    style PW100 fill:#ff9999
+            </pre>
+        </div>
+
+        <h2>Proposed Provider Pool Architecture</h2>
+        <div class="mermaid">
+            <pre class="mermaid">
+graph TB
+    subgraph "Provider Pool System"
+        subgraph "Single Manager Window"
+            PM[Provider Manager]
+            PM --> LB[Load Balancer]
+            PM --> RT[Routing Table]
+        end
+        
+        subgraph "Worker Pool"
+            W1[Worker 1<br/>20 providers]
+            W2[Worker 2<br/>20 providers]
+            W3[Worker 3<br/>20 providers]
+            W4[Worker 4<br/>20 providers]
+            W5[Worker 5<br/>20 providers]
+        end
+        
+        subgraph "Shared Connections"
+            SC1[Shared STOMP<br/>Server A]
+            SC2[Shared STOMP<br/>Server B]
+        end
+        
+        DT1[DataTable 1] -->|provider-1| PM
+        DT2[DataTable 2] -->|provider-2| PM
+        DT100[DataTable 100] -->|provider-100| PM
+        
+        LB --> W1
+        LB --> W2
+        LB --> W3
+        LB --> W4
+        LB --> W5
+        
+        W1 --> SC1
+        W2 --> SC1
+        W3 --> SC2
+        W4 --> SC2
+        W5 --> SC1
+        
+        SC1 -->|Multiplexed| S1[STOMP Server A]
+        SC2 -->|Multiplexed| S2[STOMP Server B]
+    end
+    
+    style PM fill:#99ff99
+    style W1 fill:#99ccff
+    style W2 fill:#99ccff
+    style W3 fill:#99ccff
+    style W4 fill:#99ccff
+    style W5 fill:#99ccff
+            </pre>
+        </div>
+
+        <h2>Key Benefits</h2>
+        <div class="benefits">
+            <div class="benefit-card">
+                <h4>🚀 Performance</h4>
+                <p>90% reduction in memory usage. Shared connections reduce network overhead.</p>
+            </div>
+            <div class="benefit-card">
+                <h4>📊 Scalability</h4>
+                <p>Easily handle 1000+ datasources by adding workers to the pool.</p>
+            </div>
+            <div class="benefit-card">
+                <h4>🔧 Management</h4>
+                <p>Centralized monitoring, health checks, and configuration.</p>
+            </div>
+            <div class="benefit-card">
+                <h4>🛡️ Reliability</h4>
+                <p>Automatic failover, circuit breakers, and load balancing.</p>
+            </div>
+            <div class="benefit-card">
+                <h4>🔌 Connection Efficiency</h4>
+                <p>Multiple datasources share WebSocket connections to same servers.</p>
+            </div>
+            <div class="benefit-card">
+                <h4>💰 Cost Effective</h4>
+                <p>Lower resource usage means reduced infrastructure costs.</p>
+            </div>
+        </div>
+
+        <h2>Message Flow Sequence</h2>
+        <div class="mermaid">
+            <pre class="mermaid">
+sequenceDiagram
+    participant DT as DataTable
+    participant PM as Provider Manager
+    participant W as Worker
+    participant P as Provider Instance
+    participant S as STOMP Server
+    
+    DT->>PM: Connect to datasource-123
+    PM->>PM: Check routing table
+    PM->>W: Route to Worker 3
+    W->>P: Get/Create provider-123
+    P->>S: Reuse connection or connect
+    S->>P: Data stream
+    P->>W: Process data
+    W->>PM: Publish updates
+    PM->>DT: Deliver to subscribers
+            </pre>
+        </div>
+
+        <h2>Implementation Example</h2>
+        <pre><code>// Provider Pool Configuration
+const poolConfig = {
+  pool: {
+    minWorkers: 2,
+    maxWorkers: 10,
+    providersPerWorker: 20,
+    workerIdleTimeout: 300000
+  },
+  connectionSharing: {
+    enabled: true,
+    maxConnectionsPerServer: 5,
+    reuseConnections: true
+  },
+  loadBalancing: {
+    strategy: 'least-loaded',
+    rebalanceInterval: 60000
+  }
+};
+
+// Worker Assignment Logic
+class ProviderPoolManager {
+  assignProvider(providerId: string, config: any) {
+    const worker = this.loadBalancer.getBestWorker();
+    worker.createProvider(providerId, config);
+    this.routingTable.set(providerId, worker.id);
+  }
+  
+  routeMessage(providerId: string, message: any) {
+    const workerId = this.routingTable.get(providerId);
+    const worker = this.workers.get(workerId);
+    worker.sendMessage(providerId, message);
+  }
+}</code></pre>
+
+        <h2>Migration Path</h2>
+        <ol>
+            <li><strong>Phase 1:</strong> Implement Provider Pool Manager alongside existing architecture</li>
+            <li><strong>Phase 2:</strong> Migrate datasources in batches to pool architecture</li>
+            <li><strong>Phase 3:</strong> Monitor performance and optimize pool sizing</li>
+            <li><strong>Phase 4:</strong> Deprecate old one-window-per-provider system</li>
+        </ol>
+
+        <div class="success">
+            <h3>Expected Outcomes</h3>
+            <ul>
+                <li>Memory usage: 5-10GB → 500MB-1GB</li>
+                <li>Window count: 100 → 5-10</li>
+                <li>WebSocket connections: 100 → 10-20</li>
+                <li>Startup time: 30s → 5s</li>
+                <li>Management overhead: High → Low</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#007acc',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#005a9e',
+                lineColor: '#333',
+                secondaryColor: '#f0f8ff',
+                tertiaryColor: '#e8f4f8'
+            }
+        });
+    </script>
+</body>
+</html>

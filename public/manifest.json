@@ -1,0 +1,40 @@
+{
+  "devtools_port": 9090,
+  "licenseKey": "openfin-demo-license-key",
+  "runtime": {
+    "version": "41.134.102.4"
+  },
+  "platform": {
+    "uuid": "agv3-workspace-platform",
+    "name": "AGV3 Workspace Platform",
+    "description": "AGV3 Grid Visualization Platform",
+    "icon": "http://localhost:5174/icon.png",
+    "autoShow": false,
+    "providerUrl": "http://localhost:5174/provider.html",
+    "preventQuitOnLastWindowClosed": true,
+    "defaultWindowOptions": {
+      "permissions": {
+        "System": {
+          "launchExternalProcess": true,
+          "readRegistryValue": true,
+          "openUrlWithBrowser": {
+            "enabled": true,
+            "protocols": ["http", "https", "mailto"]
+          }
+        }
+      }
+    }
+  },
+  "snapshot": {
+    "windows": []
+  },
+  "customSettings": {
+    "appId": "agv3-workspace"
+  },
+  "supportInformation": {
+    "email": "support@agv3.local",
+    "company": "AGV3 Team",
+    "product": "AGV3 Workspace Platform",
+    "version": "1.0.0"
+  }
+}

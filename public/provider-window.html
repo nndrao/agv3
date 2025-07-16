@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Provider Window</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #1e1e1e;
+      color: #ffffff;
+    }
+    #status {
+      padding: 10px;
+      background-color: #2d2d2d;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    #logs {
+      padding: 10px;
+      background-color: #2d2d2d;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Data Provider</h2>
+  <div id="status">Initializing...</div>
+  <div id="logs"></div>
+  
+  <script>
+    // Capture console logs to display in the UI
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      const logsDiv = document.getElementById('logs');
+      if (logsDiv) {
+        // Limit the display of very long strings
+        const displayArgs = args.map(arg => {
+          if (typeof arg === 'string' && arg.length > 500) {
+            return arg.substring(0, 500) + '... [truncated]';
+          }
+          return arg;
+        });
+        logsDiv.innerHTML += displayArgs.join(' ') + '\n';
+        logsDiv.scrollTop = logsDiv.scrollHeight;
+      }
+    };
+    
+    console.error = function(...args) {
+      originalError.apply(console, args);
+      const logsDiv = document.getElementById('logs');
+      if (logsDiv) {
+        logsDiv.innerHTML += '[ERROR] ' + args.join(' ') + '\n';
+        logsDiv.scrollTop = logsDiv.scrollHeight;
+      }
+    };
+  </script>
+  <script type="module" src="/src/windows/provider/main.ts"></script>
+</body>
+</html>
