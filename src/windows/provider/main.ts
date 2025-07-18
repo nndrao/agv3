@@ -1,7 +1,6 @@
 import { StompDatasourceProviderSimplified } from '../../providers/StompDatasourceProviderSimplified';
 import { ChannelPublisher } from '../../services/channels/channelPublisher';
 import { StorageClient } from '../../services/storage/storageClient';
-import { ConflatedDataStore } from '../../services/datasource/ConflatedDataStore';
 
 class HeadlessProvider {
   private provider!: StompDatasourceProviderSimplified;
@@ -11,7 +10,6 @@ class HeadlessProvider {
   private snapshot: any[] = [];
   private statistics: any = {};
   private startTime: number = Date.now();
-  private conflatedStore: ConflatedDataStore<any> | null = null;
   
   async initialize() {
     console.log('🚀 Initializing headless provider...');
@@ -144,22 +142,16 @@ class HeadlessProvider {
       } else {
         console.log(`🔄 Real-time update: ${data.length} rows`);
         
-        // Feed updates through the conflated store
-        if (this.conflatedStore) {
-          data.forEach((update: any) => {
-            this.conflatedStore!.addUpdate({
-              data: update,
-              operation: 'update',
-              timestamp: Date.now()
-            });
-          });
-        } else {
-          // If no conflated store, publish directly
+        // Just publish the data directly - conflation is now handled in the provider
+        try {
           await this.publisher.publish('data', {
             data,
             isSnapshot: false,
             timestamp: Date.now()
           });
+          console.log(`✅ Published real-time data to channel`);
+        } catch (error) {
+          console.error('❌ Failed to publish real-time data:', error);
         }
       }
     });
@@ -169,77 +161,17 @@ class HeadlessProvider {
       console.log('✅ Provider emitted snapshot-complete:', stats);
       await this.publisher.publish('snapshot-complete', stats);
       
-      // Initialize ConflatedDataStore with snapshot data
-      if (this.conflatedStore && this.snapshot.length > 0) {
-        this.conflatedStore.setSnapshot(this.snapshot);
-        console.log('✅ ConflatedDataStore initialized with snapshot data');
-      }
+      // No longer need ConflatedDataStore - conflation handled in provider
     });
   }
   
   private async startDataCollection() {
     console.log('📊 Starting data collection...');
     
-    // Don't fetch snapshot here - wait for getSnapshot request
-    // Just initialize the ConflatedDataStore
+    // ConflatedDataStore is now initialized in the start() method
+    // This method is kept for compatibility but doesn't do much anymore
     
-    try {
-      // Initialize ConflatedDataStore if we have a keyColumn
-      if (this.config.keyColumn) {
-        console.log('🔧 Initializing ConflatedDataStore with keyColumn:', this.config.keyColumn);
-        this.conflatedStore = new ConflatedDataStore(this.config.keyColumn, {
-          windowMs: 100, // Batch updates for 100ms
-          maxBatchSize: 1000,
-          enableMetrics: true
-        });
-        
-        // Listen for conflated updates
-        this.conflatedStore.on('updates', async (updates: any[]) => {
-          console.log(`📦 Publishing ${updates.length} conflated real-time updates`);
-          
-          // Update local snapshot
-          updates.forEach(update => {
-            const key = update.data[this.config.keyColumn];
-            if (key) {
-              const index = this.snapshot.findIndex(
-                (row: any) => row[this.config.keyColumn] === key
-              );
-              if (index >= 0) {
-                this.snapshot[index] = update.data;
-              } else if (update.operation === 'add') {
-                this.snapshot.push(update.data);
-              }
-            }
-          });
-          
-          // Publish real-time updates with 'realtime-update' event
-          await this.publisher.publish('realtime-update', {
-            updates: updates.map(u => u.data),
-            timestamp: new Date().toISOString()
-          });
-          
-          // Update statistics
-          this.updateStatistics(updates.length);
-        });
-        
-        // Listen for metrics updates
-        this.conflatedStore.on('metrics', (metrics: any) => {
-          console.log('📊 Conflation metrics:', {
-            totalReceived: metrics.totalUpdatesReceived,
-            applied: metrics.updatesApplied,
-            conflated: metrics.updatesConflated,
-            conflationRate: metrics.conflationRate + '%'
-          });
-        });
-      } else {
-        console.warn('⚠️ No keyColumn configured, ConflatedDataStore disabled');
-      }
-      
-      console.log('✅ Provider ready to receive snapshot request');
-    } catch (error) {
-      console.error('Error in startDataCollection:', error);
-      throw error;
-    }
+    console.log('✅ Provider ready to receive snapshot request');
   }
   
   // Removed - now using provider.subscribeToRealtimeUpdates() instead
@@ -392,16 +324,15 @@ class HeadlessProvider {
         this.provider = new StompDatasourceProviderSimplified();
         this.provider.initialize(normalizedConfig);
         
-        // Setup event handlers BEFORE connecting and starting data collection
+        // Setup event handlers BEFORE connecting
         this.setupEventHandlers();
         
         console.log('Provider created, starting...');
         try {
           await this.provider.start();
-          console.log('Started! Starting data collection...');
+          console.log('Started! Provider ready');
           
-          // Start listening for data
-          await this.startDataCollection();
+          // No need to call startDataCollection anymore
         } catch (connectError) {
           console.error('Failed to connect to STOMP server:', connectError);
           console.error('Config:', this.config);
@@ -433,7 +364,7 @@ class HeadlessProvider {
         this.setupEventHandlers();
         
         await this.provider.start();
-        await this.startDataCollection();
+        console.log('Started! Provider ready');
       }
       
       await this.updateStatus('running');
@@ -447,12 +378,6 @@ class HeadlessProvider {
   
   private async stop() {
     console.log('⏹️ Stopping provider...');
-    
-    // Clean up ConflatedDataStore
-    if (this.conflatedStore) {
-      this.conflatedStore.destroy();
-      this.conflatedStore = null;
-    }
     
     if (this.provider) {
       await this.provider.stop();

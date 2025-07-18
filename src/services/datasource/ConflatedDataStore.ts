@@ -57,6 +57,7 @@ export class ConflatedDataStore<T extends Record<string, any>> extends EventEmit
    * Add an update to the queue for conflation
    */
   addUpdate(update: DataUpdate<T>): void {
+    console.log(`ConflatedDataStore: Received ${update.operation} update for key: ${update.data[this.keyColumn]}`);
     this.updateQueue.push(update);
     this.metrics.totalUpdatesReceived++;
     this.metrics.lastUpdateTimestamp = Date.now();
@@ -67,6 +68,7 @@ export class ConflatedDataStore<T extends Record<string, any>> extends EventEmit
     }
     
     this.conflationTimer = setTimeout(() => {
+      console.log(`[ConflatedDataStore] Timer fired, processing updates...`);
       this.processUpdateQueue();
     }, this.config.windowMs);
   }
@@ -75,6 +77,7 @@ export class ConflatedDataStore<T extends Record<string, any>> extends EventEmit
    * Process the update queue, conflating updates for the same key
    */
   private processUpdateQueue(): void {
+    console.log(`[ConflatedDataStore] Processing update queue with ${this.updateQueue.length} updates, snapshot size: ${this.snapshot.size}`);
     if (this.updateQueue.length === 0) return;
     
     const startTime = Date.now();

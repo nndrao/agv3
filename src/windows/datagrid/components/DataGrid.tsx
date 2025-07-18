@@ -139,6 +139,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
   const [isFirstBatch, setIsFirstBatch] = useState(true);
   const [isGridReady, setIsGridReady] = useState(false);
   const [snapshotMode, setSnapshotMode] = useState<'idle' | 'receiving' | 'complete'>('idle');
+  const snapshotModeRef = useRef<'idle' | 'receiving' | 'complete'>('idle');
   const [gridRowData, setGridRowData] = useState<any[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const pendingDataRef = useRef<{ data: any[], metadata: DataMetadata }[]>([]);
@@ -207,6 +208,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       pendingDataRef.current = [];
       snapshotDataRef.current = [];
       setSnapshotMode('idle');
+      snapshotModeRef.current = 'idle';
       setGridRowData([]);
       
       loadColumnDefinitions(internalSelectedProvider);
@@ -286,7 +288,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
             pinned: col.pinned || null,
             width: col.width || undefined,
             minWidth: col.minWidth || 100,
-            enableCellChangeFlash: true,
+            enableCellChangeFlash: true,  // Enable for each column
             cellDataType: col.cellDataType || undefined,
             valueFormatter: col.cellDataType === 'number' && col.precision !== undefined
               ? (params: any) => {
@@ -442,17 +444,57 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
         console.log('DataGrid received data:', { 
           dataLength: data.length, 
           metadata,
-          firstItem: data[0] 
+          firstItem: data[0],
+          snapshotMode: snapshotModeRef.current,
+          isSnapshot: metadata.isSnapshot,
+          hasGridApi: !!gridRef.current?.api
         });
 
-        setGridRowData(prev => [...prev, ...data]);
-        //handleDataUpdate(data, metadata);
+        // During snapshot, accumulate data
+        if (snapshotModeRef.current !== 'complete') {
+          console.log('Appending data during snapshot phase');
+          // Append data during snapshot
+          setGridRowData(prev => [...prev, ...data]);
+        } else {
+          console.log('Applying real-time update via transaction');
+          // After snapshot complete, use transaction API for real-time updates
+          if (gridRef.current?.api) {
+            const transaction = {
+              update: data  // AG-Grid will match by rowId and update existing rows
+            };
+            
+            const result = gridRef.current.api.applyTransaction(transaction);
+            console.log('Transaction applied:', {
+              updated: result?.update?.length || 0,
+              added: result?.add?.length || 0,
+              dataLength: data.length
+            });
+          } else {
+            console.warn('Cannot apply transaction - grid API not ready or snapshot not complete');
+          }
+        }
       });
       
       client.onSnapshotComplete((stats) => {
         console.log('Snapshot complete:', stats);
+        console.log('Enabling real-time updates with transactions');
+        console.log('Total rows in grid:', gridRowData.length);
         setSnapshotMode('complete');
+        snapshotModeRef.current = 'complete';
         setIsFirstBatch(true);
+        
+        // Flash the grid to show snapshot is complete
+        if (gridRef.current?.api) {
+          // Small delay to ensure grid has processed all data
+          setTimeout(() => {
+            gridRef.current?.api?.flashCells();
+            console.log('Grid ready for real-time updates');
+            console.log('Current grid row count:', gridRef.current?.api?.getDisplayedRowCount());
+            
+            // Log that we're now waiting for real-time updates
+            console.log('Waiting for real-time updates via transaction API...');
+          }, 100);
+        }
       });
       
       client.onError((error) => {
@@ -602,7 +644,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
           columnDefs={columnDefs.length > 0 ? columnDefs : loadedColumnDefs}
           defaultColDef={defaultColDefMemo}
           onGridReady={handleGridReady}
-           enableCellChangeFlash={snapshotMode === 'receiving' ? false : enableCellChangeFlash}
+           enableCellChangeFlash={snapshotMode === 'complete'}
           rowSelection={rowSelectionOptions}
           animateRows={snapshotMode === 'receiving' ? false : animateRows}
           suppressRowHoverHighlight={suppressRowHoverHighlight}

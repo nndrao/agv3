@@ -25,7 +25,8 @@
       "Bash(npx tsc:*)",
       "Bash(cat:*)",
       "Bash(tsc --version)",
-      "Bash(tsc --noEmit)"
+      "Bash(tsc --noEmit)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

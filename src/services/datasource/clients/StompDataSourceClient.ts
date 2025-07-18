@@ -140,6 +140,11 @@ export class StompDataSourceClient extends BaseDataSourceClient {
     
     // Handle data events
     this.channel.on('data', (event: any) => {
+      console.log('StompDataSourceClient received data event:', {
+        isSnapshot: event.isSnapshot,
+        dataLength: event.data?.length,
+        timestamp: event.timestamp
+      });
       this.handleDataEvent(event);
     });
     
@@ -169,10 +174,18 @@ export class StompDataSourceClient extends BaseDataSourceClient {
     
     const data = Array.isArray(event.data) ? event.data : [event.data];
     
+    console.log('StompDataSourceClient.handleDataEvent:', {
+      mode: this._mode,
+      isSnapshot: event.isSnapshot,
+      dataLength: data.length,
+      timestamp: event.timestamp
+    });
+    
     // Check if this is snapshot data
     if (this._mode === 'snapshot' || event.isSnapshot) {
       this.handleSnapshotData(data, event);
     } else {
+      console.log('Handling as real-time data');
       this.handleRealtimeData(data, event);
     }
   }

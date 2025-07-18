@@ -48,6 +48,8 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   // Statistics
   private snapshotStartTime: number = 0;
   private snapshotRowCount: number = 0;
+  
+  // Removed conflation - emit real-time updates immediately
   private sequenceNumber: number = 0;
   
   // Refresh handling
@@ -193,6 +195,11 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
       const messageBody = message.body;
       const byteSize = new Blob([messageBody]).size;
       
+      // Log every message in realtime mode
+      if (this._mode === 'realtime') {
+        console.log(`📨 STOMP message in realtime mode: ${messageBody.substring(0, 100)}...`);
+      }
+      
       // Check for end token
       if (this.isEndToken(messageBody)) {
         this.handleSnapshotComplete();
@@ -207,7 +214,10 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
       if (this._mode === 'snapshot') {
         this.handleSnapshotData(data);
       } else if (this._mode === 'realtime') {
+        console.log(`🔄 Processing real-time STOMP data: ${data.length} items`);
         this.handleRealtimeData(data);
+      } else {
+        console.warn(`⚠️ Received data in unexpected mode: ${this._mode}`);
       }
       
     } catch (error) {
@@ -233,7 +243,7 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   
   private handleSnapshotData(data: any[]): void {
     // Update cache
-    const keyColumn = this.config?.keyColumn || 'id';
+    const keyColumn = this.stompConfig?.keyColumn || this.config?.keyColumn || 'id';
     data.forEach(row => {
       const key = row[keyColumn];
       if (key !== undefined) {
@@ -255,8 +265,8 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   }
   
   private handleRealtimeData(data: any[]): void {
-    // Update cache with realtime updates
-    const keyColumn = this.config?.keyColumn || 'id';
+    // Update cache
+    const keyColumn = this.stompConfig?.keyColumn || this.config?.keyColumn || 'id';
     data.forEach(row => {
       const key = row[keyColumn];
       if (key !== undefined) {
@@ -264,7 +274,8 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
       }
     });
     
-    // Emit immediately for realtime
+    // Emit immediately without conflation
+    console.log(`🔄 Emitting ${data.length} real-time updates immediately`);
     this.emit('data', {
       data,
       isSnapshot: false,
@@ -272,6 +283,7 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
       timestamp: Date.now()
     });
   }
+  
   
   private handleSnapshotComplete(): void {
     // Flush any remaining batched data
@@ -289,6 +301,8 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
     // Switch to realtime mode
     this._mode = 'realtime';
     console.log(`✅ Snapshot complete: ${this.snapshotRowCount} rows in ${duration}ms`);
+    console.log(`📊 Mode switched to: ${this._mode}`);
+    console.log(`🔄 Ready to receive real-time updates`);
   }
   
   private flushBatch(): void {
