@@ -24,7 +24,8 @@
       "Bash(npx shadcn@latest add:*)",
       "Bash(npx tsc:*)",
       "Bash(cat:*)",
-      "Bash(tsc --version)"
+      "Bash(tsc --version)",
+      "Bash(tsc --noEmit)"
     ],
     "deny": []
   }

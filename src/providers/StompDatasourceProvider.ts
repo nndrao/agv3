@@ -48,7 +48,7 @@ interface StompProviderConfig {
   id: string;
   name: string;
   httpUrl?: string;
-  webSocketUrl?: string;
+  websocketUrl?: string;
   topic: string;
   username?: string;
   password?: string;

@@ -1,11 +1,10 @@
-import { StompDatasourceProvider } from '../../providers/StompDatasourceProvider';
+import { StompDatasourceProviderSimplified } from '../../providers/StompDatasourceProviderSimplified';
 import { ChannelPublisher } from '../../services/channels/channelPublisher';
 import { StorageClient } from '../../services/storage/storageClient';
 import { ConflatedDataStore } from '../../services/datasource/ConflatedDataStore';
-import { IMessage } from '@stomp/stompjs';
 
 class HeadlessProvider {
-  private provider!: StompDatasourceProvider;
+  private provider!: StompDatasourceProviderSimplified;
   private publisher!: ChannelPublisher;
   private config: any;
   private providerId!: string;
@@ -107,65 +106,74 @@ class HeadlessProvider {
   private setupEventHandlers() {
     if (!this.provider) return;
     
-    // Handle connection events
-    this.provider.on('connected', () => {
-      console.log('✅ Provider connected');
-      this.publisher.publish('status', {
-        type: 'connected',
-        timestamp: new Date().toISOString()
-      });
-    });
-    
-    this.provider.on('disconnected', () => {
-      console.log('🔌 Provider disconnected');
-      this.publisher.publish('status', {
-        type: 'disconnected',
-        timestamp: new Date().toISOString()
-      });
-    });
-    
-    // Handle snapshot lifecycle events
-    this.provider.on('REQUESTING_SNAPSHOT_DATA', async () => {
-      console.log('📋 Provider emitted REQUESTING_SNAPSHOT_DATA');
-      await this.publisher.publish('REQUESTING_SNAPSHOT_DATA', {});
-    });
-    
-    this.provider.on('SNAPSHOT_COMPLETE', async (data: any) => {
-      console.log('✅ Provider emitted SNAPSHOT_COMPLETE:', data);
-      await this.publisher.publish('SNAPSHOT_COMPLETE', data);
-    });
-    
-    // Handle real-time updates - these come after snapshot completes
-    this.provider.on('realtime-update', async (updates: any[]) => {
-      console.log(`🔄 Real-time update from provider: ${updates.length} rows`);
+    // Handle status events (connected/disconnected)
+    this.provider.on('status', async (status: any) => {
+      console.log('📊 Provider status:', status);
       
-      // Feed updates through the conflated store
-      if (this.conflatedStore) {
-        updates.forEach(update => {
-          this.conflatedStore!.addUpdate({
-            data: update,
-            operation: 'update',
-            timestamp: Date.now()
-          });
+      if (status.connected !== undefined) {
+        await this.publisher.publish('status', {
+          type: status.connected ? 'connected' : 'disconnected',
+          connected: status.connected,
+          error: status.error,
+          timestamp: new Date().toISOString()
         });
-      } else {
-        console.error('ConflatedStore not initialized, dropping updates');
       }
     });
     
-    // Handle snapshot batch updates
-    this.provider.on('update', async (updates: any[]) => {
-      console.log(`📦 Snapshot batch update from provider: ${updates.length} rows`);
-      // Snapshot updates are handled differently - they're sent directly during fetchSnapshot
+    // Handle data events (both snapshot and real-time)
+    this.provider.on('data', async (event: any) => {
+      const { data, isSnapshot, clearData } = event;
+      
+      if (clearData) {
+        console.log('🧹 Clear data signal received');
+        this.snapshot = [];
+        return;
+      }
+      
+      if (isSnapshot) {
+        console.log(`📦 Snapshot batch: ${data.length} rows`);
+        // During snapshot, accumulate data
+        this.snapshot.push(...data);
+        
+        // Publish snapshot data
+        await this.publisher.publish('data', {
+          data,
+          isSnapshot: true,
+          timestamp: Date.now()
+        });
+      } else {
+        console.log(`🔄 Real-time update: ${data.length} rows`);
+        
+        // Feed updates through the conflated store
+        if (this.conflatedStore) {
+          data.forEach((update: any) => {
+            this.conflatedStore!.addUpdate({
+              data: update,
+              operation: 'update',
+              timestamp: Date.now()
+            });
+          });
+        } else {
+          // If no conflated store, publish directly
+          await this.publisher.publish('data', {
+            data,
+            isSnapshot: false,
+            timestamp: Date.now()
+          });
+        }
+      }
     });
     
-    // Handle errors
-    this.provider.on('error', async (error: Error) => {
-      console.error('❌ Provider error:', error);
-      await this.publisher.publish('error', {
-        message: error.message,
-        timestamp: new Date().toISOString()
-      });
+    // Handle snapshot complete
+    this.provider.on('snapshot-complete', async (stats: any) => {
+      console.log('✅ Provider emitted snapshot-complete:', stats);
+      await this.publisher.publish('snapshot-complete', stats);
+      
+      // Initialize ConflatedDataStore with snapshot data
+      if (this.conflatedStore && this.snapshot.length > 0) {
+        this.conflatedStore.setSnapshot(this.snapshot);
+        console.log('✅ ConflatedDataStore initialized with snapshot data');
+      }
     });
   }
   
@@ -274,60 +282,29 @@ class HeadlessProvider {
     });
     
     // Handle snapshot requests - triggers a fresh snapshot fetch
-    this.publisher.registerHandler('getSnapshot', async () => {
-      console.log('📸 Snapshot requested from DataTable');
+    this.publisher.registerHandler('getSnapshot', async (request: any) => {
+      console.log('📸 Snapshot requested from DataTable:', request);
       
-      // If provider is initialized and connected, fetch a fresh snapshot
-      if (this.provider && this.provider.getIsConnected()) {
-        console.log('Provider connected, fetching snapshot...');
+      // Check if provider is initialized
+      if (this.provider) {
+        console.log('Provider exists, requesting snapshot...');
         
         try {
           // Clear existing snapshot data
           this.snapshot = [];
-          let previousLength = 0;
           
-          // Fetch new snapshot
-          const snapshotResult = await this.provider.fetchSnapshot(10000, async (batch, totalRows) => {
-            console.log(`📦 Snapshot batch received: ${batch.length} rows, total so far: ${totalRows}`);
-            
-            // Store the entire accumulated data
-            this.snapshot = batch;
-            
-            // Send only the new items in this batch
-            const newItems = batch.slice(previousLength);
-            previousLength = batch.length;
-            
-            if (newItems.length > 0) {
-              console.log(`📤 Publishing ${newItems.length} new items as update event`);
-              // Publish update event for snapshot data
-              await this.publisher.publish('update', {
-                updates: newItems,
-                timestamp: new Date().toISOString()
-              });
-            }
-          });
+          // Request snapshot from simplified provider
+          await this.provider.requestSnapshot();
           
-          console.log('Snapshot fetch completed:', {
-            success: snapshotResult.success,
-            totalRows: this.snapshot.length,
-            error: snapshotResult.error
-          });
-          
-          // Set snapshot in ConflatedDataStore for real-time updates
-          if (this.conflatedStore && snapshotResult.success) {
-            this.conflatedStore.setSnapshot(this.snapshot);
-            console.log('✅ ConflatedDataStore initialized with snapshot data');
-          }
+          console.log('Snapshot request sent to provider');
           
           return {
             acknowledged: true,
-            success: snapshotResult.success,
-            rowCount: this.snapshot.length,
-            error: snapshotResult.error,
+            message: 'Snapshot request initiated',
             timestamp: new Date().toISOString()
           };
         } catch (error) {
-          console.error('Error fetching snapshot:', error);
+          console.error('Error requesting snapshot:', error);
           return {
             acknowledged: false,
             error: error instanceof Error ? error.message : String(error),
@@ -335,10 +312,39 @@ class HeadlessProvider {
           };
         }
       } else {
-        console.log('Provider not connected, returning error');
+        console.log('Provider not initialized');
         return {
           acknowledged: false,
-          error: 'Provider not connected',
+          error: 'Provider not initialized',
+          timestamp: new Date().toISOString()
+        };
+      }
+    });
+    
+    // Handle refresh requests
+    this.publisher.registerHandler('refresh-request', async () => {
+      console.log('🔄 Refresh requested from client');
+      
+      if (this.provider) {
+        try {
+          await this.provider.refresh();
+          return {
+            acknowledged: true,
+            message: 'Refresh initiated',
+            timestamp: new Date().toISOString()
+          };
+        } catch (error) {
+          console.error('Error during refresh:', error);
+          return {
+            acknowledged: false,
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+          };
+        }
+      } else {
+        return {
+          acknowledged: false,
+          error: 'Provider not initialized',
           timestamp: new Date().toISOString()
         };
       }
@@ -355,29 +361,44 @@ class HeadlessProvider {
       console.log('▶️ Starting provider...');
       console.log('Config type check:', {
         hasWebsocketUrl: !!this.config.websocketUrl,
+        hasWebSocketUrl: !!this.config.webSocketUrl,
         hasListenerTopic: !!this.config.listenerTopic,
+        configKeys: Object.keys(this.config),
         config: this.config
       });
       
       // Check if this is the new StompConfig format or old StompProviderConfig
-      if (this.config.websocketUrl && this.config.listenerTopic) {
+      if ((this.config.websocketUrl || this.config.webSocketUrl) && (this.config.listenerTopic || this.config.topic)) {
         console.log('Using new StompConfig format');
         console.log('Request configuration:', {
           requestMessage: this.config.requestMessage,
           requestBody: this.config.requestBody,
-          listenerTopic: this.config.listenerTopic
+          listenerTopic: this.config.listenerTopic || this.config.topic
         });
         
+        // Normalize configuration to handle field name variations
+        const normalizedConfig = {
+          websocketUrl: this.config.websocketUrl || this.config.webSocketUrl,
+          listenerTopic: this.config.listenerTopic || this.config.topic,
+          requestMessage: this.config.requestMessage,
+          requestBody: this.config.requestBody,
+          snapshotEndToken: this.config.snapshotEndToken,
+          keyColumn: this.config.keyColumn,
+          messageRate: this.config.messageRate,
+          snapshotTimeoutMs: this.config.snapshotTimeoutMs
+        };
+        
         // New format - use the StompConfig constructor and methods
-        this.provider = new StompDatasourceProvider(this.config);
+        this.provider = new StompDatasourceProviderSimplified();
+        this.provider.initialize(normalizedConfig);
         
         // Setup event handlers BEFORE connecting and starting data collection
         this.setupEventHandlers();
         
-        console.log('Provider created, connecting...');
+        console.log('Provider created, starting...');
         try {
-          await this.provider.connect();
-          console.log('Connected! Starting data collection...');
+          await this.provider.start();
+          console.log('Started! Starting data collection...');
           
           // Start listening for data
           await this.startDataCollection();
@@ -388,8 +409,31 @@ class HeadlessProvider {
         }
       } else {
         console.log('Using old StompProviderConfig format');
-        // Old format - use the legacy start method
-        await this.provider.start(this.config);
+        // Initialize with old format - still need to normalize
+        this.provider = new StompDatasourceProviderSimplified();
+        
+        // The old format might also have field name variations
+        const normalizedConfig = {
+          id: this.config.id,
+          name: this.config.name,
+          webSocketUrl: this.config.webSocketUrl || this.config.websocketUrl,
+          topic: this.config.topic || this.config.listenerTopic,
+          username: this.config.username,
+          password: this.config.password,
+          heartbeatInterval: this.config.heartbeatInterval || 30000,
+          reconnectInterval: this.config.reconnectInterval || 5000,
+          batchSize: this.config.batchSize || 1000,
+          conflationWindow: this.config.conflationWindow || 100,
+          keyColumn: this.config.keyColumn || 'id'
+        };
+        
+        this.provider.initialize(normalizedConfig);
+        
+        // Setup event handlers
+        this.setupEventHandlers();
+        
+        await this.provider.start();
+        await this.startDataCollection();
       }
       
       await this.updateStatus('running');
@@ -411,7 +455,7 @@ class HeadlessProvider {
     }
     
     if (this.provider) {
-      this.provider.disconnect();
+      await this.provider.stop();
     }
     await this.updateStatus('stopped');
     return { success: true };
@@ -427,7 +471,7 @@ class HeadlessProvider {
   private getStatus() {
     return {
       providerId: this.providerId,
-      status: this.provider?.getStatus ? this.provider.getStatus() : { connected: !!(this.provider as any)?.isConnected },
+      status: this.provider?.getStatistics ? this.provider.getStatistics() : { connected: false },
       statistics: this.statistics,
       config: this.config
     };
