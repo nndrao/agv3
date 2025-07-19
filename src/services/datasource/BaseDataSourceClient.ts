@@ -8,9 +8,7 @@ import {
   SnapshotStats,
   DataMessage 
 } from './interfaces';
-import { RingBuffer } from './utils/RingBuffer';
-import { SequenceTracker } from './utils/SequenceTracker';
-import { PerformanceMonitor } from './utils/PerformanceMonitor';
+// Removed unused imports for RingBuffer, SequenceTracker, and PerformanceMonitor
 
 export abstract class BaseDataSourceClient extends EventEmitter implements IDataSourceClient {
   // Abstract properties to be implemented by subclasses
@@ -21,11 +19,6 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
   protected _mode: DataSourceMode = 'idle';
   protected _isConnected: boolean = false;
   protected _connectionStatus: ConnectionStatus = 'disconnected';
-  
-  // Message handling
-  protected messageQueue: RingBuffer<DataMessage>;
-  protected sequenceTracker: SequenceTracker;
-  protected performanceMonitor: PerformanceMonitor;
   
   // Processing state
   protected processingActive: boolean = false;
@@ -46,19 +39,6 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
     super();
     
     this._keyColumn = config.keyColumn || 'id';
-    
-    // Initialize message queue with configurable size
-    const queueSize = config.queueSize || 10000;
-    this.messageQueue = new RingBuffer<DataMessage>(queueSize);
-    
-    // Initialize sequence tracker
-    this.sequenceTracker = new SequenceTracker(1, {
-      maxBufferSize: config.maxOutOfOrderBuffer || 1000,
-      gapTimeout: config.gapTimeout || 5000
-    });
-    
-    // Initialize performance monitor
-    this.performanceMonitor = new PerformanceMonitor();
   }
   
   // Getters
@@ -123,155 +103,28 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
   // Protected methods for subclasses
   
   protected enqueueMessage(data: any[], metadata: DataMetadata): void {
-    console.log('BaseDataSourceClient.enqueueMessage:', { 
-      dataLength: data.length, 
-      metadata,
-      queueSize: this.messageQueue.getSize() 
-    });
-    
-    const message: DataMessage = {
-      sequence: ++this.sequenceNumber,
-      data,
-      metadata: {
-        ...metadata,
-        timestamp: metadata.timestamp || Date.now()
-      },
-      timestamp: Date.now(),
-      attempts: 0
-    };
-    
-    if (!this.messageQueue.push(message)) {
-      // Buffer full - apply backpressure
-      console.log('Message queue full, applying backpressure');
-      this.applyBackpressure();
-      
-      // Try one more time after backpressure
-      if (!this.messageQueue.push(message)) {
-        console.error('Failed to push message even after backpressure');
-        this.emitError(new Error('Message queue full - dropping message'));
-      }
-    } else {
-      console.log('Message queued successfully, new queue size:', this.messageQueue.getSize());
-    }
-    
-    // Check if we should release backpressure
-    if (this.backpressureActive && this.messageQueue.getFillPercentage() < 50) {
-      this.releaseBackpressure();
-    }
+    // Process message directly without queuing
+    this.emitData(data, metadata);
   }
   
   protected async startMessageProcessor(): Promise<void> {
-    if (this.processingActive) return;
-    
-    console.log('Starting message processor');
-    this.processingActive = true;
-    
-    // Start the processing loop in the background
-    this.processMessages();
+    // No longer needed - processing messages directly
   }
   
   private async processMessages(): Promise<void> {
-    while (this.processingActive && this._isConnected) {
-      if (this.processingPaused) {
-        await this.wait(10);
-        continue;
-      }
-      
-      const startTime = Date.now();
-      const messages: DataMessage[] = [];
-      const batchSize = this.performanceMonitor.getSuggestedBatchSize();
-      
-      // Collect batch of messages
-      while (messages.length < batchSize) {
-        const message = this.messageQueue.pop();
-        if (!message) break;
-        messages.push(message);
-      }
-      
-      if (messages.length === 0) {
-        await this.wait(1);
-        continue;
-      }
-      
-      try {
-        // Process messages in batch
-        await this.processBatch(messages);
-        
-        // Record performance metrics
-        this.performanceMonitor.recordProcessing(
-          startTime,
-          messages.length,
-          this.messageQueue.getSize()
-        );
-      } catch (error) {
-        console.error('Error processing message batch:', error);
-        
-        // Re-queue messages for retry
-        for (const message of messages) {
-          message.attempts++;
-          if (message.attempts < 3) {
-            this.messageQueue.pushFront(message);
-          } else {
-            this.handleFailedMessage(message, error as Error);
-          }
-        }
-      }
-    }
-    
-    this.processingActive = false;
+    // No longer needed - processing messages directly
   }
   
   protected async processBatch(messages: DataMessage[]): Promise<void> {
-    console.log('BaseDataSourceClient.processBatch:', { 
-      messageCount: messages.length,
-      firstMessage: messages[0]
-    });
-    
-    // Group messages by metadata type for efficient processing
-    const snapshotMessages: DataMessage[] = [];
-    const realtimeMessages: DataMessage[] = [];
-    
-    for (const message of messages) {
-      if (message.metadata.isSnapshot) {
-        snapshotMessages.push(message);
-      } else {
-        realtimeMessages.push(message);
-      }
-    }
-    
-    // Process snapshot messages
-    if (snapshotMessages.length > 0) {
-      const allData = snapshotMessages.flatMap(m => m.data);
-      const metadata: DataMetadata = {
-        isSnapshot: true,
-        batchNumber: snapshotMessages[0].metadata.batchNumber,
-        isFirstBatch: snapshotMessages[0].metadata.isFirstBatch,
-        totalRows: allData.length
-      };
-      
-      this.emitData(allData, metadata);
-    }
-    
-    // Process realtime messages
-    if (realtimeMessages.length > 0) {
-      const allData = realtimeMessages.flatMap(m => m.data);
-      const metadata: DataMetadata = {
-        isSnapshot: false,
-        timestamp: Date.now()
-      };
-      
-      this.emitData(allData, metadata);
-    }
+    // No longer needed - processing messages directly
   }
   
   protected handleFailedMessage(message: DataMessage, error: Error): void {
-    console.error(`Failed to process message after ${message.attempts} attempts:`, error);
     this.emitError(new Error(`Message processing failed: ${error.message}`));
   }
   
   protected applyBackpressure(): void {
     if (!this.backpressureActive) {
-      console.warn('Applying backpressure - message queue is filling up');
       this.backpressureActive = true;
       this.processingPaused = true;
       
@@ -282,7 +135,6 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
   
   protected releaseBackpressure(): void {
     if (this.backpressureActive) {
-      console.log('Releasing backpressure - queue has space');
       this.backpressureActive = false;
       this.processingPaused = false;
       
@@ -302,17 +154,11 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
   
   // Event emission helpers
   protected emitData(data: any[], metadata: DataMetadata): void {
-    console.log('BaseDataSourceClient.emitData:', { 
-      dataLength: data.length, 
-      metadata,
-      handlerCount: this.dataHandlers.length 
-    });
-    
     for (const handler of this.dataHandlers) {
       try {
         handler(data, metadata);
       } catch (error) {
-        console.error('Error in data handler:', error);
+        // Error in data handler
       }
     }
   }
@@ -361,12 +207,7 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
     return {
       connectionStatus: this._connectionStatus,
       mode: this._mode,
-      queueSize: this.messageQueue.getSize(),
-      queueCapacity: this.messageQueue.getCapacity(),
-      queueFillPercentage: this.messageQueue.getFillPercentage(),
-      backpressureActive: this.backpressureActive,
-      performance: this.performanceMonitor.getStatistics(),
-      sequenceTracker: this.sequenceTracker.getStatistics()
+      backpressureActive: this.backpressureActive
     };
   }
 }

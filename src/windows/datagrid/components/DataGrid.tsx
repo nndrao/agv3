@@ -14,6 +14,7 @@ import {
 } from "ag-grid-community";
 import { themeQuartz } from "ag-grid-community";
 import { cn } from "../../../lib/utils";
+import "./DataGrid.css";
 import {
   Select,
   SelectContent,
@@ -105,8 +106,6 @@ export interface DataGridProps extends Omit<AgGridReactProps, 'theme'> {
   asyncTransactionWaitMillis?: number;
   rowSelection?: RowSelectionOptions | 'single' | 'multiple';
   animateRows?: boolean;
-  suppressRowHoverHighlight?: boolean;
-  suppressCellFocus?: boolean;
   pagination?: boolean;
   paginationPageSize?: number;
   paginationPageSizeSelector?: number[] | boolean;
@@ -114,10 +113,9 @@ export interface DataGridProps extends Omit<AgGridReactProps, 'theme'> {
   theme?: unknown;
   className?: string;
   getRowId?: (params: GetRowIdParams) => string;
-  rowBuffer?: number;
-  cacheBlockSize?: number;
-  maxBlocksInCache?: number;
-  blockLoadDebounceMillis?: number;
+  suppressScrollOnNewData?: boolean;
+  debounceVerticalScrollbar?: boolean;
+  suppressAnimationFrame?: boolean;
   selectedProvider?: string;
   onProviderChange?: (provider: string) => void;
 }
@@ -128,7 +126,7 @@ export interface DataGridRef {
 
 const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
   const gridRef = useRef<AgGridReact>(null);
-  const [providers, setProviders] = useState<any[]>([]);
+  const [providers, setProviders] = useState<{id: string; name: string; type?: string; isActive: boolean; status: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkModeState] = useState<boolean>(true);
   const [internalSelectedProvider, setInternalSelectedProvider] = useState<string | null>(null);
@@ -138,15 +136,55 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [isFirstBatch, setIsFirstBatch] = useState(true);
   const [isGridReady, setIsGridReady] = useState(false);
-  const [snapshotMode, setSnapshotMode] = useState<'idle' | 'receiving' | 'complete'>('idle');
+  // Remove snapshotMode state - only use ref to avoid re-renders
   const snapshotModeRef = useRef<'idle' | 'receiving' | 'complete'>('idle');
-  const [gridRowData, setGridRowData] = useState<any[]>([]);
+  // Generate dummy data for testing
+  const generateDummyData = (rows: number = 1000, cols: number = 30) => {
+    const data = [];
+    const columns = ['id', ...Array.from({ length: cols - 1 }, (_, i) => `col${i + 1}`)];
+    
+    for (let i = 0; i < rows; i++) {
+      const row: Record<string, any> = { id: `ROW-${i}` };
+      columns.forEach((col, idx) => {
+        if (col === 'id') return;
+        if (idx % 3 === 0) {
+          row[col] = `Text-${i}-${idx}`;
+        } else if (idx % 3 === 1) {
+          row[col] = Math.random() * 1000;
+        } else {
+          row[col] = Math.random() > 0.5;
+        }
+      });
+      data.push(row);
+    }
+    return data;
+  };
+  
+  // Generate column definitions for dummy data
+  const generateDummyColumnDefs = (cols: number = 30): ColDef[] => {
+    const columns = ['id', ...Array.from({ length: cols - 1 }, (_, i) => `col${i + 1}`)];
+    return columns.map((col, idx) => ({
+      field: col,
+      headerName: col.toUpperCase(),
+      filter: true,
+      sortable: true,
+      resizable: true,
+      width: col === 'id' ? 100 : 150,
+      cellDataType: idx % 3 === 0 ? 'text' : idx % 3 === 1 ? 'number' : 'boolean',
+      enableCellChangeFlash: true
+    }));
+  };
+  
+  // TEST MODE: Set to true to use dummy data
+  const USE_DUMMY_DATA = true;
+  const [gridRowData, setGridRowData] = useState<Record<string, any>[]>(USE_DUMMY_DATA ? generateDummyData() : []);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const pendingDataRef = useRef<{ data: any[], metadata: DataMetadata }[]>([]);
-  const snapshotDataRef = useRef<any[]>([]);
+  const pendingDataRef = useRef<{ data: Record<string, any>[], metadata: DataMetadata }[]>([]);
+  const snapshotDataRef = useRef<Record<string, any>[]>([]);
 
-  const updateBatchRef = useRef<any[]>([]);
+  const updateBatchRef = useRef<Record<string, any>[]>([]);
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     rowData,
@@ -157,11 +195,9 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
     onRowSelected,
     onCellValueChanged,
     enableCellChangeFlash = true,
-    asyncTransactionWaitMillis = 50,
+    asyncTransactionWaitMillis = 60,
     rowSelection,
     animateRows = true,
-    suppressRowHoverHighlight = false,
-    suppressCellFocus = false,
     pagination = false,
     paginationPageSize = 100,
     paginationPageSizeSelector = [20, 50, 100, 200],
@@ -169,10 +205,6 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
     theme = agGridTheme,
     className = "ag-theme-quartz",
     getRowId,
-    rowBuffer = 10,
-    cacheBlockSize = 100,
-    maxBlocksInCache = 10,
-    blockLoadDebounceMillis = 100,
     selectedProvider,
     onProviderChange,
     ...otherProps
@@ -201,31 +233,47 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
 
   // Handle provider changes
   useEffect(() => {
-    if (internalSelectedProvider) {
+    if (internalSelectedProvider && !USE_DUMMY_DATA) {
       // Reset grid ready state when provider changes
-      console.log('Provider changed, resetting grid state');
+      // Provider changed, resetting grid state
       setIsGridReady(false);
       pendingDataRef.current = [];
       snapshotDataRef.current = [];
-      setSnapshotMode('idle');
       snapshotModeRef.current = 'idle';
       setGridRowData([]);
       
       loadColumnDefinitions(internalSelectedProvider);
       initializeDataSourceClient(internalSelectedProvider);
-    } else {
+    } else if (!USE_DUMMY_DATA) {
       // Cleanup
       dataSourceClient?.disconnect();
       setDataSourceClient(null);
     }
     
+    // Set up periodic cleanup (from AGV1 pattern)
+    cleanupTimerRef.current = setInterval(() => {
+      // Clear update batch if it's too large
+      if (updateBatchRef.current.length > 1000) {
+        updateBatchRef.current = [];
+      }
+      // Clear snapshot data if too large
+      if (snapshotDataRef.current.length > 10000) {
+        snapshotDataRef.current = [];
+      }
+    }, 60000); // Every minute
+    
     return () => {
-      // Clean up timer
+      // Clean up timers
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
         updateTimerRef.current = null;
       }
+      if (cleanupTimerRef.current) {
+        clearInterval(cleanupTimerRef.current);
+        cleanupTimerRef.current = null;
+      }
       updateBatchRef.current = [];
+      snapshotDataRef.current = [];
       dataSourceClient?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,7 +302,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       
       setProviders(providersWithStatus);
     } catch (error) {
-      console.error('Failed to load providers:', error);
+      // Failed to load providers
     } finally {
       setLoading(false);
     }
@@ -262,7 +310,6 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
 
   const loadColumnDefinitions = async (providerId: string): Promise<void> => {
     try {
-      console.log('📋 Loading column definitions for provider:', providerId);
       const configs = await StorageClient.query({
         componentType: 'datasource',
         appId: 'agv3'
@@ -270,15 +317,27 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       
       const config = configs.find(c => c.config.id === providerId);
       if (config) {
-        console.log('📋 Config found:', config);
+        // Config found
         
         if (config.config.keyColumn) {
-          console.log(`Setting keyColumn: ${config.config.keyColumn}`);
+          // Setting keyColumn
           setKeyColumn(config.config.keyColumn);
         }
 
         if (config.config.columnDefinitions) {
-          const cols: ColDef[] = config.config.columnDefinitions.map((col: any) => ({
+          const cols: ColDef[] = config.config.columnDefinitions.map((col: {
+            field: string;
+            headerName?: string;
+            hide?: boolean;
+            filter?: boolean;
+            sortable?: boolean;
+            resizable?: boolean;
+            pinned?: string | null;
+            width?: number;
+            minWidth?: number;
+            cellDataType?: string;
+            precision?: number;
+          }) => ({
             field: col.field,
             headerName: col.headerName || col.field,
             hide: col.hide || false,
@@ -291,29 +350,28 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
             enableCellChangeFlash: true,  // Enable for each column
             cellDataType: col.cellDataType || undefined,
             valueFormatter: col.cellDataType === 'number' && col.precision !== undefined
-              ? (params: any) => {
+              ? (params: { value: number | null | undefined }) => {
                   if (params.value == null) return '';
                   return Number(params.value).toFixed(col.precision);
                 }
               : col.cellDataType === 'number'
-                ? (params: any) => {
+                ? (params: { value: number | null | undefined }) => {
                     if (params.value == null) return '';
                     return Number(params.value).toFixed(2);
                   }
                 : undefined
           }));
-          console.log(`✅ Loaded ${cols.length} column definitions:`, cols.map(c => c.field));
+          // Loaded column definitions
           setLoadedColumnDefs(cols);
         } else {
-          console.warn('No column definitions found in config');
+          // No column definitions found in config
           setLoadedColumnDefs([]);
         }
       } else {
-        console.error('❌ No config found for provider:', providerId);
+        // No config found for provider
         setLoadedColumnDefs([]);
       }
     } catch (error) {
-      console.error('Failed to load column definitions:', error);
       setLoadedColumnDefs([]);
     }
   };
@@ -407,7 +465,6 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       
       const config = configs.find(c => c.config.id === providerId);
       if (!config) {
-        console.error('Provider configuration not found:', providerId);
         return;
       }
       
@@ -416,7 +473,7 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       const isProviderRunning = activeProviders.some(p => p.providerId === providerId);
       
       if (!isProviderRunning) {
-        console.log('Provider not running, starting it now...');
+        // Provider not running, starting it now
         try {
           await ProviderManager.startProvider({
             providerId,
@@ -424,9 +481,8 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
             config: config.config,
             type: config.componentSubType as 'stomp' | 'rest'
           });
-          console.log('Provider started successfully');
+          // Provider started successfully
         } catch (error) {
-          console.error('Failed to start provider:', error);
           setConnectionStatus('error');
           return;
         }
@@ -441,46 +497,57 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       });
       
       client.onData((data, metadata) => {
-        console.log('DataGrid received data:', { 
-          dataLength: data.length, 
-          metadata,
-          firstItem: data[0],
-          snapshotMode: snapshotModeRef.current,
-          isSnapshot: metadata.isSnapshot,
-          hasGridApi: !!gridRef.current?.api
-        });
+        // Handle incoming data
 
-        // During snapshot, accumulate data
-        if (snapshotModeRef.current !== 'complete') {
-          console.log('Appending data during snapshot phase');
-          // Append data during snapshot
-          setGridRowData(prev => [...prev, ...data]);
-        } else {
-          console.log('Applying real-time update via transaction');
-          // After snapshot complete, use transaction API for real-time updates
-          if (gridRef.current?.api) {
-            const transaction = {
-              update: data  // AG-Grid will match by rowId and update existing rows
-            };
-            
-            const result = gridRef.current.api.applyTransaction(transaction);
-            console.log('Transaction applied:', {
-              updated: result?.update?.length || 0,
-              added: result?.add?.length || 0,
-              dataLength: data.length
-            });
-          } else {
-            console.warn('Cannot apply transaction - grid API not ready or snapshot not complete');
+        // During snapshot, accumulate data in ref
+        if (metadata.isSnapshot && snapshotModeRef.current !== 'complete') {
+          // Only update ref, not state to avoid re-renders
+          if (snapshotModeRef.current !== 'receiving') {
+            snapshotModeRef.current = 'receiving';
           }
+          // Use push to avoid creating new arrays
+          snapshotDataRef.current.push(...data);
+        } else if (snapshotModeRef.current === 'complete') {
+          // After snapshot complete, batch real-time updates
+          updateBatchRef.current.push(...data);
+          
+          // Clear existing timer
+          if (updateTimerRef.current) {
+            clearTimeout(updateTimerRef.current);
+          }
+          
+          // Set new timer to apply batched updates
+          updateTimerRef.current = setTimeout(() => {
+            if (gridRef.current?.api && updateBatchRef.current.length > 0) {
+              // Use async transaction for large updates (AGV1 pattern)
+              const useAsync = updateBatchRef.current.length > 50;
+              const transaction = {
+                update: updateBatchRef.current
+              };
+              
+              if (useAsync) {
+                gridRef.current.api.applyTransactionAsync(transaction);
+              } else {
+                const result = gridRef.current.api.applyTransaction(transaction);
+              }
+              
+              // Clear the batch
+              updateBatchRef.current = [];
+            }
+          }, asyncTransactionWaitMillis);
+        } else {
+          // Received data in unexpected state
         }
       });
       
       client.onSnapshotComplete((stats) => {
-        console.log('Snapshot complete:', stats);
-        console.log('Enabling real-time updates with transactions');
-        console.log('Total rows in grid:', gridRowData.length);
-        setSnapshotMode('complete');
+        // Snapshot complete
+        
+        // Update ref first
         snapshotModeRef.current = 'complete';
+        
+        // Set grid data once
+        setGridRowData(snapshotDataRef.current);
         setIsFirstBatch(true);
         
         // Flash the grid to show snapshot is complete
@@ -488,17 +555,19 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
           // Small delay to ensure grid has processed all data
           setTimeout(() => {
             gridRef.current?.api?.flashCells();
-            console.log('Grid ready for real-time updates');
-            console.log('Current grid row count:', gridRef.current?.api?.getDisplayedRowCount());
+            // Grid ready for real-time updates
+            
+            // Clear snapshot data ref
+            snapshotDataRef.current = [];
             
             // Log that we're now waiting for real-time updates
-            console.log('Waiting for real-time updates via transaction API...');
+            // Waiting for real-time updates
           }, 100);
         }
       });
       
       client.onError((error) => {
-        console.error('DataSource error:', error);
+        // DataSource error
       });
       
       // Connect
@@ -507,7 +576,6 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
       setDataSourceClient(client);
       
     } catch (error) {
-      console.error('Failed to initialize data source client:', error);
       setConnectionStatus('error');
     }
   };
@@ -518,8 +586,14 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
   const handleRefresh = async () => {
     if (!dataSourceClient) return;
     
+    // Clear any pending update timer
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
+      updateTimerRef.current = null;
+    }
+    
     setIsFirstBatch(true);
-    setSnapshotMode('idle');
+    snapshotModeRef.current = 'idle';
     snapshotDataRef.current = [];
     updateBatchRef.current = [];
     // Clear the grid data
@@ -528,15 +602,12 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
     try {
       await dataSourceClient.refresh();
     } catch (error) {
-      console.error('Refresh failed:', error);
+      // Refresh failed
     }
   };
   
   const handleGridReady = useCallback((event: GridReadyEvent) => {
-    console.log('Grid is ready!', { 
-      hasDataSourceClient: !!dataSourceClient,
-      pendingDataCount: pendingDataRef.current.length 
-    });
+    // Grid is ready
     setIsGridReady(true);
     
     
@@ -547,8 +618,8 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
   }, [onGridReady, dataSourceClient]);
 
   return (
-    <div className="datagrid-wrapper" style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div className="datagrid-toolbar h-[50px] min-h-[50px] border-b bg-background flex items-center justify-between px-4">
+    <div className="flex flex-col h-screen w-full">
+      <div className="h-[50px] min-h-[50px] border-b bg-background flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4 flex-1">
           {loading ? (
             <div className="text-sm text-muted-foreground">Loading providers...</div>
@@ -636,27 +707,31 @@ const DataGrid = forwardRef<DataGridRef, DataGridProps>((props, ref) => {
           </button>
         </div>
       </div>
-      <div className={cn(className, "flex-1 overflow-hidden")}>
+      <div className={cn(className, "ag-theme-quartz", "flex-1 min-h-0 overflow-hidden")}>
         <AgGridReact
           ref={gridRef}
           theme={theme}
           rowData={gridRowData}
-          columnDefs={columnDefs.length > 0 ? columnDefs : loadedColumnDefs}
+          columnDefs={USE_DUMMY_DATA ? generateDummyColumnDefs() : (columnDefs.length > 0 ? columnDefs : loadedColumnDefs)}
           defaultColDef={defaultColDefMemo}
           onGridReady={handleGridReady}
-           enableCellChangeFlash={snapshotMode === 'complete'}
+          enableCellChangeFlash={enableCellChangeFlash}
+          animateRows={false}
+          getRowId={getRowId || (keyColumn ? (params) => params.data?.[keyColumn] : undefined)}
           rowSelection={rowSelectionOptions}
-          animateRows={snapshotMode === 'receiving' ? false : animateRows}
-          suppressRowHoverHighlight={suppressRowHoverHighlight}
-           statusBar={statusBar || defaultStatusBar}
+          statusBar={statusBar || defaultStatusBar}
           sideBar={isSidebarVisible ? sideBar : false}
-          getRowId={getRowId || ((params) => params.data?.[keyColumn])}
+          suppressScrollOnNewData={true}
+          debounceVerticalScrollbar={true}
+          suppressColumnMoveAnimation={true}
+          suppressAnimationFrame={false}
           rowBuffer={10}
-          
-          suppressColumnVirtualisation={false}
-          suppressRowVirtualisation={false}
-         
-        
+          asyncTransactionWaitMillis={asyncTransactionWaitMillis}
+          // Performance settings from AGV1
+          suppressRowHoverHighlight={true}
+          suppressCellFocus={false}
+          enableCellTextSelection={true}
+          ensureDomOrder={true}
         />
       </div>
     </div>
