@@ -58,6 +58,36 @@ export class WindowManager {
     return view;
   }
   
+  static async openDataGridStomp(): Promise<any> {
+    const id = uuidv4();
+    
+    // Get the platform
+    const platform = fin.Platform.getCurrentSync();
+    
+    // Create view for DataGrid with direct STOMP connection
+    const view = await platform.createView({
+      url: `http://localhost:5174/datagrid-stomp?id=${id}`,
+      name: `datagrid-stomp-view-${id}`
+    });
+    
+    return view;
+  }
+  
+  static async openDataGridChannel(): Promise<any> {
+    const id = uuidv4();
+    
+    // Get the platform
+    const platform = fin.Platform.getCurrentSync();
+    
+    // Create view for DataGrid with channel connection
+    const view = await platform.createView({
+      url: `http://localhost:5174/datagrid-channel?id=${id}`,
+      name: `datagrid-channel-view-${id}`
+    });
+    
+    return view;
+  }
+  
   static async createHeadlessProvider(providerId: string, config: any): Promise<any> {
     const windowName = `provider-${providerId}`;
     

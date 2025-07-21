@@ -27,7 +27,8 @@
       "Bash(tsc --version)",
       "Bash(tsc --noEmit)",
       "Bash(grep:*)",
-      "WebFetch(domain:ui.shadcn.com)"
+      "WebFetch(domain:ui.shadcn.com)",
+      "Bash(npm create:*)"
     ],
     "deny": []
   }

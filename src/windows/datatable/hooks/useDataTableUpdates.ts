@@ -4,7 +4,7 @@ import { GridApi } from 'ag-grid-community';
 export interface UseDataTableUpdatesOptions {
   gridApi: GridApi | null;
   keyColumn: string;
-  snapshotMode: 'idle' | 'requesting' | 'receiving' | 'complete';
+  isSnapshotComplete: boolean;
   asyncTransactionWaitMillis?: number;
   updatesEnabled?: boolean;
   onUpdateError?: (error: Error) => void;
@@ -28,7 +28,7 @@ interface DataUpdate {
 export function useDataTableUpdates({
   gridApi,
   keyColumn,
-  snapshotMode,
+  isSnapshotComplete,
   asyncTransactionWaitMillis = 50,
   updatesEnabled = true,
   onUpdateError,
@@ -57,11 +57,11 @@ export function useDataTableUpdates({
     // Enable cell flash duration for visual feedback
     gridApi.setGridOption('cellFlashDuration', 2000);
 
-    console.log('[useDataTableUpdates] Grid configured:', {
-      keyColumn,
-      asyncTransactionWaitMillis,
-      cellFlashDuration: 2000
-    });
+    // console.log('[useDataTableUpdates] Grid configured:', {
+    //   keyColumn,
+    //   asyncTransactionWaitMillis,
+    //   cellFlashDuration: 2000
+    // });
   }, [gridApi, keyColumn, asyncTransactionWaitMillis]);
 
   // Apply batched updates to the grid
@@ -72,7 +72,7 @@ export function useDataTableUpdates({
     const batch = updateBatchRef.current;
     updateBatchRef.current = [];
 
-    console.log(`[useDataTableUpdates] Applying ${batch.length} batched updates`);
+    // console.log(`[useDataTableUpdates] Applying ${batch.length} batched updates`);
 
     // Group updates by operation type
     const transaction: any = {
@@ -82,8 +82,18 @@ export function useDataTableUpdates({
     };
 
     // Process each update
-    batch.forEach((update) => {
+    batch.forEach((update, index) => {
       const operation = update.operation || 'update';
+      
+      // Log first update to debug
+      if (index === 0) {
+        console.log('[useDataTableUpdates] First update item:', {
+          operation,
+          keyColumn,
+          keyValue: update.data[keyColumn],
+          dataKeys: Object.keys(update.data).slice(0, 5)
+        });
+      }
       
       switch (operation) {
         case 'add':
@@ -111,6 +121,12 @@ export function useDataTableUpdates({
       const result = gridApi.applyTransactionAsync(transaction);
 
       if (result) {
+        console.log('[useDataTableUpdates] Transaction result:', {
+          add: result.add?.length || 0,
+          update: result.update?.length || 0,
+          remove: result.remove?.length || 0
+        });
+        
         const latency = Date.now() - startTime;
         
         // Update metrics
@@ -151,12 +167,12 @@ export function useDataTableUpdates({
   // Process incoming updates
   const processUpdates = useCallback((updates: any[]) => {
     // Only process updates if snapshot is complete and updates are enabled
-    if (snapshotMode !== 'complete' || !updatesEnabled || !gridApi) {
-      console.log('[useDataTableUpdates] Skipping updates:', {
-        snapshotMode,
-        updatesEnabled,
-        hasGridApi: !!gridApi
-      });
+    if (!isSnapshotComplete || !updatesEnabled || !gridApi) {
+      // console.log('[useDataTableUpdates] Skipping updates:', {
+      //   isSnapshotComplete,
+      //   updatesEnabled,
+      //   hasGridApi: !!gridApi
+      // });
       return;
     }
 
@@ -166,7 +182,7 @@ export function useDataTableUpdates({
       return;
     }
 
-    console.log(`[useDataTableUpdates] Processing ${updates.length} updates`);
+    // console.log(`[useDataTableUpdates] Processing ${updates.length} updates`);
 
     // Convert updates to DataUpdate format
     const dataUpdates: DataUpdate[] = updates.map(update => ({
@@ -187,7 +203,7 @@ export function useDataTableUpdates({
       applyBatchedUpdates();
       updateTimerRef.current = null;
     }, asyncTransactionWaitMillis);
-  }, [snapshotMode, updatesEnabled, gridApi, keyColumn, asyncTransactionWaitMillis, applyBatchedUpdates]);
+  }, [isSnapshotComplete, updatesEnabled, gridApi, keyColumn, asyncTransactionWaitMillis, applyBatchedUpdates]);
 
   // Manual flush function
   const flushTransactions = useCallback(() => {

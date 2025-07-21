@@ -133,6 +133,22 @@ function getCustomActions(): CustomActionsMap {
       } catch (error) {
         console.error('Failed to show provider status:', error);
       }
+    },
+    'new-datagrid-stomp': async (): Promise<void> => {
+      console.log('Opening DataGrid with direct STOMP connection...');
+      try {
+        await WindowManager.openDataGridStomp();
+      } catch (error) {
+        console.error('Failed to open DataGrid STOMP:', error);
+      }
+    },
+    'new-datagrid-channel': async (): Promise<void> => {
+      console.log('Opening DataGrid with channel connection...');
+      try {
+        await WindowManager.openDataGridChannel();
+      } catch (error) {
+        console.error('Failed to open DataGrid Channel:', error);
+      }
     }
   };
 }

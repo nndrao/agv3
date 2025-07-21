@@ -1,4 +1,3 @@
-export { default as DataGrid } from './DataGrid';
-export type { DataGridProps, DataGridRef } from './DataGrid';
-
-import './DataGrid.css';
+export { DataGridSimple } from './DataGridSimple';
+export { DataGridStomp } from './DataGridStomp';
+export { DataGridChannel } from './DataGridChannel';

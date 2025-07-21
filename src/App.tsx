@@ -4,7 +4,7 @@ import { AllEnterpriseModule } from 'ag-grid-enterprise';
 import { Header } from '@/components/header';
 import { HeroSection } from '@/components/hero-section';
 import { Footer } from '@/components/footer';
-import DataGridWrapper from "./windows/datagrid/DataGridWrapper";
+import { DataGridSimple, DataGridStomp, DataGridChannel } from "./windows/datagrid/components";
 import { App as DatasourceConfigApp } from './windows/datasource-config/App';
 import { App as ProviderStatusApp } from './windows/provider-status/App';
 
@@ -32,7 +32,9 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         
         {/* OpenFin window routes */}
-        <Route path="/datatable" element={<div style={{ height: "100vh", width: "100vw" }}><DataGridWrapper /></div>} />
+        <Route path="/datatable" element={<div className="h-screen w-screen"><DataGridSimple /></div>} />
+        <Route path="/datagrid-stomp" element={<div className="h-screen w-screen"><DataGridStomp /></div>} />
+        <Route path="/datagrid-channel" element={<div className="h-screen w-screen"><DataGridChannel /></div>} />
         <Route path="/datasource-config" element={<DatasourceConfigApp />} />
         <Route path="/provider-status" element={<ProviderStatusApp />} />
       </Routes>
