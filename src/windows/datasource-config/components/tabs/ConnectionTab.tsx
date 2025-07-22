@@ -64,67 +64,77 @@ export function ConnectionTab({
                   className="mt-1.5"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="websocket-url" className="text-sm font-normal">WebSocket URL *</Label>
-                  <Input
-                    id="websocket-url"
-                    value={config.websocketUrl}
-                    onChange={handleChange('websocketUrl')}
-                    placeholder="ws://localhost:8080"
-                    className="mt-1.5"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="listener-topic" className="text-sm font-normal">Listener Topic *</Label>
-                  <Input
-                    id="listener-topic"
-                    value={config.listenerTopic}
-                    onChange={handleChange('listenerTopic')}
-                    placeholder="/snapshot/positions"
-                    className="mt-1.5"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="websocket-url" className="text-sm font-normal">WebSocket URL *</Label>
+                <Input
+                  id="websocket-url"
+                  value={config.websocketUrl}
+                  onChange={handleChange('websocketUrl')}
+                  placeholder="ws://localhost:8080"
+                  className="mt-1.5"
+                />
               </div>
-            </div>
-            <div className="mt-4">
-              <Label htmlFor="updates-topic" className="text-sm font-normal">Updates Topic (optional)</Label>
-              <Input
-                id="updates-topic"
-                value={config.updatesTopic || ''}
-                onChange={handleChange('updatesTopic')}
-                placeholder="Leave empty to use same as Listener Topic"
-                className="mt-1.5"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Some STOMP servers send real-time updates on a different topic than the snapshot
-              </p>
             </div>
           </div>
 
           {/* Request Configuration */}
           <div>
             <h3 className="text-xs font-semibold mb-4 text-muted-foreground uppercase tracking-wider">REQUEST CONFIGURATION</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="request-destination" className="text-sm font-normal">Destination</Label>
-                <Input
-                  id="request-destination"
-                  value={config.requestMessage}
-                  onChange={handleChange('requestMessage')}
-                  placeholder="/snapshot/positions/5000/100"
-                  className="mt-1.5"
-                />
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="data-type" className="text-sm font-normal">Data Type *</Label>
+                  <select
+                    id="data-type"
+                    value={config.dataType || 'positions'}
+                    onChange={(e) => onChange({ dataType: e.target.value as 'positions' | 'trades' })}
+                    className="mt-1.5 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="positions">Positions</option>
+                    <option value="trades">Trades</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="message-rate" className="text-sm font-normal">Message Rate *</Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      id="message-rate"
+                      type="number"
+                      value={config.messageRate || 1000}
+                      onChange={handleNumberChange('messageRate')}
+                      placeholder="1000"
+                      min="100"
+                      max="50000"
+                      className="pr-16 bg-background"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">msg/s</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="request-body" className="text-sm font-normal">Body</Label>
-                <Input
-                  id="request-body"
-                  value={config.requestBody}
-                  onChange={handleChange('requestBody')}
-                  placeholder="TriggerTopic"
-                  className="mt-1.5"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="batch-size" className="text-sm font-normal">Batch Size (optional)</Label>
+                  <Input
+                    id="batch-size"
+                    type="number"
+                    value={config.batchSize || ''}
+                    onChange={handleNumberChange('batchSize')}
+                    placeholder="Auto (rate/10)"
+                    min="10"
+                    max="1000"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <Label className="text-xs font-medium text-muted-foreground">Generated Configuration</Label>
+                <div className="mt-2 space-y-1 font-mono text-xs">
+                  <div>Listener: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]</div>
+                  <div>Trigger: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]/{config.messageRate || 1000}{config.batchSize ? `/${config.batchSize}` : ''}</div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  A unique client ID will be generated automatically on each connection
+                </p>
               </div>
             </div>
           </div>
@@ -154,39 +164,21 @@ export function ConnectionTab({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div>
-                <Label htmlFor="snapshot-timeout" className="text-sm font-normal">Snapshot Timeout</Label>
-                <div className="relative mt-1.5">
-                  <Input
-                    id="snapshot-timeout"
-                    type="number"
-                    value={config.snapshotTimeoutMs}
-                    onChange={handleNumberChange('snapshotTimeoutMs')}
-                    placeholder="60000"
-                    min="10000"
-                    max="600000"
-                    className="pr-12 bg-background"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ms</span>
-                </div>
+            <div className="mt-4">
+              <Label htmlFor="snapshot-timeout" className="text-sm font-normal">Snapshot Timeout</Label>
+              <div className="relative mt-1.5">
+                <Input
+                  id="snapshot-timeout"
+                  type="number"
+                  value={config.snapshotTimeoutMs || 30000}
+                  onChange={handleNumberChange('snapshotTimeoutMs')}
+                  placeholder="30000"
+                  min="10000"
+                  max="600000"
+                  className="pr-12 bg-background"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">ms</span>
               </div>
-              {config.listenerTopic?.includes('/snapshot/') && (
-                <div>
-                  <Label htmlFor="message-rate" className="text-sm font-normal">Message Rate</Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      id="message-rate"
-                      type="number"
-                      value={config.messageRate}
-                      onChange={handleChange('messageRate')}
-                      placeholder="1000"
-                      className="pr-16 bg-background"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">msg/s</span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

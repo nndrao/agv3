@@ -36,11 +36,16 @@ export interface FieldInfo {
 export interface StompConfig {
   websocketUrl: string;
   listenerTopic: string;
-  requestMessage?: string;
-  requestBody?: string;
+  requestMessage?: string;  // Deprecated - will be auto-generated
+  requestBody?: string;     // Deprecated - no longer needed
+  
+  // New fields for structured format
+  dataType?: 'positions' | 'trades';
+  messageRate?: number;
+  batchSize?: number;
+  
   snapshotEndToken?: string;
   keyColumn?: string;
-  messageRate?: string;
   snapshotTimeoutMs?: number;
 }
 

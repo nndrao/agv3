@@ -5,14 +5,29 @@ import { AgGridReact } from "ag-grid-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Download, Settings, Moon, Sun, Play, Square } from "lucide-react";
+import { Moon, Sun, Play, Square, Save, Loader2, Info, MoreVertical, Edit2 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { ProviderSelector } from "../../datatable/components/ProviderSelector";
 import { StorageClient } from "../../../services/storage/storageClient";
-import { Client, IMessage } from '@stomp/stompjs';
-// Removed useDataTableUpdates - using grid API directly for better performance
+import { StompClient, StompClientConfig } from "../../../services/stomp/StompClient";
 import { useToast } from "@/hooks/use-toast";
+import { useProfileManagement, BaseProfile } from "@/hooks/useProfileManagement";
+import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
+import { ProfileManagementDialog } from "@/components/ProfileManagementDialog";
+import { SaveProfileDialog } from "@/components/SaveProfileDialog";
+import { RenameViewDialog } from "@/components/RenameViewDialog";
+import { getViewInstanceId } from "@/utils/viewUtils";
+import { WindowManager } from "@/services/window/windowManager";
+import { debugStorage } from "@/utils/storageDebug";
+import { ViewTitleManager } from "@/utils/viewTitleManager";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import "@/index.css";
 
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -20,6 +35,47 @@ ModuleRegistry.registerModules([AllEnterpriseModule]);
 // Define row data interface
 interface RowData {
   [key: string]: any;
+}
+
+// Define profile interface for DataGridStomp
+interface DataGridStompProfile extends BaseProfile {
+  // Data source
+  selectedProviderId: string | null;
+  autoConnect: boolean;
+  
+  // Grid configuration
+  columnState?: any;
+  filterModel?: any;
+  sortModel?: any;
+  groupModel?: any;
+  
+  // UI preferences
+  sidebarVisible: boolean;
+  theme: 'light' | 'dark' | 'system';
+  showColumnSettings: boolean;
+  
+  // Performance settings
+  asyncTransactionWaitMillis: number;
+  rowBuffer: number;
+  
+  // Custom settings
+  messageCountLimit?: number;
+  updateFrequency?: number;
+}
+
+// Validate that GridApi is properly initialized
+function validateGridApi(gridApi: GridApi | null): boolean {
+  if (!gridApi) return false;
+  
+  // Check for essential methods
+  const requiredMethods = [
+    'getColumnState',
+    'getFilterModel',
+    'applyColumnState',
+    'setFilterModel'
+  ];
+  
+  return requiredMethods.every(method => typeof (gridApi as any)[method] === 'function');
 }
 
 // Define theme configuration
@@ -96,20 +152,157 @@ const DataGridStompComponent = () => {
   const [providerConfig, setProviderConfig] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState<boolean>(false);
-  const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(false);
   const [rowData, setRowData] = useState<RowData[]>([]);
   const [columnDefs, setColumnDefs] = useState<ColDef<RowData>[]>([]);
   const [snapshotMode, setSnapshotMode] = useState<'idle' | 'requesting' | 'receiving' | 'complete'>('idle');
   const messageCountRef = useRef(0);
   const [messageCountDisplay, setMessageCountDisplay] = useState(0);
   const lastUpdateTimeRef = useRef<number>(Date.now());
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [currentViewTitle, setCurrentViewTitle] = useState('');
   
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
-  const stompClientRef = useRef<Client | null>(null);
-  const subscriptionRef = useRef<any>(null);
-  const isReceivingSnapshot = useRef(true);
+  const stompClientRef = useRef<StompClient | null>(null);
   const snapshotDataRef = useRef<RowData[]>([]);
+  const isSnapshotComplete = useRef(false);
+  const [currentClientId, setCurrentClientId] = useState<string>('');
   const [stylesLoaded, setStylesLoaded] = useState(false);
+  const isInitialMount = useRef(true);
+  const hasAutoConnected = useRef(false);
+  const isConnecting = useRef(false);
+  const isApplyingProfile = useRef(false);
+  
+  // Get view instance ID from query parameters
+  const viewInstanceId = useMemo(() => getViewInstanceId(), []);
+  
+  // Register this instance with WindowManager on mount
+  useEffect(() => {
+    // Debug storage context
+    debugStorage('DataGridStomp Mount');
+    
+    // Extract a readable name from the ID
+    let instanceName = 'DataGrid STOMP';
+    if (viewInstanceId.includes('instance-')) {
+      const match = viewInstanceId.match(/instance-(\d+)/);
+      if (match) {
+        instanceName = `DataGrid STOMP ${match[1]}`;
+      }
+    } else if (viewInstanceId.includes('datagrid-stomp-')) {
+      // Extract custom name
+      const customName = viewInstanceId.replace('datagrid-stomp-', '').replace(/-/g, ' ');
+      instanceName = customName.charAt(0).toUpperCase() + customName.slice(1);
+    }
+    
+    console.log(`[DataGridStomp] Registering instance: ${viewInstanceId} as "${instanceName}"`);
+    WindowManager.registerViewInstance(viewInstanceId, instanceName, 'DataGridStomp');
+    
+    // Restore saved title if available
+    ViewTitleManager.restoreTitle(instanceName).then(() => {
+      console.log('[DataGridStomp] Title restoration completed');
+    });
+  }, [viewInstanceId]);
+  
+  // Memoize the profile change handler to prevent re-renders
+  const handleProfileChange = useCallback((profile: DataGridStompProfile) => {
+    // Apply profile settings
+    console.log('[DataGridStomp] Applying profile:', profile);
+    
+    // Set flag to prevent marking as unsaved when applying profile
+    isApplyingProfile.current = true;
+    
+    // On initial mount, apply all settings including selectedProviderId
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      console.log('[DataGridStomp] Initial mount - applying full profile');
+      if (profile.selectedProviderId) {
+        setSelectedProviderId(profile.selectedProviderId);
+      }
+      setSidebarVisible(profile.sidebarVisible ?? false);
+      setShowColumnSettings(profile.showColumnSettings ?? false);
+      if (profile.theme && profile.theme !== 'system') {
+        setTheme(profile.theme);
+      }
+    } else {
+      // After initial mount, NEVER update selectedProviderId from profile
+      // This prevents the profile from clearing user selections
+      console.log('[DataGridStomp] Subsequent profile application - skipping selectedProviderId');
+      setSidebarVisible(profile.sidebarVisible ?? false);
+      setShowColumnSettings(profile.showColumnSettings ?? false);
+      if (profile.theme && profile.theme !== 'system') {
+        setTheme(profile.theme);
+      }
+    }
+    
+    // Reset flag after applying
+    setTimeout(() => {
+      isApplyingProfile.current = false;
+    }, 0);
+    
+    // Apply grid state if available and grid is ready
+    if (gridApiRef.current && validateGridApi(gridApiRef.current)) {
+      try {
+        if (profile.columnState && profile.columnState.length > 0) {
+          gridApiRef.current.applyColumnState({
+            state: profile.columnState,
+            applyOrder: true
+          });
+        }
+        
+        if (profile.filterModel && Object.keys(profile.filterModel).length > 0) {
+          gridApiRef.current.setFilterModel(profile.filterModel);
+        }
+        
+        if (profile.sortModel && profile.sortModel.length > 0 && typeof gridApiRef.current.getSortModel === 'function') {
+          gridApiRef.current.setSortModel(profile.sortModel);
+        }
+      } catch (error) {
+        console.warn('[DataGridStomp] Error applying grid state:', error);
+      }
+    }
+    
+    // Auto-connect is handled in the provider config loading effect
+    
+    // Don't reset unsaved changes when profile is loaded
+    // The user must explicitly save changes
+  }, [setTheme]);
+  
+  // Profile management
+  const {
+    profiles,
+    activeProfile,
+    activeProfileData,
+    isLoading: profilesLoading,
+    isSaving,
+    saveProfile,
+    loadProfile,
+    deleteProfile,
+    createProfile,
+    setActiveProfile,
+    exportProfile,
+    importProfile,
+    resetToDefault
+  } = useProfileManagement<DataGridStompProfile>({
+    viewInstanceId,
+    componentType: 'DataGridStomp',
+    defaultProfile: {
+      name: 'Default',
+      autoLoad: true,
+      selectedProviderId: null,
+      autoConnect: false,
+      sidebarVisible: false,
+      theme: 'system',
+      showColumnSettings: false,
+      asyncTransactionWaitMillis: 50,
+      rowBuffer: 10
+    },
+    onProfileChange: handleProfileChange,
+    // autoSaveInterval: 300, // Disabled - user must explicitly save
+    debug: false // Disable debug logging to reduce re-renders
+  });
   
   // Removed debug state tracking to prevent re-renders
   // Memoize the key column
@@ -117,10 +310,54 @@ const DataGridStompComponent = () => {
 
   // Load provider configuration when selected
   useEffect(() => {
-    if (!selectedProviderId) return;
+    if (!selectedProviderId) {
+      setProviderConfig(null);
+      return;
+    }
     
+    console.log('[DataGridStomp] Provider selected:', selectedProviderId);
     loadProviderConfig(selectedProviderId);
+    setHasUnsavedChanges(true);
   }, [selectedProviderId]);
+  
+  // Handle auto-connect when provider config is loaded
+  useEffect(() => {
+    if (!providerConfig || !selectedProviderId) {
+      return;
+    }
+    
+    // Auto-connect if profile has autoConnect enabled and we haven't already auto-connected
+    if (activeProfileData?.autoConnect && !hasAutoConnected.current && !isConnected && !stompClientRef.current) {
+      console.log('[DataGridStomp] Auto-connecting after provider config loaded');
+      console.log('Provider config ready:', providerConfig);
+      hasAutoConnected.current = true;
+      
+      // Small delay to ensure all state is settled
+      const timer = setTimeout(() => {
+        connectToStomp();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [providerConfig, selectedProviderId, activeProfileData?.autoConnect, isConnected]);
+  
+  // Track changes to mark unsaved state
+  useEffect(() => {
+    // Don't mark as unsaved when applying profile
+    if (!isApplyingProfile.current) {
+      setHasUnsavedChanges(true);
+    }
+  }, [sidebarVisible, showColumnSettings]);
+  
+  // Remove auto-save - user must explicitly save changes
+  
+  // Debug: Log when profiles change
+  useEffect(() => {
+    console.log('[DataGridStomp] Profiles updated:', {
+      count: profiles.length,
+      profiles: profiles.map(p => ({ id: p.versionId, name: p.name }))
+    });
+  }, [profiles.length]); // Only depend on length to reduce re-renders
 
   const loadProviderConfig = async (providerId: string) => {
     console.log('Loading provider config for:', providerId);
@@ -154,6 +391,12 @@ const DataGridStompComponent = () => {
     console.log('Connect button clicked');
     console.log('Current provider config:', providerConfig);
     
+    // Prevent multiple simultaneous connections
+    if (isConnected || stompClientRef.current || isConnecting.current) {
+      console.log('[DataGridStomp] Already connected, has client, or is connecting, skipping');
+      return;
+    }
+    
     if (!providerConfig) {
       console.error('No provider config loaded');
       toast({
@@ -163,6 +406,9 @@ const DataGridStompComponent = () => {
       });
       return;
     }
+    
+    // Mark as connecting
+    isConnecting.current = true;
     
     // Validate required fields
     const requiredFields = ['websocketUrl', 'listenerTopic'];
@@ -187,194 +433,100 @@ const DataGridStompComponent = () => {
     });
     
     try {
-      // Only reset essential state - avoid unnecessary re-renders
+      // Reset state
+      setIsConnected(false);
+      setSnapshotMode('idle');
+      setRowData([]);
       snapshotDataRef.current = [];
-      isReceivingSnapshot.current = true;
+      isSnapshotComplete.current = false;
       messageCountRef.current = 0;
+      setMessageCountDisplay(0);
       
-      // Create STOMP client directly
-      const client = new Client({
-        brokerURL: providerConfig.websocketUrl,
-        debug: (str) => {
-          console.log('[STOMP Debug]', str);
-        },
-        reconnectDelay: 5000,
-        heartbeatIncoming: 4000,
-        heartbeatOutgoing: 4000,
+      // Create StompClient config from provider config
+      const clientConfig: StompClientConfig = {
+        websocketUrl: providerConfig.websocketUrl,
+        dataType: providerConfig.dataType || 'positions',
+        messageRate: providerConfig.messageRate || 1000,
+        batchSize: providerConfig.batchSize,
+        snapshotEndToken: providerConfig.snapshotEndToken,
+        keyColumn: providerConfig.keyColumn,
+        snapshotTimeoutMs: providerConfig.snapshotTimeoutMs || 30000
+      };
+      
+      // Create new StompClient
+      const client = new StompClient(clientConfig);
+      
+      // Set up event listeners
+      client.on('connected', ({ clientId }) => {
+        console.log('✅ Connected with client ID:', clientId);
+        setCurrentClientId(clientId);
+        setIsConnected(true);
+        setSnapshotMode('requesting');
+        // Clear connecting flag on successful connection
+        isConnecting.current = false;
       });
       
-      // Set up connection handlers
-      client.onConnect = () => {
-        console.log('✅ Connected to STOMP server');
-        setIsConnected(true);
-        
-        // Emit requesting snapshot data
-        console.log('📋 Requesting snapshot data...');
-        setSnapshotMode('requesting');
-        
-        // Subscribe to listener topic
-        console.log('📡 Subscribing to topic:', providerConfig.listenerTopic);
-        subscriptionRef.current = client.subscribe(providerConfig.listenerTopic, (message: IMessage) => {
-          try {
-            const messageBody = message.body.trim();
-            
-            // Check for end token FIRST - before trying to parse JSON
-            if (providerConfig.snapshotEndToken && isReceivingSnapshot.current) {
-              const endToken = providerConfig.snapshotEndToken.toLowerCase();
-              const messageLower = messageBody.toLowerCase();
-              
-              // Check if this could be the end token message
-              if (messageLower.includes(endToken)) {
-                console.log('🏁 Snapshot complete - end token received:', messageBody);
-                isReceivingSnapshot.current = false;
-                setSnapshotMode('complete');
-                // Set all data at once when snapshot is complete
-                setRowData(snapshotDataRef.current);
-                messageCountRef.current = snapshotDataRef.current.length;
-                setMessageCountDisplay(snapshotDataRef.current.length);
-                toast({
-                  title: "Snapshot Complete",
-                  description: `Received ${snapshotDataRef.current.length} records`,
-                });
-                return;
-              }
-            }
-            
-            // If not end token, try to parse as JSON
-            let data;
-            try {
-              data = JSON.parse(messageBody);
-            } catch (parseError) {
-              // If it's not JSON and we're not in snapshot mode, it might be a text message
-              if (!isReceivingSnapshot.current) {
-                console.log('[STOMP] Non-JSON message received after snapshot:', messageBody);
-              } else {
-                console.warn('[STOMP] Non-JSON message during snapshot (not end token):', messageBody);
-              }
-              return;
-            }
-            
-            // Process data based on snapshot mode
-            if (isReceivingSnapshot.current) {
-              // During snapshot - accumulate data
-              if (Array.isArray(data)) {
-                // Log first item to verify structure
-                if (snapshotDataRef.current.length === 0 && data.length > 0) {
-                  console.log('[STOMP] First snapshot item:', {
-                    hasPositionId: 'positionId' in data[0],
-                    positionId: data[0].positionId,
-                    keys: Object.keys(data[0]).slice(0, 5)
-                  });
-                }
-                snapshotDataRef.current.push(...data);
-                messageCountRef.current += data.length;
-              } else if (data && typeof data === 'object') {
-                snapshotDataRef.current.push(data);
-                messageCountRef.current += 1;
-              }
-              // Set snapshot mode to receiving only once at the beginning
-              if (snapshotMode === 'requesting') {
-                setSnapshotMode('receiving');
-              }
-            } else {
-              // Real-time mode - process updates
-              const updates = Array.isArray(data) ? data : [data];
-              
-              // Only log first update for debugging
-              if (updates.length > 0 && messageCountRef.current < 10) {
-                const firstUpdate = updates[0];
-                const keyColumn = providerConfig?.keyColumn || 'id';
-                console.log('[STOMP] Real-time update:', {
-                  keyColumn,
-                  hasKey: keyColumn in firstUpdate,
-                  keyValue: firstUpdate[keyColumn],
-                  updateKeys: Object.keys(firstUpdate).slice(0, 5)
-                });
-              }
-              
-              // Use grid API directly like ag-grid stress test
-              if (gridApiRef.current) {
-                gridApiRef.current.applyTransactionAsync({ update: updates });
-              }
-              messageCountRef.current += updates.length;
-              
-              // Update display counter less frequently to minimize re-renders
-              const now = Date.now();
-              const elapsed = now - lastUpdateTimeRef.current;
-              if (elapsed >= 1000) {
-                setMessageCountDisplay(messageCountRef.current);
-                lastUpdateTimeRef.current = now;
-              }
-            }
-          } catch (error) {
-            console.error('[STOMP] Error processing message:', error);
-          }
-        });
-        
-        // Send snapshot request if configured
-        if (providerConfig.requestMessage && providerConfig.requestBody) {
-          console.log('🚀 Sending snapshot request:', {
-            destination: providerConfig.requestMessage,
-            body: providerConfig.requestBody
-          });
+      client.on('data', (data) => {
+        if (!isSnapshotComplete.current) {
+          // During snapshot - accumulate data
+          snapshotDataRef.current.push(...data);
+          messageCountRef.current += data.length;
           
-          client.publish({
-            destination: providerConfig.requestMessage,
-            body: providerConfig.requestBody,
-          });
-        }
-        
-        // Set up timeout for snapshot completion
-        const snapshotTimeout = setTimeout(() => {
-          if (isReceivingSnapshot.current) {
-            console.warn('⏰ Snapshot timeout - no end token received after 30s');
-            console.log('Total records received:', snapshotDataRef.current.length);
-            isReceivingSnapshot.current = false;
-            setSnapshotMode('complete');
-            // Set all data at once when snapshot times out
-            setRowData(snapshotDataRef.current);
-            messageCountRef.current = snapshotDataRef.current.length;
-            setMessageCountDisplay(snapshotDataRef.current.length);
-            toast({
-              title: "Snapshot Complete (Timeout)",
-              description: `Received ${snapshotDataRef.current.length} records (no end token)`,
-              variant: "default"
-            });
+          // Update mode to receiving if not already
+          setSnapshotMode((prev) => prev === 'requesting' ? 'receiving' : prev);
+        } else {
+          // Real-time updates - direct to grid API
+          if (gridApiRef.current) {
+            gridApiRef.current.applyTransactionAsync({ update: data });
           }
-        }, 30000); // 30 second timeout
+          messageCountRef.current += data.length;
+          
+          // Update display counter less frequently
+          const now = Date.now();
+          const elapsed = now - lastUpdateTimeRef.current;
+          if (elapsed >= 1000) {
+            setMessageCountDisplay(messageCountRef.current);
+            lastUpdateTimeRef.current = now;
+          }
+        }
+      });
+      
+      client.on('snapshot-complete', ({ rowCount, duration }) => {
+        console.log(`🏁 Snapshot complete: ${rowCount} records in ${duration}ms`);
+        isSnapshotComplete.current = true;
+        setSnapshotMode('complete');
+        setRowData(snapshotDataRef.current);
+        setMessageCountDisplay(rowCount);
         
-        // Store timeout ref for cleanup
-        (client as any)._snapshotTimeout = snapshotTimeout;
-      };
-      
-      client.onStompError = (frame) => {
-        console.error('[STOMP] Error:', frame.headers['message']);
-        setIsConnected(false);
         toast({
-          title: "STOMP Error",
-          description: frame.headers['message'] || 'Connection error',
+          title: "Snapshot Complete",
+          description: `Received ${rowCount} records in ${(duration / 1000).toFixed(1)}s`,
+        });
+      });
+      
+      client.on('error', (error) => {
+        console.error('[STOMP] Error:', error);
+        setIsConnected(false);
+        // Clear connecting flag on error
+        isConnecting.current = false;
+        toast({
+          title: "Connection Error",
+          description: error.message,
           variant: "destructive"
         });
-      };
+      });
       
-      client.onWebSocketError = (event) => {
-        console.error('[STOMP] WebSocket error:', event);
-        setIsConnected(false);
-        toast({
-          title: "WebSocket Error",
-          description: "Failed to connect to WebSocket",
-          variant: "destructive"
-        });
-      };
-      
-      client.onDisconnect = () => {
+      client.on('disconnected', () => {
         console.log('🔌 Disconnected from STOMP server');
         setIsConnected(false);
-      };
+        setCurrentClientId('');
+        // Clear connecting flag on disconnect
+        isConnecting.current = false;
+      });
       
-      // Activate the client
+      // Store client reference and connect
       stompClientRef.current = client;
-      client.activate();
+      await client.connect();
       
     } catch (error) {
       console.error('Connection error:', error);
@@ -385,27 +537,24 @@ const DataGridStompComponent = () => {
         description: error instanceof Error ? error.message : 'Failed to connect to STOMP server',
         variant: "destructive"
       });
+    } finally {
+      // Always clear connecting flag
+      isConnecting.current = false;
     }
   };
 
-  const disconnectFromStomp = async () => {
+  const disconnectFromStomp = () => {
     if (stompClientRef.current) {
       try {
-        // Clear snapshot timeout if exists
-        const timeout = (stompClientRef.current as any)._snapshotTimeout;
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        
-        if (subscriptionRef.current) {
-          subscriptionRef.current.unsubscribe();
-          subscriptionRef.current = null;
-        }
-        stompClientRef.current.deactivate();
+        stompClientRef.current.disconnect();
         stompClientRef.current = null;
         setIsConnected(false);
         setSnapshotMode('idle');
-        isReceivingSnapshot.current = true;
+        setCurrentClientId('');
+        isSnapshotComplete.current = false;
+        // Reset flags when manually disconnecting
+        hasAutoConnected.current = false;
+        isConnecting.current = false;
         toast({
           title: "Disconnected",
           description: "Disconnected from STOMP server",
@@ -426,6 +575,53 @@ const DataGridStompComponent = () => {
     return () => clearTimeout(timer);
   }, []);
   
+  // Check for saved title on mount and apply it with a delay to ensure it takes precedence
+  useEffect(() => {
+    const checkAndRestoreTitle = async () => {
+      try {
+        // Use the viewInstanceId which is unique for each view
+        const savedTitle = localStorage.getItem(`viewTitle_${viewInstanceId}`);
+        if (savedTitle) {
+          console.log(`[DataGridStomp] Found saved title: "${savedTitle}" for instance: ${viewInstanceId}`);
+          
+          // Apply the title immediately
+          document.title = savedTitle;
+          
+          // Also apply with a small delay to ensure it overrides any default title setting
+          setTimeout(() => {
+            document.title = savedTitle;
+          }, 100);
+          
+          // Update view options with another delay to ensure the view is fully initialized
+          setTimeout(async () => {
+            try {
+              const currentView = await fin.View.getCurrent();
+              await currentView.updateOptions({
+                title: savedTitle,
+                titleOrder: 'options'
+              });
+              console.log(`[DataGridStomp] Successfully restored title: "${savedTitle}"`);
+            } catch (e) {
+              console.warn('[DataGridStomp] Could not update view options:', e);
+            }
+          }, 500);
+        } else {
+          console.log(`[DataGridStomp] No saved title found for instance: ${viewInstanceId}`);
+        }
+      } catch (error) {
+        console.warn('[DataGridStomp] Could not restore title:', error);
+      }
+    };
+    
+    // Check immediately
+    checkAndRestoreTitle();
+    
+    // Also check after a longer delay in case something else is setting the title
+    const timeoutId = setTimeout(checkAndRestoreTitle, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, [viewInstanceId]);
+  
   // Memoize dark mode calculation to prevent re-computation
   const isDarkMode = useMemo(() => {
     return appTheme === 'dark' || (appTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -443,10 +639,9 @@ const DataGridStompComponent = () => {
   useEffect(() => {
     return () => {
       if (stompClientRef.current) {
-        if (subscriptionRef.current) {
-          subscriptionRef.current.unsubscribe();
-        }
-        stompClientRef.current.deactivate();
+        console.log('[DataGridStomp] Component unmounting, disconnecting STOMP client');
+        stompClientRef.current.disconnect();
+        stompClientRef.current = null;
       }
     };
   }, []);
@@ -488,101 +683,365 @@ const DataGridStompComponent = () => {
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
     // console.log('[DataGridStomp] Grid ready event fired');
     gridApiRef.current = params.api;
-  }, []);
+    
+    // Apply saved state if available and valid
+    try {
+      if (activeProfileData?.columnState && activeProfileData.columnState.length > 0) {
+        params.api.applyColumnState({
+          state: activeProfileData.columnState,
+          applyOrder: true
+        });
+      }
+      
+      if (activeProfileData?.filterModel && Object.keys(activeProfileData.filterModel).length > 0) {
+        params.api.setFilterModel(activeProfileData.filterModel);
+      }
+      
+      if (activeProfileData?.sortModel && activeProfileData.sortModel.length > 0 && typeof params.api.setSortModel === 'function') {
+        params.api.setSortModel(activeProfileData.sortModel);
+      }
+    } catch (error) {
+      console.warn('[DataGridStomp] Error applying saved state on grid ready:', error);
+    }
+  }, [activeProfileData]);
+  
+  // Save current state to profile
+  const saveCurrentState = useCallback(async (saveAsNew = false, name?: string) => {
+    console.log('[DataGridStomp] Saving profile:', {
+      saveAsNew,
+      name,
+      selectedProviderId,
+      profilesBeforeSave: profiles.length
+    });
+    
+    // Extract grid state only when updating existing profile (not for new profiles)
+    let columnState = [];
+    let filterModel = {};
+    let sortModel = [];
+    
+    // Only extract grid state if we're updating an existing profile, not creating a new one
+    if (!saveAsNew && validateGridApi(gridApiRef.current)) {
+      try {
+        columnState = gridApiRef.current.getColumnState();
+        filterModel = gridApiRef.current.getFilterModel();
+        // Check if getSortModel exists (it might be part of sortController)
+        if (typeof gridApiRef.current.getSortModel === 'function') {
+          sortModel = gridApiRef.current.getSortModel();
+        } else if (gridApiRef.current.sortController && typeof gridApiRef.current.sortController.getSortModel === 'function') {
+          sortModel = gridApiRef.current.sortController.getSortModel();
+        }
+      } catch (error) {
+        console.warn('[DataGridStomp] Error extracting grid state:', error);
+      }
+    }
+    
+    const currentState: DataGridStompProfile = {
+      name: name || activeProfileData?.name || 'Profile',
+      autoLoad: true,
+      selectedProviderId,
+      autoConnect: isConnected,
+      sidebarVisible,
+      theme: appTheme as 'light' | 'dark' | 'system',
+      showColumnSettings,
+      asyncTransactionWaitMillis: 50,
+      rowBuffer: 10,
+      columnState,
+      filterModel,
+      sortModel
+    };
+    
+    await saveProfile(currentState, saveAsNew, name);
+    setHasUnsavedChanges(false);
+    
+    // The profiles state should be updated by the hook after save
+    console.log('[DataGridStomp] Profile saved successfully');
+  }, [activeProfileData, selectedProviderId, isConnected, sidebarVisible, appTheme, showColumnSettings, saveProfile]);
+  
+  // Handle profile management actions
+  const handleProfileExport = useCallback(async () => {
+    if (!activeProfile) return;
+    
+    try {
+      const exportData = await exportProfile(activeProfile.versionId);
+      const blob = new Blob([exportData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `datagrid-profile-${activeProfile.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Profile Exported",
+        description: `Profile "${activeProfile.name}" exported successfully`
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export profile",
+        variant: "destructive"
+      });
+    }
+  }, [activeProfile, exportProfile, toast]);
+  
+  const handleProfileImport = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      await importProfile(text);
+    } catch (error) {
+      toast({
+        title: "Import Failed",
+        description: "Failed to import profile",
+        variant: "destructive"
+      });
+    }
+  }, [importProfile, toast]);
+  
+  const handleProfileRename = useCallback(async (versionId: string, newName: string) => {
+    const profile = profiles.find(p => p.versionId === versionId);
+    if (!profile) return;
+    
+    const updatedProfile = {
+      ...(profile.config as DataGridStompProfile),
+      name: newName
+    };
+    
+    await saveProfile(updatedProfile, false);
+  }, [profiles, saveProfile]);
+  
+  const handleSetDefault = useCallback(async (versionId: string) => {
+    await setActiveProfile(versionId);
+  }, [setActiveProfile]);
 
-  // Memoize event handlers to prevent re-renders
-  const handleRefresh = useCallback(() => {
-    if (gridApiRef.current) {
-      gridApiRef.current.refreshCells();
+  // Handle view rename dialog open
+  const handleOpenRenameDialog = useCallback(async () => {
+    try {
+      // Get current view title
+      const currentView = await fin.View.getCurrent();
+      const currentOptions = await currentView.getOptions();
+      const title = document.title || currentOptions.title || currentOptions.name;
+      setCurrentViewTitle(title);
+      setShowRenameDialog(true);
+    } catch (error) {
+      console.error('Failed to get current view title:', error);
+      setCurrentViewTitle(document.title || 'DataGrid View');
+      setShowRenameDialog(true);
     }
   }, []);
 
-  const handleExport = useCallback(() => {
-    if (gridApiRef.current) {
-      gridApiRef.current.exportDataAsCsv();
+  // Handle actual rename
+  const handleRenameView = useCallback(async (newTitle: string) => {
+    try {
+      // Update document title immediately
+      document.title = newTitle;
+      
+      // Save title for persistence
+      await ViewTitleManager.setTitle(newTitle, true);
+      
+      // Try to update view options (may not work in all cases)
+      try {
+        const currentView = await fin.View.getCurrent();
+        await currentView.updateOptions({ 
+          title: newTitle,
+          titleOrder: 'options'
+        });
+      } catch (e) {
+        console.warn('Could not update view options:', e);
+      }
+      
+      toast({
+        title: "View Renamed",
+        description: `View renamed to "${newTitle}"`
+      });
+    } catch (error) {
+      console.error('Failed to rename view:', error);
+      toast({
+        title: "Rename Failed",
+        description: "Failed to rename the view",
+        variant: "destructive"
+      });
     }
-  }, []);
+  }, [toast]);
 
-  if (!stylesLoaded) {
+  // Removed refresh and export handlers - no longer needed
+
+  if (!stylesLoaded || profilesLoading) {
     return <div className="h-full flex items-center justify-center">Loading...</div>;
+  }
+  
+  // Only log renders in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DataGridStomp] Rendering with:', {
+      profilesCount: profiles.length,
+      activeProfile: activeProfile?.name,
+      hasUnsavedChanges,
+      isSaving
+    });
   }
 
   return (
     <div className={`h-full flex flex-col ${isDarkMode ? 'dark' : 'light'}`} data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Toolbar */}
-      <div className="h-[80px] border-b bg-background flex flex-col px-4 py-2 gap-2">
-        {/* First row - Provider selection and connection */}
-        <div className="flex items-center gap-4">
-          <ProviderSelector
-            value={selectedProviderId}
-            onChange={setSelectedProviderId}
+      <div className="h-14 border-b bg-background flex items-center px-4 gap-2">
+        {/* Profile management section */}
+        <div className="flex items-center gap-2">
+          <ProfileSelectorSimple
+            profiles={profiles}
+            activeProfileId={activeProfile?.versionId}
+            onProfileChange={loadProfile}
+            onCreateProfile={() => setShowSaveDialog(true)}
+            onManageProfiles={() => setShowProfileDialog(true)}
+            loading={profilesLoading}
           />
           
+          {/* Save button next to profile selector */}
           <Button
-            onClick={isConnected ? disconnectFromStomp : connectToStomp}
-            disabled={!selectedProviderId}
-            variant={isConnected ? "destructive" : "default"}
+            onClick={() => saveCurrentState()}
+            disabled={isSaving || !activeProfile}
+            variant="ghost"
             size="sm"
-            className="gap-2"
+            className="relative"
+            title={hasUnsavedChanges ? 'Save unsaved changes' : 'Save current profile'}
           >
-            {isConnected ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {isConnected ? 'Disconnect' : 'Connect'}
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                {hasUnsavedChanges && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-orange-500 rounded-full" />
+                )}
+              </>
+            )}
           </Button>
-          
-          <div className="flex items-center gap-2 text-sm">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
-            <span className="text-muted-foreground">
-              {isConnected ? `Connected • ${messageCountDisplay} messages • ${snapshotMode}` : 'Disconnected'}
-            </span>
-          </div>
         </div>
         
-        {/* Second row - Grid controls */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            className="gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-          
-          <Separator orientation="vertical" className="h-6" />
-          
-          <div className="flex items-center gap-2 ml-auto">
-            <Label htmlFor="sidebar-toggle" className="text-sm">
+        <div className="h-6 w-px bg-border" />
+        
+        {/* Provider selection and connection */}
+        <ProviderSelector
+          value={selectedProviderId}
+          onChange={(providerId) => {
+            console.log('[DataGridStomp] Provider changed to:', providerId);
+            setSelectedProviderId(providerId);
+            setHasUnsavedChanges(true);
+          }}
+        />
+        
+        <Button
+          onClick={isConnected ? disconnectFromStomp : connectToStomp}
+          disabled={!selectedProviderId}
+          variant={isConnected ? "destructive" : "default"}
+          size="sm"
+          className="gap-2"
+        >
+          {isConnected ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          {isConnected ? 'Disconnect' : 'Connect'}
+        </Button>
+        
+        {/* Connection status */}
+        <div className="flex items-center gap-2 text-sm">
+          <div className={`w-2 h-2 rounded-full transition-colors ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+          <span className="text-muted-foreground">
+            {isConnected ? (
+              <>
+                <span className="font-medium text-foreground">Connected</span>
+                <span className="mx-1">•</span>
+                <span>{messageCountDisplay.toLocaleString()} messages</span>
+                {snapshotMode !== 'idle' && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <span className="capitalize">{snapshotMode}</span>
+                  </>
+                )}
+                {currentClientId && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <span className="text-xs font-mono">{currentClientId}</span>
+                  </>
+                )}
+              </>
+            ) : (
+              'Disconnected'
+            )}
+          </span>
+        </div>
+        
+        {/* Right side controls */}
+        <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="sidebar-toggle" className="text-sm text-muted-foreground">
               Sidebar
             </Label>
             <Switch
               id="sidebar-toggle"
               checked={sidebarVisible}
               onCheckedChange={setSidebarVisible}
+              className="h-4 w-8"
             />
-            
-            <Separator orientation="vertical" className="h-6" />
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setTheme(isDarkMode ? 'light' : 'dark')}
-              className="gap-2"
-            >
-              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {isDarkMode ? 'Light' : 'Dark'}
-            </Button>
           </div>
+          
+          <div className="h-6 w-px bg-border" />
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTheme(isDarkMode ? 'light' : 'dark')}
+            className="gap-2 px-3"
+          >
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? 'Light' : 'Dark'}
+          </Button>
+          
+          <div className="h-6 w-px bg-border" />
+          
+          {/* Debug info dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                title="View debug information"
+              >
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Debug info</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Debug Information</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-xs font-mono" onSelect={(e) => e.preventDefault()}>
+                <span className="text-muted-foreground">Profiles:</span>
+                <span className="ml-auto">{profiles.length}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-xs font-mono" onSelect={(e) => e.preventDefault()}>
+                <span className="text-muted-foreground">Active:</span>
+                <span className="ml-auto">{activeProfile?.name || 'none'}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-xs font-mono" onSelect={(e) => e.preventDefault()}>
+                <span className="text-muted-foreground">View ID:</span>
+                <span className="ml-auto" title={viewInstanceId}>
+                  {viewInstanceId.substring(0, 8)}...
+                </span>
+              </DropdownMenuItem>
+              {isConnected && currentClientId && (
+                <DropdownMenuItem className="text-xs font-mono" onSelect={(e) => e.preventDefault()}>
+                  <span className="text-muted-foreground">Client ID:</span>
+                  <span className="ml-auto" title={currentClientId}>
+                    {currentClientId.substring(0, 12)}...
+                  </span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleOpenRenameDialog}>
+                <Edit2 className="h-4 w-4 mr-2" />
+                Rename View
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       
@@ -606,6 +1065,40 @@ const DataGridStompComponent = () => {
           statusBar={statusBarConfig}
         />
       </div>
+      
+      {/* Profile Management Dialog */}
+      <ProfileManagementDialog
+        open={showProfileDialog}
+        onOpenChange={setShowProfileDialog}
+        profiles={profiles}
+        activeProfileId={activeProfile?.versionId}
+        onSave={saveProfile}
+        onDelete={deleteProfile}
+        onRename={handleProfileRename}
+        onSetDefault={handleSetDefault}
+        onImport={handleProfileImport}
+        onExport={handleProfileExport}
+      />
+      
+      {/* Save Profile Dialog */}
+      <SaveProfileDialog
+        open={showSaveDialog}
+        onOpenChange={setShowSaveDialog}
+        onSave={async (name, description) => {
+          await saveCurrentState(true, name); // Always create new when using dialog
+          setShowSaveDialog(false);
+        }}
+        title='Create New Profile'
+        initialName=''
+      />
+      
+      {/* Rename View Dialog */}
+      <RenameViewDialog
+        open={showRenameDialog}
+        onOpenChange={setShowRenameDialog}
+        currentTitle={currentViewTitle}
+        onRename={handleRenameView}
+      />
     </div>
   );
 };

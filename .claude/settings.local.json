@@ -28,7 +28,11 @@
       "Bash(tsc --noEmit)",
       "Bash(grep:*)",
       "WebFetch(domain:ui.shadcn.com)",
-      "Bash(npm create:*)"
+      "Bash(npm create:*)",
+      "WebFetch(domain:developer.openfin.co)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:openfin.zendesk.com)",
+      "Bash(true)"
     ],
     "deny": []
   }

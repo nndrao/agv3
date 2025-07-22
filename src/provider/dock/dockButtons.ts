@@ -45,6 +45,14 @@ export function createDockButtons(): DockButton[] {
         id: 'show-providers',
         customData: {}
       }
+    },
+    {
+      tooltip: 'Manage DataGrid Instances',
+      iconUrl: `${baseUrl}/icons/layers.svg`,
+      action: {
+        id: 'manage-datagrid-instances',
+        customData: {}
+      }
     }
   ];
   

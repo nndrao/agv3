@@ -16,14 +16,32 @@ export class LocalStorageAdapter implements StorageAdapter {
     config.lastUpdated = new Date();
     
     localStorage.setItem(key, JSON.stringify(config));
+    
+    // Store the mapping for faster lookups
+    const mappingKey = `${this.prefix}mapping:${config.configId}`;
+    localStorage.setItem(mappingKey, config.componentType);
+    
     this.updateIndex(config.componentType, config.configId);
     
     return config.configId;
   }
   
   async read(configId: string): Promise<UnifiedConfig | null> {
-    // Search all component types
-    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings'];
+    // First check if we have a direct mapping stored
+    const mappingKey = `${this.prefix}mapping:${configId}`;
+    const componentType = localStorage.getItem(mappingKey);
+    
+    if (componentType) {
+      // We know the component type, so directly fetch
+      const key = this.getKey(componentType, configId);
+      const data = localStorage.getItem(key);
+      if (data) {
+        return JSON.parse(data);
+      }
+    }
+    
+    // Fallback: Search all known component types
+    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings', 'DataGridStomp', 'DataGridChannel', 'DataTable'];
     
     for (const type of types) {
       const key = this.getKey(type, configId);
@@ -51,6 +69,10 @@ export class LocalStorageAdapter implements StorageAdapter {
     
     const key = this.getKey(existing.componentType, configId);
     localStorage.setItem(key, JSON.stringify(updated));
+    
+    // Update mapping in case componentType changed
+    const mappingKey = `${this.prefix}mapping:${configId}`;
+    localStorage.setItem(mappingKey, updated.componentType);
   }
   
   async delete(configId: string): Promise<void> {
@@ -58,6 +80,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     if (config) {
       const key = this.getKey(config.componentType, configId);
       localStorage.removeItem(key);
+      
+      // Remove the mapping
+      const mappingKey = `${this.prefix}mapping:${configId}`;
+      localStorage.removeItem(mappingKey);
+      
       this.removeFromIndex(config.componentType, configId);
     }
   }
