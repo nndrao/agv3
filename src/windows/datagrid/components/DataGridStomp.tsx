@@ -160,7 +160,6 @@ const DataGridStompComponent = () => {
   const lastUpdateTimeRef = useRef<number>(Date.now());
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [currentViewTitle, setCurrentViewTitle] = useState('');
   
@@ -173,7 +172,7 @@ const DataGridStompComponent = () => {
   const isInitialMount = useRef(true);
   const hasAutoConnected = useRef(false);
   const isConnecting = useRef(false);
-  const isApplyingProfile = useRef(false);
+  const wasManuallyDisconnected = useRef(false);
   
   // Get view instance ID from query parameters
   const viewInstanceId = useMemo(() => getViewInstanceId(), []);
@@ -212,9 +211,6 @@ const DataGridStompComponent = () => {
     // Apply profile settings
     console.log('[DataGridStomp] Applying profile:', profile);
     
-    // Set flag to prevent marking as unsaved when applying profile
-    isApplyingProfile.current = true;
-    
     // On initial mount, apply all settings including selectedProviderId
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -224,24 +220,15 @@ const DataGridStompComponent = () => {
       }
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
-      if (profile.theme && profile.theme !== 'system') {
-        setTheme(profile.theme);
-      }
+      // Don't apply theme from profile - let user control it manually
     } else {
       // After initial mount, NEVER update selectedProviderId from profile
       // This prevents the profile from clearing user selections
       console.log('[DataGridStomp] Subsequent profile application - skipping selectedProviderId');
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
-      if (profile.theme && profile.theme !== 'system') {
-        setTheme(profile.theme);
-      }
+      // Don't apply theme from profile - let user control it manually
     }
-    
-    // Reset flag after applying
-    setTimeout(() => {
-      isApplyingProfile.current = false;
-    }, 0);
     
     // Apply grid state if available and grid is ready
     if (gridApiRef.current && validateGridApi(gridApiRef.current)) {
@@ -269,7 +256,7 @@ const DataGridStompComponent = () => {
     
     // Don't reset unsaved changes when profile is loaded
     // The user must explicitly save changes
-  }, [setTheme]);
+  }, []);
   
   // Profile management
   const {
@@ -318,7 +305,6 @@ const DataGridStompComponent = () => {
     
     console.log('[DataGridStomp] Provider selected:', selectedProviderId);
     loadProviderConfig(selectedProviderId);
-    setHasUnsavedChanges(true);
   }, [selectedProviderId]);
   
   // Handle auto-connect when provider config is loaded
@@ -328,7 +314,8 @@ const DataGridStompComponent = () => {
     }
     
     // Auto-connect if profile has autoConnect enabled and we haven't already auto-connected
-    if (activeProfileData?.autoConnect && !hasAutoConnected.current && !isConnected && !stompClientRef.current) {
+    // AND the user hasn't manually disconnected
+    if (activeProfileData?.autoConnect && !hasAutoConnected.current && !isConnected && !stompClientRef.current && !wasManuallyDisconnected.current) {
       console.log('[DataGridStomp] Auto-connecting after provider config loaded');
       console.log('Provider config ready:', providerConfig);
       hasAutoConnected.current = true;
@@ -342,13 +329,6 @@ const DataGridStompComponent = () => {
     }
   }, [providerConfig, selectedProviderId, activeProfileData?.autoConnect, isConnected]);
   
-  // Track changes to mark unsaved state
-  useEffect(() => {
-    // Don't mark as unsaved when applying profile
-    if (!isApplyingProfile.current) {
-      setHasUnsavedChanges(true);
-    }
-  }, [sidebarVisible, showColumnSettings]);
   
   // Remove auto-save - user must explicitly save changes
   
@@ -391,6 +371,9 @@ const DataGridStompComponent = () => {
   const connectToStomp = async () => {
     console.log('Connect button clicked');
     console.log('Current provider config:', providerConfig);
+    
+    // Clear manual disconnect flag when user manually connects
+    wasManuallyDisconnected.current = false;
     
     // Prevent multiple simultaneous connections
     if (isConnected || stompClientRef.current || isConnecting.current) {
@@ -553,8 +536,8 @@ const DataGridStompComponent = () => {
         setSnapshotMode('idle');
         setCurrentClientId('');
         isSnapshotComplete.current = false;
-        // Reset flags when manually disconnecting
-        hasAutoConnected.current = false;
+        // Set flag to prevent auto-reconnect
+        wasManuallyDisconnected.current = true;
         isConnecting.current = false;
         toast({
           title: "Disconnected",
@@ -767,7 +750,7 @@ const DataGridStompComponent = () => {
       selectedProviderId,
       autoConnect: isConnected,
       sidebarVisible,
-      theme: appTheme as 'light' | 'dark' | 'system',
+      theme: 'system', // Always save as system to let user control theme
       showColumnSettings,
       asyncTransactionWaitMillis: 50,
       rowBuffer: 10,
@@ -777,11 +760,10 @@ const DataGridStompComponent = () => {
     };
     
     await saveProfile(currentState, saveAsNew, name);
-    setHasUnsavedChanges(false);
     
     // The profiles state should be updated by the hook after save
     console.log('[DataGridStomp] Profile saved successfully');
-  }, [activeProfileData, selectedProviderId, isConnected, sidebarVisible, appTheme, showColumnSettings, saveProfile]);
+  }, [activeProfileData, selectedProviderId, isConnected, sidebarVisible, showColumnSettings, saveProfile]);
   
   // Handle profile management actions
   const handleProfileExport = useCallback(async () => {
@@ -856,6 +838,28 @@ const DataGridStompComponent = () => {
       setShowRenameDialog(true);
     }
   }, []);
+  
+  // Memoize the callbacks for ProfileSelectorSimple to prevent re-renders
+  const handleOpenSaveDialog = useCallback(() => {
+    setShowSaveDialog(true);
+  }, []);
+  
+  const handleOpenProfileDialog = useCallback(() => {
+    setShowProfileDialog(true);
+  }, []);
+  
+  const handleSaveNewProfile = useCallback(async (name: string, description?: string) => {
+    await saveCurrentState(true, name); // Always create new when using dialog
+    setShowSaveDialog(false);
+  }, [saveCurrentState]);
+  
+  const handleProviderChange = useCallback((providerId: string | null) => {
+    console.log('[DataGridStomp] Provider changed to:', providerId);
+    setSelectedProviderId(providerId);
+    // Reset connection flags when provider changes
+    hasAutoConnected.current = false;
+    wasManuallyDisconnected.current = false;
+  }, []);
 
   // Handle actual rename
   const handleRenameView = useCallback(async (newTitle: string) => {
@@ -909,14 +913,13 @@ const DataGridStompComponent = () => {
   }
   
   // Only log renders in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[DataGridStomp] Rendering with:', {
-      profilesCount: profiles.length,
-      activeProfile: activeProfile?.name,
-      hasUnsavedChanges,
-      isSaving
-    });
-  }
+  // if (process.env.NODE_ENV === 'development') {
+  //   console.log('[DataGridStomp] Rendering with:', {
+  //     profilesCount: profiles.length,
+  //     activeProfile: activeProfile?.name,
+  //     isSaving
+  //   });
+  // }
 
   return (
     <div className={`h-full flex flex-col ${isDarkMode ? 'dark' : 'light'}`} data-theme={isDarkMode ? 'dark' : 'light'}>
@@ -928,28 +931,25 @@ const DataGridStompComponent = () => {
             profiles={profiles}
             activeProfileId={activeProfile?.versionId}
             onProfileChange={loadProfile}
-            onCreateProfile={() => setShowSaveDialog(true)}
-            onManageProfiles={() => setShowProfileDialog(true)}
+            onCreateProfile={handleOpenSaveDialog}
+            onManageProfiles={handleOpenProfileDialog}
             loading={profilesLoading}
           />
           
           {/* Save button next to profile selector */}
           <Button
-            onClick={() => saveCurrentState()}
+            onClick={saveCurrentState}
             disabled={isSaving || !activeProfile}
             variant="ghost"
             size="sm"
             className="relative"
-            title={hasUnsavedChanges ? 'Save unsaved changes' : 'Save current profile'}
+            title='Save current profile'
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                {hasUnsavedChanges && (
-                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-orange-500 rounded-full" />
-                )}
               </>
             )}
           </Button>
@@ -960,11 +960,7 @@ const DataGridStompComponent = () => {
         {/* Provider selection and connection */}
         <ProviderSelector
           value={selectedProviderId}
-          onChange={(providerId) => {
-            console.log('[DataGridStomp] Provider changed to:', providerId);
-            setSelectedProviderId(providerId);
-            setHasUnsavedChanges(true);
-          }}
+          onChange={handleProviderChange}
         />
         
         <Button
@@ -1121,10 +1117,7 @@ const DataGridStompComponent = () => {
       <SaveProfileDialog
         open={showSaveDialog}
         onOpenChange={setShowSaveDialog}
-        onSave={async (name, description) => {
-          await saveCurrentState(true, name); // Always create new when using dialog
-          setShowSaveDialog(false);
-        }}
+        onSave={handleSaveNewProfile}
         title='Create New Profile'
         initialName=''
       />

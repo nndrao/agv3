@@ -10,20 +10,20 @@ interface ProfileSelectorSimpleProps {
   loading?: boolean;
 }
 
-export function ProfileSelectorSimple({
+const ProfileSelectorSimpleComponent = ({
   profiles,
   activeProfileId,
   onProfileChange,
   onCreateProfile,
   onManageProfiles,
   loading = false
-}: ProfileSelectorSimpleProps) {
-  console.log('[ProfileSelectorSimple] Rendering with:', {
-    profilesCount: profiles.length,
-    profiles: profiles.map(p => ({ id: p.versionId, name: p.name })),
-    activeProfileId,
-    loading
-  });
+}: ProfileSelectorSimpleProps) => {
+  // console.log('[ProfileSelectorSimple] Rendering with:', {
+  //   profilesCount: profiles.length,
+  //   profiles: profiles.map(p => ({ id: p.versionId, name: p.name })),
+  //   activeProfileId,
+  //   loading
+  // });
 
   if (loading) {
     return <div className="text-sm">Loading profiles...</div>;
@@ -66,4 +66,6 @@ export function ProfileSelectorSimple({
       )}
     </div>
   );
-}
+};
+
+export const ProfileSelectorSimple = React.memo(ProfileSelectorSimpleComponent);
