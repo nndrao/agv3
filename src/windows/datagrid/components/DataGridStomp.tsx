@@ -19,7 +19,6 @@ import { RenameViewDialog } from "@/components/RenameViewDialog";
 import { getViewInstanceId } from "@/utils/viewUtils";
 import { WindowManager } from "@/services/window/windowManager";
 import { debugStorage } from "@/utils/storageDebug";
-import { ViewTitleManager } from "@/utils/viewTitleManager";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -197,13 +196,15 @@ const DataGridStompComponent = () => {
       instanceName = customName.charAt(0).toUpperCase() + customName.slice(1);
     }
     
-    console.log(`[DataGridStomp] Registering instance: ${viewInstanceId} as "${instanceName}"`);
     WindowManager.registerViewInstance(viewInstanceId, instanceName, 'DataGridStomp');
     
     // Restore saved title if available
-    ViewTitleManager.restoreTitle(instanceName).then(() => {
-      console.log('[DataGridStomp] Title restoration completed');
-    });
+    const savedTitle = localStorage.getItem(`viewTitle_${viewInstanceId}`);
+    if (savedTitle) {
+      document.title = savedTitle;
+    } else {
+      document.title = instanceName;
+    }
   }, [viewInstanceId]);
   
   // Memoize the profile change handler to prevent re-renders
@@ -838,7 +839,7 @@ const DataGridStompComponent = () => {
       document.title = newTitle;
       
       // Save title for persistence
-      await ViewTitleManager.setTitle(newTitle, true);
+      localStorage.setItem(`viewTitle_${viewInstanceId}`, newTitle);
       
       // Try to update view options (may not work in all cases)
       try {
@@ -848,7 +849,7 @@ const DataGridStompComponent = () => {
           titleOrder: 'options'
         });
       } catch (e) {
-        console.warn('Could not update view options:', e);
+        // Silent fail - not critical
       }
       
       toast({
@@ -856,14 +857,13 @@ const DataGridStompComponent = () => {
         description: `View renamed to "${newTitle}"`
       });
     } catch (error) {
-      console.error('Failed to rename view:', error);
       toast({
         title: "Rename Failed",
         description: "Failed to rename the view",
         variant: "destructive"
       });
     }
-  }, [toast]);
+  }, [viewInstanceId, toast]);
 
   // Removed refresh and export handlers - no longer needed
 

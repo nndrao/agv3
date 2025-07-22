@@ -53,7 +53,6 @@ export class WindowManager {
     
     // Track window closure
     window.on('closed', () => {
-      console.log('Datasource config window closed');
       this.windows.delete(windowName);
     });
     
@@ -119,7 +118,6 @@ export class WindowManager {
     
     // Track window closure
     window.on('closed', () => {
-      console.log('Provider status window closed');
       this.windows.delete(windowName);
     });
     
@@ -181,7 +179,6 @@ export class WindowManager {
       const savedTitle = localStorage.getItem(`viewTitle_${id}`);
       if (savedTitle) {
         viewTitle = savedTitle;
-        console.log(`[WindowManager] Found saved title "${savedTitle}" for view ${id}`);
       }
     }
     
@@ -259,7 +256,6 @@ export class WindowManager {
     
     // Track window closure
     window.on('closed', () => {
-      console.log('DataGrid STOMP Manager window closed');
       this.windows.delete(windowName);
     });
     
@@ -273,8 +269,6 @@ export class WindowManager {
   static async createHeadlessProvider(providerId: string, config: any): Promise<any> {
     const windowName = `provider-${providerId}`;
     
-    console.log(`Creating provider window: ${windowName}`);
-    console.log('Provider config:', config);
     
     // Create headless window
     const window = await fin.Window.create({
@@ -296,16 +290,9 @@ export class WindowManager {
     
     this.windows.set(windowName, window);
     
-    console.log(`Provider window created: ${windowName}`);
-    console.log('Window details:', {
-      name: windowName,
-      url: getViewUrl('/provider-window.html'),
-      customData: window.getOptions().customData
-    });
     
     // Track window closure
     window.on('closed', () => {
-      console.log(`Provider window closed: ${windowName}`);
       this.windows.delete(windowName);
     });
     
@@ -332,14 +319,12 @@ export class WindowManager {
     try {
       const existingWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name });
       if (existingWindow) {
-        console.log(`Found existing window: ${name}`);
         // Add to our map
         this.windows.set(name, existingWindow);
         return existingWindow;
       }
     } catch (error) {
       // Window doesn't exist
-      console.log(`Window not found: ${name}`);
     }
     
     return null;
@@ -372,7 +357,6 @@ export class WindowManager {
     
     // Check if instance already exists
     if (!this.viewInstances.has(id)) {
-      console.log(`[WindowManager] Registering new instance: ${id} (${name})`);
       this.saveViewInstance(id, name, type);
     }
   }

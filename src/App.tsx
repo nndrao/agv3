@@ -9,6 +9,7 @@ import { App as DatasourceConfigApp } from './windows/datasource-config/App';
 import { App as ProviderStatusApp } from './windows/provider-status/App';
 import { DataGridInstanceTest } from './windows/test/DataGridInstanceTest';
 import { DataGridStompManager } from './components/DataGridStompManager';
+import { RenameDialogApp } from './windows/rename-dialog/RenameDialogApp';
 
 // Register AG-Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -41,6 +42,7 @@ function App() {
         <Route path="/provider-status" element={<ProviderStatusApp />} />
         <Route path="/datagrid-instance-test" element={<DataGridInstanceTest />} />
         <Route path="/datagrid-stomp-manager" element={<div className="p-6"><DataGridStompManager /></div>} />
+        <Route path="/rename-dialog" element={<RenameDialogApp />} />
       </Routes>
     </BrowserRouter>
   );
