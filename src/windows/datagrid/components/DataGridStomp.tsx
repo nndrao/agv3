@@ -635,6 +635,31 @@ const DataGridStompComponent = () => {
     root.classList.remove('light', 'dark');
     root.classList.add(isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
+  
+  // Expose rename dialog function to be called from context menu
+  useEffect(() => {
+    (window as any).__showRenameDialog = async () => {
+      return new Promise((resolve) => {
+        // Get current title
+        const currentView = fin.View.getCurrent();
+        currentView.getOptions().then(options => {
+          const title = document.title || options.title || options.name || 'Untitled';
+          setCurrentViewTitle(title);
+          setShowRenameDialog(true);
+          
+          // Store resolve function to be called when dialog closes
+          (window as any).__renameDialogResolve = resolve;
+        }).catch(() => {
+          resolve({ success: false });
+        });
+      });
+    };
+    
+    return () => {
+      delete (window as any).__showRenameDialog;
+      delete (window as any).__renameDialogResolve;
+    };
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -856,12 +881,24 @@ const DataGridStompComponent = () => {
         title: "View Renamed",
         description: `View renamed to "${newTitle}"`
       });
+      
+      // If called from context menu, resolve the promise
+      if ((window as any).__renameDialogResolve) {
+        (window as any).__renameDialogResolve({ success: true, newTitle });
+        delete (window as any).__renameDialogResolve;
+      }
     } catch (error) {
       toast({
         title: "Rename Failed",
         description: "Failed to rename the view",
         variant: "destructive"
       });
+      
+      // If called from context menu, resolve with failure
+      if ((window as any).__renameDialogResolve) {
+        (window as any).__renameDialogResolve({ success: false });
+        delete (window as any).__renameDialogResolve;
+      }
     }
   }, [viewInstanceId, toast]);
 
@@ -1095,7 +1132,14 @@ const DataGridStompComponent = () => {
       {/* Rename View Dialog */}
       <RenameViewDialog
         open={showRenameDialog}
-        onOpenChange={setShowRenameDialog}
+        onOpenChange={(open) => {
+          setShowRenameDialog(open);
+          // If closing and called from context menu, resolve with cancel
+          if (!open && (window as any).__renameDialogResolve) {
+            (window as any).__renameDialogResolve({ success: false });
+            delete (window as any).__renameDialogResolve;
+          }
+        }}
         currentTitle={currentViewTitle}
         onRename={handleRenameView}
       />

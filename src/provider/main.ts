@@ -244,27 +244,77 @@ function getCustomActions(): CustomActionsMap {
         }
         
         const targetView = fin.View.wrapSync(viewIdentity);
-        const options = await targetView.getOptions();
-        const currentTitle = options.title || options.name || 'Untitled';
+        
+        // Get the current title - check multiple sources
+        let currentTitle = 'Untitled';
+        try {
+          // First, try to get the view instance ID and check localStorage
+          const viewInfo = await targetView.getInfo();
+          const viewUrl = viewInfo.url;
+          const urlParams = new URLSearchParams(new URL(viewUrl).search);
+          const viewInstanceId = urlParams.get('id');
+          
+          if (viewInstanceId) {
+            // Try to get the title from localStorage (where renamed titles are stored)
+            const savedTitle = await targetView.executeJavaScript(`
+              (() => {
+                const id = ${JSON.stringify(viewInstanceId)};
+                return window.localStorage.getItem('viewTitle_' + id);
+              })()
+            `);
+            
+            if (savedTitle) {
+              currentTitle = savedTitle;
+            } else {
+              // Try to get document.title
+              const docTitle = await targetView.executeJavaScript('document.title');
+              currentTitle = docTitle || 'Untitled';
+            }
+          } else {
+            // Fallback to document.title
+            const docTitle = await targetView.executeJavaScript('document.title');
+            currentTitle = docTitle || 'Untitled';
+          }
+        } catch (e) {
+          // Final fallback - try view options
+          try {
+            const options = await targetView.getOptions();
+            currentTitle = options.title || options.name || 'Untitled';
+          } catch (e2) {
+            currentTitle = 'Untitled';
+          }
+        }
         
         // Show rename dialog
         const dialogId = `rename-${Date.now()}`;
         const baseUrl = window.location.origin;
         
+        // Get the parent window position to center the dialog over it
+        const parentWindow = await targetView.getCurrentWindow();
+        const parentBounds = await parentWindow.getBounds();
+        
+        // Calculate center position (adding 20px for the 10px padding on each side)
+        const dialogWidth = 360;
+        const dialogHeight = 160;
+        const left = parentBounds.left + Math.floor((parentBounds.width - dialogWidth) / 2);
+        const top = parentBounds.top + Math.floor((parentBounds.height - dialogHeight) / 2);
+        
         const dialogWindow = await fin.Window.create({
-          name: `rename-dialog-${dialogId}`,
+          name: `rename-dialog-${Date.now()}`,
           url: `${baseUrl}/rename-dialog`,
-          defaultWidth: 340,
-          defaultHeight: 170,
+          defaultWidth: dialogWidth,
+          defaultHeight: dialogHeight,
+          defaultLeft: left,
+          defaultTop: top,
           frame: false,
           autoShow: true,
-          defaultCentered: true,
           alwaysOnTop: true,
           resizable: false,
           maximizable: false,
           minimizable: false,
           showTaskbarIcon: false,
-          backgroundColor: '#2B2B2B',
+          opacity: 0.95,
+          backgroundColor: '#00000000', // Transparent background
           customData: {
             dialogId,
             currentTitle,
@@ -298,7 +348,7 @@ function getCustomActions(): CustomActionsMap {
         
         const result = await resultPromise;
         
-        if (result.success && result.newTitle && result.newTitle !== currentTitle) {
+        if (result && result.success && result.newTitle && result.newTitle !== currentTitle) {
           // Update view title
           await targetView.updateOptions({
             title: result.newTitle,
