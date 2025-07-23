@@ -215,6 +215,72 @@ export class WindowManager {
     return view;
   }
   
+  static async openDataGridStompSimplified(instanceName?: string): Promise<any> {
+    // Load existing instances
+    this.loadViewInstances();
+    
+    let id: string;
+    let viewName: string;
+    
+    if (instanceName) {
+      // Use provided instance name to find or create instance
+      const existingInstance = Array.from(this.viewInstances.values())
+        .find(instance => instance.type === 'DataGridStompSimplified' && instance.name === instanceName);
+      
+      if (existingInstance) {
+        id = existingInstance.id;
+      } else {
+        // Create new instance with stable ID based on name
+        id = `datagrid-stomp-simplified-${instanceName.toLowerCase().replace(/\s+/g, '-')}`;
+      }
+      viewName = instanceName;
+    } else {
+      // Create new instance with timestamp ID
+      const existingCount = Array.from(this.viewInstances.values())
+        .filter(instance => instance.type === 'DataGridStompSimplified').length;
+      
+      id = `datagrid-stomp-simplified-instance-${existingCount + 1}`;
+      viewName = `DataGrid STOMP Simplified ${existingCount + 1}`;
+    }
+    
+    let viewTitle = viewName;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const savedTitle = localStorage.getItem(`viewTitle_${id}`);
+      if (savedTitle) {
+        viewTitle = savedTitle;
+      }
+    }
+    
+    const platform = await fin.Platform.getCurrent();
+    const view = await platform.createView({
+      name: id,
+      url: getViewUrl(`/datagrid-stomp-simplified?id=${encodeURIComponent(id)}`),
+      customData: {
+        viewInstanceId: id,
+        instanceName: viewName,
+        type: 'DataGridStompSimplified',
+        createdAt: new Date().toISOString()
+      },
+      fdc3InteropApi: '2.0',
+      interop: {
+        currentContextGroup: 'green'
+      }
+    }, fin.me.identity);
+    
+    // Register the instance
+    this.registerViewInstance(id, viewName, 'DataGridStompSimplified');
+    
+    // Update the view title to match the saved one
+    if (viewTitle !== viewName) {
+      await view.updateOptions({
+        title: viewTitle,
+        titleOrder: 'options'
+      });
+    }
+    
+    return view;
+  }
+  
   static async openDataGridStompManager(): Promise<any> {
     const windowName = 'datagrid-stomp-manager-window';
     

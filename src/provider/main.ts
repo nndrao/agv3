@@ -3,12 +3,24 @@ import { Home, Storefront, Dock } from '@openfin/workspace';
 import type { StorefrontFooter, StorefrontLandingPage } from '@openfin/workspace';
 import type { CustomActionsMap } from '@openfin/workspace-platform';
 import { DockProvider } from './dock/dockProvider';
+import { setDeveloperMode, refreshDockButtons } from './dock/dockButtons';
 import { StorageService } from '../services/storage/storageService';
 import { ChannelService } from '../services/channels/channelService';
 import { WindowManager } from '../services/window/windowManager';
 
 async function initializePlatform() {
   console.log('🚀 Initializing AGV3 Platform...');
+  
+  // Clear developer mode on startup to ensure buttons are hidden
+  try {
+    localStorage.removeItem('agv3_developer_mode');
+    console.log('[Main] Cleared developer mode from localStorage');
+  } catch (e) {
+    console.error('[Main] Error clearing developer mode:', e);
+  }
+  
+  // Set up keyboard shortcut listener for developer mode
+  setupDeveloperModeShortcut();
   
   try {
     // Initialize storage service
@@ -161,12 +173,20 @@ async function initializeWorkspaceComponents() {
   });
   console.log('✅ Storefront registered');
 
-  // 3. Register dock
+  // 3. Make sure dock is hidden first
+  try {
+    await Dock.hide();
+    console.log('🚫 Dock hidden before registration');
+  } catch (e) {
+    // Ignore if dock wasn't shown
+  }
+  
+  // 4. Register dock with correct buttons
   console.log('🎨 Registering custom dock...');
   await DockProvider.register();
   console.log('✅ Dock registered');
   
-  // 4. Show the dock
+  // 5. Show the dock
   await Dock.show();
   console.log('✅ Dock shown');
   
@@ -177,44 +197,58 @@ async function initializeWorkspaceComponents() {
 // Custom actions for dock buttons and menu items
 function getCustomActions(): CustomActionsMap {
   return {
+    // The developer-tools-menu action is no longer needed since we're using native dropdown
     'configure-datasource': async (): Promise<void> => {
-      console.log('Opening datasource configuration...');
+      console.log('[CustomActions] Opening datasource configuration...');
       try {
         await WindowManager.openDatasourceConfig();
+        console.log('[CustomActions] Datasource config opened');
       } catch (error) {
-        console.error('Failed to open datasource config:', error);
+        console.error('[CustomActions] Failed to open datasource config:', error);
       }
     },
     'new-datatable': async (): Promise<void> => {
-      console.log('Opening new DataTable...');
+      console.log('[CustomActions] Opening new DataTable...');
       try {
         await WindowManager.openDataTable();
+        console.log('[CustomActions] DataTable opened');
       } catch (error) {
-        console.error('Failed to open data table:', error);
+        console.error('[CustomActions] Failed to open data table:', error);
       }
     },
     'show-providers': async (): Promise<void> => {
-      console.log('Showing active providers...');
+      console.log('[CustomActions] Showing active providers...');
       try {
         await WindowManager.showProviderStatus();
+        console.log('[CustomActions] Provider status shown');
       } catch (error) {
-        console.error('Failed to show provider status:', error);
+        console.error('[CustomActions] Failed to show provider status:', error);
       }
     },
     'new-datagrid-stomp': async (): Promise<void> => {
-      console.log('Opening DataGrid with direct STOMP connection...');
+      console.log('[CustomActions] Opening DataGrid with direct STOMP connection...');
       try {
         await WindowManager.openDataGridStomp();
+        console.log('[CustomActions] DataGrid STOMP opened');
       } catch (error) {
-        console.error('Failed to open DataGrid STOMP:', error);
+        console.error('[CustomActions] Failed to open DataGrid STOMP:', error);
+      }
+    },
+    'new-datagrid-stomp-simplified': async (): Promise<void> => {
+      console.log('Opening simplified DataGrid with direct STOMP connection...');
+      try {
+        await WindowManager.openDataGridStompSimplified();
+      } catch (error) {
+        console.error('Failed to open DataGrid STOMP Simplified:', error);
       }
     },
     'new-datagrid-channel': async (): Promise<void> => {
-      console.log('Opening DataGrid with channel connection...');
+      console.log('[CustomActions] Opening DataGrid with channel connection...');
       try {
         await WindowManager.openDataGridChannel();
+        console.log('[CustomActions] DataGrid Channel opened');
       } catch (error) {
-        console.error('Failed to open DataGrid Channel:', error);
+        console.error('[CustomActions] Failed to open DataGrid Channel:', error);
       }
     },
     'manage-datagrid-instances': async (): Promise<void> => {
@@ -373,6 +407,107 @@ function getCustomActions(): CustomActionsMap {
     }
   };
 }
+
+// Function to handle developer mode keyboard shortcut
+function setupDeveloperModeShortcut() {
+  // Register global hotkey with OpenFin
+  const registerHotkey = async () => {
+    try {
+      // Register Ctrl+Alt+Shift+D as a global hotkey
+      await fin.GlobalHotkey.register('CTRL+ALT+SHIFT+D', async () => {
+        console.log('[Main] Developer mode hotkey triggered');
+        
+        // Toggle developer mode
+        const { isDeveloperModeEnabled } = await import('./dock/dockButtons');
+        const currentMode = isDeveloperModeEnabled();
+        const newMode = !currentMode;
+        
+        console.log('[Main] Toggling developer mode:', newMode);
+        setDeveloperMode(newMode);
+        
+        // Refresh dock buttons
+        await refreshDockButtons();
+        
+        // Show notification using create method
+        try {
+          const notification = await fin.Notification.create({
+            title: 'Developer Mode',
+            message: newMode ? 'Developer buttons enabled' : 'Developer buttons hidden',
+            icon: window.location.origin + '/icon.png',
+            timeout: 3000
+          });
+          await notification.show();
+        } catch (notifError) {
+          console.log('[Main] Notification skipped:', notifError.message);
+          // Fallback: show status in console
+          console.log(`[Main] Developer Mode: ${newMode ? 'ENABLED' : 'DISABLED'}`);
+        }
+      });
+      
+      console.log('[Main] Global hotkey CTRL+ALT+SHIFT+D registered');
+    } catch (error) {
+      console.error('[Main] Failed to register global hotkey:', error);
+      
+      // Fallback to window event listener
+      console.log('[Main] Falling back to window event listener');
+      setupWindowKeyboardListener();
+    }
+  };
+  
+  registerHotkey();
+}
+
+// Fallback keyboard listener for window
+function setupWindowKeyboardListener() {
+  const keysPressed = new Set<string>();
+  
+  window.addEventListener('keydown', async (event) => {
+    keysPressed.add(event.key.toLowerCase());
+    
+    // Check for Ctrl+Alt+Shift+D
+    if (event.ctrlKey && event.altKey && event.shiftKey && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      console.log('[Main] Developer mode hotkey triggered (window listener)');
+      
+      // Toggle developer mode
+      const { isDeveloperModeEnabled } = await import('./dock/dockButtons');
+      const currentMode = isDeveloperModeEnabled();
+      const newMode = !currentMode;
+      
+      console.log('[Main] Toggling developer mode:', newMode);
+      setDeveloperMode(newMode);
+      
+      // Refresh dock buttons
+      await refreshDockButtons();
+      
+      // Show notification using create method
+      try {
+        const notification = await fin.Notification.create({
+          title: 'Developer Mode',
+          message: newMode ? 'Developer buttons enabled' : 'Developer buttons hidden',
+          icon: window.location.origin + '/icon.png',
+          timeout: 3000
+        });
+        await notification.show();
+      } catch (notifError) {
+        console.log('[Main] Notification skipped:', notifError.message);
+        // Fallback: show status in console
+        console.log(`[Main] Developer Mode: ${newMode ? 'ENABLED' : 'DISABLED'}`);
+      }
+    }
+  });
+  
+  window.addEventListener('keyup', (event) => {
+    keysPressed.delete(event.key.toLowerCase());
+  });
+  
+  // Clear keys on blur to prevent stuck keys
+  window.addEventListener('blur', () => {
+    keysPressed.clear();
+  });
+}
+
+// The showDeveloperToolsMenu function is no longer needed since we're using native dropdown
 
 // Auto-initialize when loaded
 if (typeof fin !== 'undefined') {

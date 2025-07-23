@@ -5,6 +5,7 @@ import { Header } from '@/components/header';
 import { HeroSection } from '@/components/hero-section';
 import { Footer } from '@/components/footer';
 import { DataGridSimple, DataGridStomp, DataGridChannel } from "./windows/datagrid/components";
+import { DataGridStompSimplified } from "./windows/datagrid/components/DataGridStompSimplified";
 import { App as DatasourceConfigApp } from './windows/datasource-config/App';
 import { App as ProviderStatusApp } from './windows/provider-status/App';
 import { DataGridInstanceTest } from './windows/test/DataGridInstanceTest';
@@ -37,6 +38,7 @@ function App() {
         {/* OpenFin window routes */}
         <Route path="/datatable" element={<div className="h-screen w-screen"><DataGridSimple /></div>} />
         <Route path="/datagrid-stomp" element={<div className="h-screen w-screen"><DataGridStomp /></div>} />
+        <Route path="/datagrid-stomp-simplified" element={<div className="h-screen w-screen"><DataGridStompSimplified /></div>} />
         <Route path="/datagrid-channel" element={<div className="h-screen w-screen"><DataGridChannel /></div>} />
         <Route path="/datasource-config" element={<DatasourceConfigApp />} />
         <Route path="/provider-status" element={<ProviderStatusApp />} />

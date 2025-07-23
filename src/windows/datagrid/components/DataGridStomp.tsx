@@ -5,7 +5,7 @@ import { AgGridReact } from "ag-grid-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Moon, Sun, Play, Square, Save, Loader2, Info, MoreVertical, Edit2 } from "lucide-react";
+import { Moon, Sun, Play, Square, Save, Loader2, Info, MoreVertical, Edit2, ChevronDown, Plus, Settings } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { ProviderSelector } from "../../datatable/components/ProviderSelector";
 import { StorageClient } from "../../../services/storage/storageClient";
@@ -925,32 +925,64 @@ const DataGridStompComponent = () => {
     <div className={`h-full flex flex-col ${isDarkMode ? 'dark' : 'light'}`} data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Toolbar */}
       <div className="h-14 border-b bg-background flex items-center px-4 gap-2">
-        {/* Profile management section */}
-        <div className="flex items-center gap-2">
-          <ProfileSelectorSimple
-            profiles={profiles}
-            activeProfileId={activeProfile?.versionId}
-            onProfileChange={loadProfile}
-            onCreateProfile={handleOpenSaveDialog}
-            onManageProfiles={handleOpenProfileDialog}
-            loading={profilesLoading}
-          />
+        {/* Profile management section - more compact */}
+        <div className="flex items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-xs gap-1 max-w-[200px]"
+                disabled={profilesLoading}
+              >
+                <span className="truncate">
+                  {activeProfile?.name || 'Select Profile'}
+                </span>
+                <ChevronDown className="h-3 w-3 flex-shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Profiles</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {profiles.map((profile) => (
+                <DropdownMenuItem
+                  key={profile.versionId}
+                  onClick={() => loadProfile(profile.versionId)}
+                  className={profile.versionId === activeProfile?.versionId ? 'bg-accent' : ''}
+                >
+                  {profile.name}
+                </DropdownMenuItem>
+              ))}
+              {profiles.length === 0 && (
+                <DropdownMenuItem disabled className="text-muted-foreground">
+                  No profiles available
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleOpenSaveDialog}>
+                <Plus className="h-3 w-3 mr-2" />
+                Create New Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleOpenProfileDialog}>
+                <Settings className="h-3 w-3 mr-2" />
+                Manage Profiles
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
-          {/* Save button next to profile selector */}
+          {/* Save button - smaller */}
           <Button
-            onClick={saveCurrentState}
+            onClick={() => saveCurrentState()}
             disabled={isSaving || !activeProfile}
             variant="ghost"
             size="sm"
-            className="relative"
+            className="h-8 w-8 p-0"
             title='Save current profile'
           >
             {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
-              <>
-                <Save className="h-4 w-4" />
-              </>
+              <Save className="h-3 w-3" />
             )}
           </Button>
         </div>
@@ -970,8 +1002,8 @@ const DataGridStompComponent = () => {
           size="sm"
           className="gap-2"
         >
-          {isConnected ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          {isConnected ? 'Disconnect' : 'Connect'}
+          {isConnected ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+          {isConnected ? 'Stop' : 'Start'}
         </Button>
         
         {/* Connection status */}
@@ -1003,16 +1035,16 @@ const DataGridStompComponent = () => {
         </div>
         
         {/* Right side controls */}
-        <div className="flex items-center gap-3 ml-auto flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="sidebar-toggle" className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="sidebar-toggle" className="text-xs text-muted-foreground">
               Sidebar
             </Label>
             <Switch
               id="sidebar-toggle"
               checked={sidebarVisible}
               onCheckedChange={setSidebarVisible}
-              className="h-4 w-8"
+              className="h-4 w-7"
             />
           </div>
           
@@ -1022,10 +1054,10 @@ const DataGridStompComponent = () => {
             variant="ghost"
             size="sm"
             onClick={() => setTheme(isDarkMode ? 'light' : 'dark')}
-            className="gap-2 px-3"
+            className="gap-1 px-2 h-8 text-xs"
           >
-            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {isDarkMode ? 'Light' : 'Dark'}
+            {isDarkMode ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
+            <span className="hidden sm:inline">{isDarkMode ? 'Light' : 'Dark'}</span>
           </Button>
           
           <div className="h-6 w-px bg-border" />
