@@ -247,15 +247,16 @@ export function StompConfigurationDialog({
       return;
     }
     
+    // For test connection, we don't need topics - just test WebSocket connection
     const provider = new StompDatasourceProvider({
       websocketUrl: formData.websocketUrl,
-      listenerTopic: formData.listenerTopic,
-      requestMessage: formData.requestMessage,
-      requestBody: formData.requestBody,
-      snapshotEndToken: formData.snapshotEndToken,
+      listenerTopic: '/test/connection', // Dummy topic for connection test
+      requestMessage: '',
+      requestBody: '',
+      snapshotEndToken: formData.snapshotEndToken || 'Success',
       keyColumn: formData.keyColumn,
       messageRate: formData.messageRate,
-      snapshotTimeoutMs: formData.snapshotTimeoutMs,
+      snapshotTimeoutMs: formData.snapshotTimeoutMs || 60000,
     });
 
     try {
@@ -282,21 +283,39 @@ export function StompConfigurationDialog({
     setInferring(true);
     setTestError('');
     
-    if (!formData.websocketUrl || !formData.listenerTopic) {
-      setTestError('WebSocket URL and Listener Topic are required');
+    if (!formData.websocketUrl) {
+      setTestError('WebSocket URL is required');
       setInferring(false);
       return;
     }
     
+    // Generate client ID for unique topic
+    const clientId = uuidv4();
+    const dataType = formData.dataType || 'positions';
+    const messageRate = formData.messageRate || 1000;
+    const batchSize = formData.batchSize || '';
+    
+    // Generate auto topics based on new STOMP server format
+    const listenerTopic = `/snapshot/${dataType}/${clientId}`;
+    const requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+    
+    console.log('[InferFields] Using auto-generated topics:', {
+      listenerTopic,
+      requestMessage,
+      clientId
+    });
+    
     const provider = new StompDatasourceProvider({
       websocketUrl: formData.websocketUrl,
-      listenerTopic: formData.listenerTopic,
-      requestMessage: formData.requestMessage,
-      requestBody: formData.requestBody,
-      snapshotEndToken: formData.snapshotEndToken,
+      listenerTopic: listenerTopic,
+      requestMessage: requestMessage,
+      requestBody: 'START', // Fixed trigger body
+      snapshotEndToken: formData.snapshotEndToken || 'Success',
       keyColumn: formData.keyColumn,
       messageRate: formData.messageRate,
-      snapshotTimeoutMs: formData.snapshotTimeoutMs,
+      snapshotTimeoutMs: formData.snapshotTimeoutMs || 60000,
+      dataType: formData.dataType,
+      batchSize: formData.batchSize,
     });
 
     try {
@@ -343,13 +362,31 @@ export function StompConfigurationDialog({
   
   const handleSave = () => {
     // Validate required fields
-    if (!formData.name || !formData.websocketUrl || !formData.listenerTopic) {
+    if (!formData.name || !formData.websocketUrl) {
       toast({
         title: 'Missing required fields',
-        description: 'Please fill in Name, WebSocket URL, and Listener Topic',
+        description: 'Please fill in Name and WebSocket URL',
         variant: 'destructive',
       });
       return;
+    }
+    
+    // Generate client ID and topics if not already set
+    if (!formData.listenerTopic) {
+      const clientId = uuidv4();
+      const dataType = formData.dataType || 'positions';
+      const messageRate = formData.messageRate || 1000;
+      const batchSize = formData.batchSize || '';
+      
+      formData.listenerTopic = `/snapshot/${dataType}/${clientId}`;
+      formData.requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+      formData.requestBody = 'START';
+      
+      console.log('[Save] Generated auto topics:', {
+        listenerTopic: formData.listenerTopic,
+        requestMessage: formData.requestMessage,
+        clientId
+      });
     }
     
     // Build columns from selected fields + manual columns
