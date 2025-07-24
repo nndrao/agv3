@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import "@/index.css";
 
-ModuleRegistry.registerModules([AllEnterpriseModule]);
+// Module registration is already done in App.tsx, no need to register again
 
 // Define row data interface
 interface RowData {

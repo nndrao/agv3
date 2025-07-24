@@ -50,15 +50,39 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
     localStorage: typeof window !== 'undefined' ? localStorage.getItem('agv3_developer_mode') : 'N/A'
   });
   
+  // Get current theme for icon selection
+  const currentTheme = localStorage.getItem('agv3_theme') || 'dark';
+  const themeIcon = currentTheme === 'dark' ? 'sun' : 'moon';
+  const themeTooltip = currentTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme';
+  
   // Always visible buttons
   const buttons: DockButton[] = [
+    {
+      tooltip: 'Configure Datasource',
+      iconUrl: `${baseUrl}/icons/database.svg`,
+      action: {
+        id: 'configure-datasource',
+        customData: {}
+      },
+      type: 'Custom' as const
+    },
+    {
+      tooltip: 'DataGrid (Direct STOMP)',
+      iconUrl: `${baseUrl}/icons/grid.svg`,
+      action: {
+        id: 'new-datagrid-stomp',
+        customData: {}
+      },
+      type: 'Custom' as const
+    },
     {
       tooltip: 'DataGrid Simplified',
       iconUrl: `${baseUrl}/icons/grid-simple.svg`,
       action: {
         id: 'new-datagrid-stomp-simplified',
         customData: {}
-      }
+      },
+      type: 'Custom' as const
     },
     {
       tooltip: 'Manage DataGrid Instances',
@@ -66,7 +90,17 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
       action: {
         id: 'manage-datagrid-instances',
         customData: {}
-      }
+      },
+      type: 'Custom' as const
+    },
+    {
+      tooltip: themeTooltip,
+      iconUrl: `${baseUrl}/icons/${themeIcon}.svg`,
+      action: {
+        id: 'toggle-theme',
+        customData: {}
+      },
+      type: 'Custom' as const
     }
   ];
   
@@ -127,7 +161,9 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
   console.log('[DockButtons] Final button configuration:', {
     totalButtons: buttons.length,
     includeDeveloperButtons: includeDeveloperButtons || devMode,
-    buttonList: buttons.map(btn => btn.tooltip)
+    buttonList: buttons.map(btn => 'tooltip' in btn ? btn.tooltip : 'Dropdown'),
+    theme: currentTheme,
+    themeIcon: themeIcon
   });
   
   return buttons;
@@ -137,26 +173,15 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
 
 // Export function to refresh dock with new button visibility
 export async function refreshDockButtons(): Promise<void> {
-  const { Dock } = await import('@openfin/workspace');
   const { DockProvider } = await import('./dockProvider');
   
   console.log('[DockButtons] Refreshing dock buttons with developer mode:', isDeveloperModeEnabled());
   
   try {
-    // Re-register the dock with updated buttons
-    await DockProvider.register();
-    console.log('[DockButtons] Dock re-registered with updated buttons');
-    
-    // Make sure the dock is shown after re-registration
-    await Dock.show();
-    console.log('[DockButtons] Dock shown');
+    // Update the dock configuration without re-registering
+    await DockProvider.updateDock();
+    console.log('[DockButtons] Dock buttons updated');
   } catch (error) {
     console.error('[DockButtons] Error refreshing dock:', error);
-    // Try to show dock even if there was an error
-    try {
-      await Dock.show();
-    } catch (showError) {
-      console.error('[DockButtons] Error showing dock:', showError);
-    }
   }
 }
