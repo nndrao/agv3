@@ -1,4 +1,5 @@
 import { DockButton, DockButtonNames, DockDropdownConfig } from '@openfin/workspace';
+import { createColorfulIcon, createDynamicIcon } from './dynamicIcons';
 
 // Track developer mode state with localStorage persistence
 let developerModeEnabled: boolean | null = null;
@@ -52,32 +53,46 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
   
   // Get current theme for icon selection
   const currentTheme = localStorage.getItem('agv3_theme') || 'dark';
-  const themeIcon = currentTheme === 'dark' ? 'sun' : 'moon';
   const themeTooltip = currentTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme';
   
   // Always visible buttons
   const buttons: DockButton[] = [
     {
       tooltip: 'Configure Datasource',
-      iconUrl: `${baseUrl}/icons/database.svg`,
+      iconUrl: createDynamicIcon({
+        text: 'DB',
+        backgroundColor: '#0EA5E9',
+        textColor: '#FFFFFF',
+        fontSize: 10
+      }),
       action: {
-        id: 'configure-datasource',
+        id: 'configure-datasource-main',
         customData: {}
       },
       type: 'Custom' as const
     },
     {
       tooltip: 'DataGrid (Direct STOMP)',
-      iconUrl: `${baseUrl}/icons/grid.svg`,
+      iconUrl: createDynamicIcon({
+        text: 'DG',
+        backgroundColor: '#10B981',
+        textColor: '#FFFFFF',
+        fontSize: 10
+      }),
       action: {
-        id: 'new-datagrid-stomp',
+        id: 'new-datagrid-stomp-main',
         customData: {}
       },
       type: 'Custom' as const
     },
     {
       tooltip: 'DataGrid Simplified',
-      iconUrl: `${baseUrl}/icons/grid-simple.svg`,
+      iconUrl: createDynamicIcon({
+        text: 'DS',
+        backgroundColor: '#8B5CF6',
+        textColor: '#FFFFFF',
+        fontSize: 10
+      }),
       action: {
         id: 'new-datagrid-stomp-simplified',
         customData: {}
@@ -86,7 +101,12 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
     },
     {
       tooltip: 'Manage DataGrid Instances',
-      iconUrl: `${baseUrl}/icons/layers.svg`,
+      iconUrl: createDynamicIcon({
+        text: 'M',
+        backgroundColor: '#F59E0B',
+        textColor: '#FFFFFF',
+        fontSize: 12
+      }),
       action: {
         id: 'manage-datagrid-instances',
         customData: {}
@@ -95,7 +115,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
     },
     {
       tooltip: themeTooltip,
-      iconUrl: `${baseUrl}/icons/${themeIcon}.svg`,
+      iconUrl: createColorfulIcon(currentTheme === 'dark' ? 'sun' : 'moon'),
       action: {
         id: 'toggle-theme',
         customData: {}
@@ -110,7 +130,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
     const toolsButton: DockDropdownConfig = {
       type: DockButtonNames.DropdownButton,
       tooltip: 'Developer Tools',
-      iconUrl: `${baseUrl}/icons/tools.svg`,
+      iconUrl: createColorfulIcon('gear'),
       options: [
         {
           tooltip: 'New DataTable',
@@ -151,6 +171,22 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
             id: 'show-providers',
             customData: {}
           }
+        },
+        {
+          tooltip: 'Reload Dock',
+          iconUrl: createColorfulIcon('refresh'),
+          action: {
+            id: 'reload-dock',
+            customData: {}
+          }
+        },
+        {
+          tooltip: 'Open DevTools',
+          iconUrl: createColorfulIcon('devtools'),
+          action: {
+            id: 'open-devtools',
+            customData: {}
+          }
         }
       ]
     };
@@ -162,8 +198,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
     totalButtons: buttons.length,
     includeDeveloperButtons: includeDeveloperButtons || devMode,
     buttonList: buttons.map(btn => 'tooltip' in btn ? btn.tooltip : 'Dropdown'),
-    theme: currentTheme,
-    themeIcon: themeIcon
+    theme: currentTheme
   });
   
   return buttons;

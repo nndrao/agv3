@@ -140,24 +140,53 @@ async function initializeWorkspaceComponents() {
     console.error('❌ Failed to register Storefront:', error);
   }
   
+  // Wait a bit longer before registering dock to ensure workspace is ready
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
   try {
-    // Register the dock provider
+    // Register the dock provider with retry logic
     console.log('🔧 About to register dock...');
-    const registration = await DockProvider.register();
-    console.log('✅ Dock registered, registration:', registration);
+    let registration = await DockProvider.register();
     
-    // Show the dock (with small delay to ensure everything is ready)
-    console.log('🔧 About to show dock...');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    await Dock.show();
-    console.log('✅ Dock shown');
+    // If first attempt fails, retry after a delay
+    if (!registration) {
+      console.log('🔧 First dock registration attempt failed, retrying in 2 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      registration = await DockProvider.register();
+    }
+    
+    if (registration) {
+      console.log('✅ Dock registered successfully');
+      
+      // Show the dock (with small delay to ensure everything is ready)
+      console.log('🔧 About to show dock...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      try {
+        await Dock.show();
+        console.log('✅ Dock shown');
+      } catch (showError) {
+        console.error('❌ Failed to show dock:', showError);
+        // Try to show again after a longer delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          await Dock.show();
+          console.log('✅ Dock shown on second attempt');
+        } catch (retryError) {
+          console.error('❌ Failed to show dock on retry:', retryError);
+        }
+      }
+    } else {
+      console.warn('⚠️ Dock registration failed after retry - dock features disabled');
+    }
   } catch (error) {
-    console.error('❌ Failed to register/show dock:', error);
+    console.error('❌ Failed to register dock:', error);
     console.error('Error details:', {
       message: error?.message,
       stack: error?.stack,
       error
     });
+    // Continue without dock - don't break the entire app
   }
   
   // Temporarily disable color scheme initialization

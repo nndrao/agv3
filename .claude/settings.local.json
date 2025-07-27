@@ -32,7 +32,8 @@
       "WebFetch(domain:developer.openfin.co)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:openfin.zendesk.com)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(npx eslint:*)"
     ],
     "deny": []
   }
