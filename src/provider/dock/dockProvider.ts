@@ -135,7 +135,7 @@ export class DockProvider {
     return {
       title: this.platformTitle,
       icon: this.platformIcon,
-      workspaceComponents: ['home', 'notifications', 'store'],
+      workspaceComponents: ['home', 'notifications', 'store', 'switchWorkspace'],
       disableUserRearrangement: false,
       buttons
     };
