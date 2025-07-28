@@ -1,0 +1,75 @@
+/* Minimal CSS for datasource config - don't override global styles too aggressively */
+
+/* For datasource config window only - override body centering */
+.datasource-config-window body {
+  display: block;
+  place-items: unset;
+}
+
+.datasource-config-window #root {
+  width: 100%;
+  height: 100vh;
+  display: block;
+}
+
+/* Fix for AG-Grid scrollbars in dark theme */
+.ag-theme-quartz-dark {
+  --ag-background-color: #1a1a1a;
+  --ag-header-background-color: #2a2a2a;
+  --ag-odd-row-background-color: #1a1a1a;
+  --ag-row-hover-color: #2a2a2a;
+  --ag-border-color: #3a3a3a;
+}
+
+/* Ensure the configuration dialog fills its container */
+.stomp-configuration-dialog {
+  min-height: 0; /* Allow shrinking */
+}
+
+/* Fix tab content margins */
+[role="tabpanel"] {
+  margin: 0 !important;
+}
+
+/* Ensure main content area uses full width */
+.flex-1.bg-background {
+  min-width: 0; /* Prevent flex item from overflowing */
+}
+
+/* Tree structure styling for Fields tab */
+.field-tree-item {
+  position: relative;
+}
+
+/* Hover effect for tree items */
+.field-tree-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Tree connector lines */
+.tree-connector::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -8px;
+  width: 12px;
+  height: 20px;
+  border-left: 1px solid #3a3a3a;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+/* Last child connector */
+.tree-connector.last-child::before {
+  border-left: 1px solid #3a3a3a;
+  border-bottom: 1px solid #3a3a3a;
+  height: 28px;
+}
+
+/* Field type badges hover effect */
+.field-type-badge {
+  transition: all 0.2s ease;
+}
+
+.field-type-badge:hover {
+  transform: scale(1.05);
+}

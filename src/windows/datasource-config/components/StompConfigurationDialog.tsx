@@ -497,33 +497,41 @@ export function StompConfigurationDialog({
   };
   
   return (
-    <div className="stomp-configuration-dialog h-full">
-      
+    <div className="stomp-configuration-dialog h-full w-full bg-[#1a1a1a] text-white flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 rounded-none h-12 border-b">
-          <TabsTrigger value="connection" className="rounded-none">
+        <TabsList className="grid w-full grid-cols-3 rounded-none h-14 bg-[#2a2a2a] border-b border-[#3a3a3a]">
+          <TabsTrigger 
+            value="connection" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium"
+          >
             Connection
           </TabsTrigger>
-          <TabsTrigger value="fields" className="rounded-none">
+          <TabsTrigger 
+            value="fields" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium flex items-center justify-center gap-2"
+          >
             Fields
             {inferredFields.length > 0 && (
-              <span className="ml-2">
+              <Badge variant="secondary" className="ml-2 h-5 px-2 text-xs">
                 {inferredFields.length}
-              </span>
+              </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="columns" className="rounded-none">
+          <TabsTrigger 
+            value="columns" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium flex items-center justify-center gap-2"
+          >
             Columns
             {(selectedFields.size + manualColumns.length) > 0 && (
-              <span className="ml-2">
+              <Badge variant="secondary" className="ml-2 h-5 px-2 text-xs">
                 {selectedFields.size + manualColumns.length}
-              </span>
+              </Badge>
             )}
           </TabsTrigger>
         </TabsList>
         
         <div className="flex-1 overflow-hidden">
-          <TabsContent value="connection" className="h-full overflow-hidden">
+          <TabsContent value="connection" className="h-full overflow-hidden m-0">
             <ConnectionTab
               config={formData}
               onChange={updateFormData}
@@ -536,7 +544,7 @@ export function StompConfigurationDialog({
             />
           </TabsContent>
           
-          <TabsContent value="fields" className="h-full overflow-hidden">
+          <TabsContent value="fields" className="h-full overflow-hidden m-0">
             <FieldsTab
               inferredFields={inferredFields}
               selectedFields={selectedFields}
@@ -615,7 +623,7 @@ export function StompConfigurationDialog({
             />
           </TabsContent>
           
-          <TabsContent value="columns" className="h-full overflow-hidden">
+          <TabsContent value="columns" className="h-full overflow-hidden m-0">
             <ColumnsTab
               selectedFields={selectedFields}
               inferredFields={inferredFields}

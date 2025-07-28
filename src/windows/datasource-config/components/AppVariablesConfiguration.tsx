@@ -105,37 +105,37 @@ export function AppVariablesConfiguration({
   };
   
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-[#1a1a1a] text-white">
       <ScrollArea className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6">
-          <Card>
+          <Card className="bg-[#242424] border-[#3a3a3a]">
             <CardHeader>
-              <CardTitle>AppVariables Configuration</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">AppVariables Configuration</CardTitle>
+              <CardDescription className="text-gray-400">
                 Define global variables that can be used in other datasource configurations
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="name">Datasource Name</Label>
+                <Label htmlFor="name" className="text-gray-300">Datasource Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="AppVariables.ds"
-                  className="mt-1.5"
+                  className="mt-1.5 bg-[#2a2a2a] border-[#3a3a3a] text-white placeholder:text-gray-500 focus:border-primary focus:ring-1 focus:ring-primary"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Name should end with .ds to follow the convention
                 </p>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="bg-[#242424] border-[#3a3a3a]">
             <CardHeader>
-              <CardTitle>Variables</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">Variables</CardTitle>
+              <CardDescription className="text-gray-400">
                 Add key-value pairs that can be referenced using {`{${formData.name}.key}`}
               </CardDescription>
             </CardHeader>
@@ -147,36 +147,39 @@ export function AppVariablesConfiguration({
                     value={newKey}
                     onChange={(e) => setNewKey(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleAddVariable()}
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white placeholder:text-gray-500 focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                   <Input
                     placeholder="Value"
                     value={newValue}
                     onChange={(e) => setNewValue(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleAddVariable()}
+                    className="bg-[#2a2a2a] border-[#3a3a3a] text-white placeholder:text-gray-500 focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                   <Button
                     size="icon"
                     variant="outline"
                     onClick={handleAddVariable}
+                    className="bg-transparent border-[#3a3a3a] text-gray-300 hover:bg-[#2a2a2a] hover:text-white hover:border-gray-500"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
                 
                 {Object.keys(formData.variables).length > 0 && (
-                  <div className="border rounded-md">
+                  <div className="border border-[#3a3a3a] rounded-md bg-[#1a1a1a]">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Key</TableHead>
-                          <TableHead>Value</TableHead>
-                          <TableHead className="w-[100px]">Actions</TableHead>
+                        <TableRow className="border-[#3a3a3a] hover:bg-transparent">
+                          <TableHead className="text-gray-300">Key</TableHead>
+                          <TableHead className="text-gray-300">Value</TableHead>
+                          <TableHead className="w-[100px] text-gray-300">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {Object.entries(formData.variables).map(([key, value]) => (
-                          <TableRow key={key}>
-                            <TableCell className="font-mono text-sm">{key}</TableCell>
+                          <TableRow key={key} className="border-[#3a3a3a] hover:bg-[#2a2a2a]">
+                            <TableCell className="font-mono text-sm text-blue-400">{key}</TableCell>
                             <TableCell>
                               {editingKey === key ? (
                                 <Input
@@ -189,10 +192,11 @@ export function AppVariablesConfiguration({
                                   }}
                                   onBlur={() => handleEditVariable(key, editingValue)}
                                   autoFocus
+                                  className="h-8 bg-[#2a2a2a] border-[#3a3a3a] text-white focus:border-primary focus:ring-1 focus:ring-primary"
                                 />
                               ) : (
                                 <span 
-                                  className="cursor-pointer hover:underline"
+                                  className="cursor-pointer hover:underline text-gray-300"
                                   onClick={() => {
                                     setEditingKey(key);
                                     setEditingValue(String(value));
@@ -207,6 +211,7 @@ export function AppVariablesConfiguration({
                                 size="icon"
                                 variant="ghost"
                                 onClick={() => handleDeleteVariable(key)}
+                                className="text-gray-400 hover:bg-[#3a3a3a] hover:text-red-400"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -219,16 +224,16 @@ export function AppVariablesConfiguration({
                 )}
                 
                 {Object.keys(formData.variables).length > 0 && (
-                  <div className="rounded-lg bg-muted/50 p-3">
-                    <Label className="text-xs font-medium text-muted-foreground">Usage Example</Label>
+                  <div className="rounded-lg bg-[#2a2a2a] border border-[#3a3a3a] p-3">
+                    <Label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Usage Example</Label>
                     <div className="mt-2 space-y-1 text-xs">
                       {Object.keys(formData.variables).slice(0, 3).map(key => (
                         <div key={key}>
-                          <code className="bg-background px-1 py-0.5 rounded">
+                          <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-blue-400">
                             {`{${formData.name}.${key}}`}
                           </code>
                           {' → '}
-                          <span className="text-muted-foreground">{String(formData.variables[key])}</span>
+                          <span className="text-gray-500">{String(formData.variables[key])}</span>
                         </div>
                       ))}
                     </div>
@@ -240,11 +245,18 @@ export function AppVariablesConfiguration({
         </div>
       </ScrollArea>
       
-      <div className="p-6 border-t flex justify-end gap-2">
-        <Button variant="outline" onClick={onCancel}>
+      <div className="p-6 border-t border-[#3a3a3a] bg-[#242424] flex justify-end gap-2">
+        <Button 
+          variant="outline" 
+          onClick={onCancel}
+          className="bg-transparent border-[#3a3a3a] text-gray-300 hover:bg-[#2a2a2a] hover:text-white hover:border-gray-500"
+        >
           Cancel
         </Button>
-        <Button onClick={handleSave}>
+        <Button 
+          onClick={handleSave}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
           <Save className="mr-2 h-4 w-4" />
           Save Variables
         </Button>

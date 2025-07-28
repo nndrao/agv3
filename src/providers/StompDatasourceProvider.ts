@@ -29,7 +29,7 @@ export interface StompStatistics {
 
 export interface FieldInfo {
   path: string;
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null' | 'date';
   nullable: boolean;
   sample?: any;
   children?: Record<string, FieldInfo>;
@@ -755,12 +755,78 @@ export class StompDatasourceProvider extends EventEmitter {
     const getType = (value: any): FieldInfo['type'] => {
       if (value === null) return 'null';
       if (Array.isArray(value)) return 'array';
+      
       const type = typeof value;
-      if (type === 'object') return 'object';
-      if (type === 'string') return 'string';
-      if (type === 'number') return 'number';
+      
+      if (type === 'object') {
+        // Check if it's a Date object
+        if (value instanceof Date) return 'date';
+        return 'object';
+      }
+      
+      if (type === 'string') {
+        // Check for date/datetime patterns
+        if (isDateString(value)) return 'date';
+        return 'string';
+      }
+      
+      if (type === 'number') {
+        // Check if it might be a timestamp
+        // Timestamps between year 2000 and 2100 in milliseconds
+        if (value > 946684800000 && value < 4102444800000) {
+          // Additional check: if it's a round number (no decimals), likely a timestamp
+          if (Number.isInteger(value)) {
+            return 'date';
+          }
+        }
+        return 'number';
+      }
+      
       if (type === 'boolean') return 'boolean';
       return 'string';
+    };
+    
+    // Helper function to detect date strings
+    const isDateString = (str: string): boolean => {
+      // Empty or very short strings are not dates
+      if (!str || str.length < 6) return false;
+      
+      // Common date/datetime patterns
+      const datePatterns = [
+        // ISO 8601 formats
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/,  // 2024-01-15T10:30:45.123Z
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/,  // 2024-01-15T10:30:45+05:30
+        /^\d{4}-\d{2}-\d{2}$/,                                      // 2024-01-15
+        
+        // Common date formats
+        /^\d{2}\/\d{2}\/\d{4}$/,                                    // 01/15/2024
+        /^\d{4}\/\d{2}\/\d{2}$/,                                    // 2024/01/15
+        /^\d{2}-\d{2}-\d{4}$/,                                      // 01-15-2024
+        
+        // Date with time
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,                   // 2024-01-15 10:30:45
+        /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,                 // 01/15/2024 10:30:45
+        
+        // RFC 2822
+        /^[A-Za-z]{3},\s\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2}\s[A-Z]{3}$/,  // Mon, 15 Jan 2024 10:30:45 GMT
+      ];
+      
+      // Check if string matches any date pattern
+      if (datePatterns.some(pattern => pattern.test(str))) {
+        return true;
+      }
+      
+      // Try parsing as date to catch other valid formats
+      const parsed = Date.parse(str);
+      if (!isNaN(parsed)) {
+        // Additional validation: check if the parsed date is reasonable
+        const date = new Date(parsed);
+        const year = date.getFullYear();
+        // Accept dates between 1900 and 2100
+        return year >= 1900 && year <= 2100;
+      }
+      
+      return false;
     };
 
     const processObject = (obj: any, path: string = '') => {

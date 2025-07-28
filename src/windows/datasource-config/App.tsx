@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Database, Variable } from 'lucide-react';
+import './datasource-config.css';
 
 export function App() {
   const [datasources, setDatasources] = useState<UnifiedConfig[]>([]);
@@ -19,6 +20,14 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [selectedType, setSelectedType] = useState<'stomp' | 'variables' | null>(null);
+  
+  useEffect(() => {
+    // Add class to body for specific styling
+    document.body.classList.add('datasource-config-window');
+    return () => {
+      document.body.classList.remove('datasource-config-window');
+    };
+  }, []);
   
   useEffect(() => {
     loadDatasources();
@@ -77,9 +86,9 @@ export function App() {
   };
   
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#1a1a1a]">
       {/* Sidebar */}
-      <div className="w-80 border-r bg-secondary flex flex-col">
+      <div className="w-80 border-r border-[#3a3a3a] bg-[#242424] flex flex-col">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Datasources</h2>
@@ -138,7 +147,7 @@ export function App() {
       </div>
       
       {/* Main Content */}
-      <div className="flex-1 bg-background">
+      <div className="flex-1 bg-background overflow-hidden">
         {selectedId ? (
           selectedType === 'variables' ? (
             <AppVariablesConfiguration
