@@ -10,6 +10,7 @@ import { StompDatasourceProvider, FieldInfo } from '../../../providers/StompData
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
 import { FieldNode } from './FieldSelector';
+import { templateResolver } from '../../../services/template/templateResolver';
 
 export interface ColumnDefinition {
   field: string;
@@ -289,21 +290,40 @@ export function StompConfigurationDialog({
       return;
     }
     
-    // Generate client ID for unique topic
-    const clientId = uuidv4();
-    const dataType = formData.dataType || 'positions';
-    const messageRate = formData.messageRate || 1000;
-    const batchSize = formData.batchSize || '';
+    // Create a session ID for consistent UUIDs during this operation
+    const sessionId = uuidv4();
     
-    // Generate auto topics based on new STOMP server format
-    const listenerTopic = `/snapshot/${dataType}/${clientId}`;
-    const requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+    let listenerTopic: string;
+    let requestMessage: string;
     
-    console.log('[InferFields] Using auto-generated topics:', {
-      listenerTopic,
-      requestMessage,
-      clientId
-    });
+    if (formData.manualTopics && formData.listenerTopic && formData.requestMessage) {
+      // Use manual topics with template resolution
+      listenerTopic = templateResolver.resolveTemplate(formData.listenerTopic, sessionId);
+      requestMessage = templateResolver.resolveTemplate(formData.requestMessage, sessionId);
+      
+      console.log('[InferFields] Using manual topics with template resolution:', {
+        originalListener: formData.listenerTopic,
+        originalTrigger: formData.requestMessage,
+        resolvedListener: listenerTopic,
+        resolvedTrigger: requestMessage,
+        sessionId
+      });
+    } else {
+      // Generate auto topics
+      const clientId = uuidv4();
+      const dataType = formData.dataType || 'positions';
+      const messageRate = formData.messageRate || 1000;
+      const batchSize = formData.batchSize || '';
+      
+      listenerTopic = `/snapshot/${dataType}/${clientId}`;
+      requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+      
+      console.log('[InferFields] Using auto-generated topics:', {
+        listenerTopic,
+        requestMessage,
+        clientId
+      });
+    }
     
     const provider = new StompDatasourceProvider({
       websocketUrl: formData.websocketUrl,
@@ -371,8 +391,14 @@ export function StompConfigurationDialog({
       return;
     }
     
-    // Generate client ID and topics if not already set
-    if (!formData.listenerTopic) {
+    // Handle topic configuration
+    if (formData.manualTopics) {
+      // Manual topics are already set, just ensure request body is set
+      if (!formData.requestBody) {
+        formData.requestBody = 'START';
+      }
+    } else {
+      // Generate auto topics if not using manual configuration
       const clientId = uuidv4();
       const dataType = formData.dataType || 'positions';
       const messageRate = formData.messageRate || 1000;

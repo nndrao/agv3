@@ -126,15 +126,66 @@ export function ConnectionTab({
                   />
                 </div>
               </div>
-              <div className="rounded-lg bg-muted/50 p-3">
-                <Label className="text-xs font-medium text-muted-foreground">Generated Configuration</Label>
-                <div className="mt-2 space-y-1 font-mono text-xs">
-                  <div>Listener: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]</div>
-                  <div>Trigger: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]/{config.messageRate || 1000}{config.batchSize ? `/${config.batchSize}` : ''}</div>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="manual-topics"
+                    checked={config.manualTopics || false}
+                    onCheckedChange={handleCheckboxChange('manualTopics')}
+                  />
+                  <label
+                    htmlFor="manual-topics"
+                    className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Configure topics manually
+                  </label>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  A unique client ID will be generated automatically on each connection
-                </p>
+                
+                {config.manualTopics ? (
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="listener-topic" className="text-sm font-normal">Listener Topic</Label>
+                      <Input
+                        id="listener-topic"
+                        value={config.listenerTopic || ''}
+                        onChange={handleChange('listenerTopic')}
+                        placeholder="/snapshot/positions/[client-id]"
+                        className="mt-1.5 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="request-message" className="text-sm font-normal">Trigger Topic</Label>
+                      <Input
+                        id="request-message"
+                        value={config.requestMessage || ''}
+                        onChange={handleChange('requestMessage')}
+                        placeholder="/snapshot/positions/[client-id]/1000/50"
+                        className="mt-1.5 font-mono text-sm"
+                      />
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <Label className="text-xs font-medium text-muted-foreground">Template Variables</Label>
+                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        <div><code className="bg-background px-1 py-0.5 rounded">[variable]</code> - Replaced with variable-UUID</div>
+                        <div><code className="bg-background px-1 py-0.5 rounded">{`{datasource.variable}`}</code> - Replaced with datasource value</div>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Example: <code className="bg-background px-1 py-0.5 rounded">{`{AppVariables.ds.Environment}`}</code> → production
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <Label className="text-xs font-medium text-muted-foreground">Auto-Generated Configuration</Label>
+                    <div className="mt-2 space-y-1 font-mono text-xs">
+                      <div>Listener: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]</div>
+                      <div>Trigger: /snapshot/{config.dataType || 'positions'}/[auto-generated-id]/{config.messageRate || 1000}{config.batchSize ? `/${config.batchSize}` : ''}</div>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      A unique client ID will be generated automatically on each connection
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

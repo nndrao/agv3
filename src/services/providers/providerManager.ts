@@ -19,7 +19,7 @@ export class ProviderManager {
     providerId: string;
     configId: string;
     config: any;
-    type: 'stomp' | 'rest';
+    type: 'stomp' | 'rest' | 'variables';
   }): Promise<void> {
     console.log('🚀 Starting provider:', options.providerId);
     console.log('Provider config:', options.config);

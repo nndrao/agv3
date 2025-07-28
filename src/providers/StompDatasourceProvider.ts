@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 import { Client, StompConfig as StompClientConfig, IMessage } from '@stomp/stompjs';
+import { templateResolver } from '../services/template/templateResolver';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface StompConnectionResult {
   success: boolean;
@@ -36,8 +38,8 @@ export interface FieldInfo {
 export interface StompConfig {
   websocketUrl: string;
   listenerTopic: string;
-  requestMessage?: string;  // Deprecated - will be auto-generated
-  requestBody?: string;     // Deprecated - no longer needed
+  requestMessage?: string;  // Topic to send snapshot request
+  requestBody?: string;     // Body of snapshot request
   
   // New fields for structured format
   dataType?: 'positions' | 'trades';
@@ -47,6 +49,9 @@ export interface StompConfig {
   snapshotEndToken?: string;
   keyColumn?: string;
   snapshotTimeoutMs?: number;
+  
+  // Template resolution
+  manualTopics?: boolean;   // Whether topics are manually configured with templates
 }
 
 interface StompProviderConfig {
@@ -77,6 +82,9 @@ export class StompDatasourceProvider extends EventEmitter {
   private client: Client | null = null;
   private config: StompProviderConfig | null = null;
   private stompConfig: StompConfig | null = null;
+  private sessionId: string | null = null;
+  private resolvedListenerTopic: string | null = null;
+  private resolvedRequestMessage: string | null = null;
   private status: StompProviderStatus = {
     connected: false,
     connecting: false,
@@ -425,6 +433,9 @@ export class StompDatasourceProvider extends EventEmitter {
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
+    
+    // Create session ID for consistent template resolution
+    this.sessionId = uuidv4();
 
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
@@ -593,8 +604,26 @@ export class StompDatasourceProvider extends EventEmitter {
       // Emit REQUESTING_SNAPSHOT_DATA event
       this.emit('REQUESTING_SNAPSHOT_DATA');
       
-      // Subscribe to the listener topic
-      this.snapshotSubscription = this.client!.subscribe(this.stompConfig!.listenerTopic, (message: IMessage) => {
+      // Resolve templates in topics
+      if (this.stompConfig!.manualTopics) {
+        this.resolvedListenerTopic = templateResolver.resolveTemplate(this.stompConfig!.listenerTopic, this.sessionId!);
+        if (this.stompConfig!.requestMessage) {
+          this.resolvedRequestMessage = templateResolver.resolveTemplate(this.stompConfig!.requestMessage, this.sessionId!);
+        }
+        console.log('[STOMP] Resolved topics from templates:', {
+          originalListener: this.stompConfig!.listenerTopic,
+          resolvedListener: this.resolvedListenerTopic,
+          originalRequest: this.stompConfig!.requestMessage,
+          resolvedRequest: this.resolvedRequestMessage,
+          sessionId: this.sessionId
+        });
+      } else {
+        this.resolvedListenerTopic = this.stompConfig!.listenerTopic;
+        this.resolvedRequestMessage = this.stompConfig!.requestMessage || null;
+      }
+      
+      // Subscribe to the resolved listener topic
+      this.snapshotSubscription = this.client!.subscribe(this.resolvedListenerTopic, (message: IMessage) => {
         try {
           const messageSize = new TextEncoder().encode(message.body).length;
           this.statistics.bytesReceived += messageSize;
@@ -696,15 +725,15 @@ export class StompDatasourceProvider extends EventEmitter {
       // No need to track in activeSubscriptions as we have dedicated snapshotSubscription
 
       // Send request message if configured
-      if (this.stompConfig!.requestMessage && this.stompConfig!.requestBody) {
+      if (this.resolvedRequestMessage && this.stompConfig!.requestBody) {
         try {
           console.log('🚀 Sending snapshot request to STOMP server:', {
-            destination: this.stompConfig!.requestMessage,
+            destination: this.resolvedRequestMessage,
             body: this.stompConfig!.requestBody
           });
           
           this.client!.publish({
-            destination: this.stompConfig!.requestMessage,
+            destination: this.resolvedRequestMessage,
             body: this.stompConfig!.requestBody,
           });
           
@@ -714,7 +743,7 @@ export class StompDatasourceProvider extends EventEmitter {
           completeSnapshot(false, 'Failed to send request message');
         }
       } else {
-        console.warn('⚠️ No request message configured - will only listen for existing data on topic:', this.stompConfig!.listenerTopic);
+        console.warn('⚠️ No request message configured - will only listen for existing data on topic:', this.resolvedListenerTopic);
       }
     });
   }

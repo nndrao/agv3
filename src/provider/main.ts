@@ -12,6 +12,7 @@ import { initColorScheme, createThemingOverride } from './theming';
 import { StorageService } from '../services/storage/storageService';
 import { ChannelService } from '../services/channels/channelService';
 import { WindowManager } from '../services/window/windowManager';
+import { AppVariablesService } from '../services/appVariables/appVariablesService';
 
 const PLATFORM_ID = 'agv3-workspace-platform';
 const PLATFORM_TITLE = 'AGV3 Workspace';
@@ -52,6 +53,9 @@ async function initializeWorkspacePlatform() {
     
     // Initialize channel service
     await ChannelService.initialize();
+    
+    // Initialize AppVariables service
+    await AppVariablesService.initialize();
     
     // Initialize workspace platform with proper configuration
     await init({
