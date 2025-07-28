@@ -36,40 +36,28 @@
   min-width: 0; /* Prevent flex item from overflowing */
 }
 
-/* Tree structure styling for Fields tab */
-.field-tree-item {
-  position: relative;
+/* Override shadcn/ui theme colors for dark mode compatibility */
+.datasource-config-window {
+  --background: 220 20% 10%;
+  --foreground: 0 0% 95%;
+  --card: 220 20% 13%;
+  --card-foreground: 0 0% 95%;
+  --popover: 220 20% 13%;
+  --popover-foreground: 0 0% 95%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 15% 20%;
+  --secondary-foreground: 0 0% 95%;
+  --muted: 220 15% 25%;
+  --muted-foreground: 220 10% 60%;
+  --accent: 220 15% 20%;
+  --accent-foreground: 0 0% 95%;
+  --border: 220 15% 25%;
+  --input: 220 15% 25%;
+  --ring: 217 91% 60%;
 }
 
-/* Hover effect for tree items */
-.field-tree-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-/* Tree connector lines */
-.tree-connector::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: -8px;
-  width: 12px;
-  height: 20px;
-  border-left: 1px solid #3a3a3a;
-  border-bottom: 1px solid #3a3a3a;
-}
-
-/* Last child connector */
-.tree-connector.last-child::before {
-  border-left: 1px solid #3a3a3a;
-  border-bottom: 1px solid #3a3a3a;
-  height: 28px;
-}
-
-/* Field type badges hover effect */
-.field-type-badge {
-  transition: all 0.2s ease;
-}
-
-.field-type-badge:hover {
-  transform: scale(1.05);
+/* Tree structure enhancements */
+[data-radix-collapsible-content] {
+  overflow: visible !important;
 }

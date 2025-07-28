@@ -2,13 +2,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Search
-} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Search, Database, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FieldNode } from '../FieldSelector';
+import { TreeItem } from '../TreeItem';
 
 interface FieldsTabProps {
   inferredFields: FieldNode[];
@@ -111,134 +111,83 @@ export function FieldsTab({
     }
     
     return (
-      <div key={field.path}>
-        <div
-          className={cn(
-            "flex items-center py-1.5 hover:bg-[#2a2a2a] rounded-md group transition-colors",
-            level === 0 ? "px-2" : "px-2"
-          )}
-          style={{ marginLeft: `${level * 24}px` }}
-        >
-          <div className="flex items-center gap-2 flex-1">
-            {/* Expand/Collapse button or spacer */}
-            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-              {hasChildren ? (
-                <button
-                  onClick={() => onExpandToggle(field.path)}
-                  className="p-0.5 hover:bg-[#3a3a3a] rounded transition-colors w-5 h-5 flex items-center justify-center"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
-                  )}
-                </button>
-              ) : (
-                <span className="w-5" /> // Spacer for alignment
-              )}
-            </div>
-            
-            <Checkbox
-              checked={checkboxState}
-              onCheckedChange={() => toggleFieldSelection(field.path)}
-              className="h-4 w-4 border-[#3a3a3a] data-[state=checked]:bg-primary data-[state=checked]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:border-primary flex-shrink-0"
-            />
-            
-            <span className={cn(
-              "text-xs px-2 py-0.5 rounded font-mono flex-shrink-0",
-              field.type === 'string' && "bg-green-900/20 text-green-400 border border-green-800/30",
-              field.type === 'number' && "bg-blue-900/20 text-blue-400 border border-blue-800/30",
-              field.type === 'boolean' && "bg-yellow-900/20 text-yellow-400 border border-yellow-800/30",
-              field.type === 'date' && "bg-purple-900/20 text-purple-400 border border-purple-800/30",
-              isObjectField && "bg-orange-900/20 text-orange-400 border border-orange-800/30"
-            )}>
-              {field.type}
-            </span>
-            
-            <span className={cn(
-              "text-sm",
-              isObjectField ? "font-semibold text-white" : "text-gray-300"
-            )}>
-              {field.name}
-            </span>
-            
-            {/* Show sample value for leaf nodes */}
-            {!isObjectField && field.sample !== undefined && field.sample !== null && (
-              <span className="text-xs text-gray-500 ml-auto mr-2 truncate max-w-[200px]" title={String(field.sample)}>
-                {String(field.sample)}
-              </span>
-            )}
-          </div>
-        </div>
-        
-        {hasChildren && isExpanded && (
-          <div className="relative">
-            {/* Vertical line for tree structure */}
-            {level < 2 && (
-              <div 
-                className="absolute left-0 top-0 bottom-0 w-px bg-[#3a3a3a]"
-                style={{ marginLeft: `${level * 24 + 12}px` }}
-              />
-            )}
-            {field.children!.map(child => renderFieldItem(child, level + 1))}
-          </div>
-        )}
-      </div>
+      <TreeItem
+        key={field.path}
+        field={field}
+        level={level}
+        isExpanded={isExpanded}
+        isSelected={checkboxState}
+        onToggle={() => toggleFieldSelection(field.path)}
+        onSelect={() => toggleFieldSelection(field.path)}
+        onExpandToggle={() => onExpandToggle(field.path)}
+        renderChild={(childField, childLevel) => renderFieldItem(childField, childLevel)}
+      />
     );
   };
   
   const filteredFields = filterFields(inferredFields, fieldSearchQuery);
   
   return (
-    <div className="h-full flex flex-col bg-[#1a1a1a]">
+    <div className="h-full flex flex-col">
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col">
           {/* Header */}
-          <div className="p-4 border-b border-[#3a3a3a] flex items-center justify-between flex-shrink-0 bg-[#242424]">
-            <div className="flex items-center gap-3">
-              <Checkbox
-                checked={selectAllIndeterminate ? "indeterminate" : selectAllChecked}
-                onCheckedChange={onSelectAllChange}
-                className="h-4 w-4 border-[#3a3a3a] data-[state=checked]:bg-primary data-[state=checked]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:border-primary"
-              />
-              <h3 className="text-sm font-medium text-white">
-                Inferred Fields
-              </h3>
-              <span className="text-xs bg-[#3a3a3a] text-gray-300 px-2 py-0.5 rounded">
-                {inferredFields.length}
-              </span>
+          <CardHeader className="flex-shrink-0 space-y-0 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={selectAllIndeterminate ? "indeterminate" : selectAllChecked}
+                  onCheckedChange={onSelectAllChange}
+                />
+                <h3 className="text-sm font-medium">
+                  Inferred Fields
+                </h3>
+                <Badge variant="secondary" className="ml-2">
+                  {inferredFields.length}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onInferFields}
+                  disabled={inferring}
+                >
+                  {inferring ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Inferring...
+                    </>
+                  ) : (
+                    <>
+                      <Database className="mr-2 h-3 w-3" />
+                      Infer Fields
+                    </>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onClearAll}
+                  disabled={inferredFields.length === 0}
+                >
+                  Clear All
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={onInferFields}
-                disabled={inferring}
-                className="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-gray-300 border-[#3a3a3a]"
-              >
-                Infer Fields
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onClearAll}
-                disabled={inferredFields.length === 0}
-                className="text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
-              >
-                Clear All
-              </Button>
-            </div>
-          </div>
+          </CardHeader>
+          
+          <Separator />
           
           {/* Search */}
-          <div className="p-3 border-b border-[#3a3a3a] flex-shrink-0 bg-[#1e1e1e]">
+          <div className="flex-shrink-0 p-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search fields..."
                 value={fieldSearchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 h-9 bg-[#2a2a2a] border-[#3a3a3a] text-white placeholder:text-gray-500 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="pl-10"
               />
             </div>
           </div>
@@ -249,7 +198,7 @@ export function FieldsTab({
               {(() => {
                 if (filteredFields.length === 0) {
                   return (
-                    <div className="text-center text-gray-500 py-8">
+                    <div className="text-center text-muted-foreground py-8">
                       {fieldSearchQuery ? 'No fields match your search' : 'No fields inferred yet. Click "Infer Fields" to analyze your data.'}
                     </div>
                   );
@@ -262,42 +211,47 @@ export function FieldsTab({
         </div>
         
         {/* Selected fields sidebar */}
-        <div className="w-64 border-l border-[#3a3a3a] flex flex-col bg-[#242424]">
-          <div className="p-4 border-b border-[#3a3a3a] flex-shrink-0 bg-[#2a2a2a]">
+        <Card className="w-64 rounded-none border-y-0 border-r-0">
+          <CardHeader className="space-y-0">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-white">
+              <h3 className="text-sm font-medium">
                 Selected Fields
               </h3>
-              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+              <Badge variant="secondary">
                 {selectedFields.size}
-              </span>
+              </Badge>
             </div>
-          </div>
-          <ScrollArea className="flex-1 overflow-y-auto">
-            <div className="p-3 space-y-1">
-              {Array.from(selectedFields).sort().map(path => {
-                return (
-                  <div
-                    key={path}
-                    className="text-sm text-gray-400 py-1 font-mono"
-                  >
-                    {path}
+          </CardHeader>
+          <Separator />
+          <CardContent className="p-0">
+            <ScrollArea className="h-[calc(100vh-16rem)]">
+              <div className="p-3 space-y-1">
+                {Array.from(selectedFields).sort().map(path => {
+                  return (
+                    <div
+                      key={path}
+                      className="rounded-md bg-muted/50 px-2 py-1 text-sm font-mono"
+                    >
+                      {path}
+                    </div>
+                  );
+                })}
+                
+                {selectedFields.size === 0 && (
+                  <div className="text-center text-muted-foreground text-sm py-4">
+                    No fields selected
                   </div>
-                );
-              })}
-              
-              {selectedFields.size === 0 && (
-                <div className="text-center text-gray-500 text-sm py-4">
-                  No fields selected
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
       </div>
       
+      <Separator />
+      
       {/* Footer */}
-      <div className="p-4 border-t border-[#3a3a3a] bg-[#242424] flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center justify-between p-4">
         <Button 
           variant="secondary"
           onClick={() => {
@@ -305,7 +259,6 @@ export function FieldsTab({
             // For now, just switch to columns tab
           }}
           disabled={selectedFields.size === 0}
-          className="bg-[#2a2a2a] hover:bg-[#3a3a3a] text-gray-300 border-[#3a3a3a]"
         >
           Update Columns ({selectedFields.size})
         </Button>
@@ -314,13 +267,11 @@ export function FieldsTab({
           <Button 
             variant="ghost" 
             onClick={() => window.location.reload()}
-            className="text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
           >
             Cancel
           </Button>
           <Button 
             variant="default" 
-            className="bg-primary hover:bg-primary/90 text-primary-foreground" 
             onClick={() => {
               const event = new CustomEvent('updateDatasource');
               window.dispatchEvent(event);

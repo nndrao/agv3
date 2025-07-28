@@ -175,14 +175,32 @@ export function StompConfigurationDialog({
   };
   
   const convertToFieldNodes = (fields: Record<string, FieldInfo>): FieldNode[] => {
-    return Object.entries(fields).map(([key, field]) => ({
+    // Filter to only root-level fields (no dots in the key)
+    const rootFields = Object.entries(fields).filter(([key]) => !key.includes('.'));
+    
+    return rootFields.map(([key, field]) => ({
       path: field.path,
-      name: key.split('.').pop() || key,
+      name: key,
       type: field.type,
       nullable: field.nullable,
       sample: field.sample,
-      children: field.children ? convertToFieldNodes(field.children) : undefined,
+      children: field.children ? Object.entries(field.children).map(([childKey, childField]) => 
+        convertFieldNodeRecursive(childField, childKey)
+      ) : undefined,
     }));
+  };
+  
+  const convertFieldNodeRecursive = (field: FieldInfo, name: string): FieldNode => {
+    return {
+      path: field.path,
+      name: name,
+      type: field.type,
+      nullable: field.nullable,
+      sample: field.sample,
+      children: field.children ? Object.entries(field.children).map(([childKey, childField]) => 
+        convertFieldNodeRecursive(childField, childKey)
+      ) : undefined,
+    };
   };
   
   const convertFieldNodeToInfo = (node: FieldNode): FieldInfo => {
@@ -362,7 +380,9 @@ export function StompConfigurationDialog({
       if (result.success && result.data && result.data.length > 0) {
         // Infer fields
         const fields = StompDatasourceProvider.inferFields(result.data);
+        console.log('[Field Inference] Raw fields:', fields);
         const fieldNodes = convertToFieldNodes(fields);
+        console.log('[Field Inference] Converted field nodes:', fieldNodes);
         setInferredFields(fieldNodes);
         
         toast({
