@@ -274,6 +274,7 @@ const DataGridStompSharedComponent = () => {
       // During snapshot - accumulate data
       snapshotDataRef.current.push(...data);
       messageCountRef.current += data.length;
+      setMessageCountDisplay(messageCountRef.current);
       
       // Update mode to receiving if not already
       setSnapshotMode((prev) => prev === 'requesting' ? 'receiving' : prev);
@@ -311,6 +312,11 @@ const DataGridStompSharedComponent = () => {
       if (data.providerId === selectedProviderId) {
         console.log(`[DataGridStompShared] Processing snapshot: ${data.data.length} rows`);
         handleSnapshotData(data.data);
+        
+        // Update snapshot mode to receiving if we were requesting
+        if (snapshotMode === 'requesting' && data.data.length > 0) {
+          setSnapshotMode('receiving');
+        }
       }
     };
     
@@ -334,19 +340,26 @@ const DataGridStompSharedComponent = () => {
         
         // Update snapshot mode based on statistics
         if (data.statistics.mode === 'snapshot') {
-          setSnapshotMode('receiving');
-        } else if (data.statistics.mode === 'realtime' && snapshotMode !== 'complete') {
-          setSnapshotMode('complete');
-          // When transitioning to realtime, set the accumulated snapshot data
-          if (snapshotDataRef.current.length > 0 && !isSnapshotComplete.current) {
-            console.log(`[DataGridStompShared] Setting snapshot data: ${snapshotDataRef.current.length} rows`);
-            setRowData(snapshotDataRef.current);
-            isSnapshotComplete.current = true;
-            toast({
-              title: "Snapshot Complete",
-              description: `Loaded ${snapshotDataRef.current.length} rows`,
-            });
+          // Only change to receiving if we're currently requesting
+          if (snapshotMode === 'requesting') {
+            setSnapshotMode('receiving');
           }
+        } else if (data.statistics.mode === 'realtime' && snapshotMode !== 'complete') {
+          // Only mark complete if we have actually received data
+          if (snapshotDataRef.current.length > 0 || isSnapshotComplete.current) {
+            setSnapshotMode('complete');
+            // When transitioning to realtime, set the accumulated snapshot data
+            if (snapshotDataRef.current.length > 0 && !isSnapshotComplete.current) {
+              console.log(`[DataGridStompShared] Setting snapshot data: ${snapshotDataRef.current.length} rows`);
+              setRowData(snapshotDataRef.current);
+              isSnapshotComplete.current = true;
+              toast({
+                title: "Snapshot Complete",
+                description: `Loaded ${snapshotDataRef.current.length} rows`,
+              });
+            }
+          }
+          // Otherwise keep showing the busy indicator
         }
       }
     };
@@ -662,6 +675,7 @@ const DataGridStompSharedComponent = () => {
       
       // Request snapshot explicitly
       console.log('[DataGridStompShared] Requesting snapshot from SharedWorker');
+      setSnapshotMode('requesting');
       try {
         const snapshot = await sharedWorkerClientRef.current.getSnapshot(selectedProviderId!);
         if (snapshot && snapshot.length > 0) {
@@ -681,9 +695,16 @@ const DataGridStompSharedComponent = () => {
           });
         } else {
           console.log('[DataGridStompShared] No cached snapshot available, waiting for live data');
+          // Keep showing the busy indicator since snapshot is still being loaded
         }
       } catch (error) {
         console.error('[DataGridStompShared] Failed to get snapshot:', error);
+        setSnapshotMode('idle');
+        toast({
+          title: "Snapshot Error",
+          description: "Failed to load snapshot data. Please try again.",
+          variant: "destructive",
+        });
       }
       
       // Request current status to sync UI state
@@ -1316,7 +1337,25 @@ const DataGridStompSharedComponent = () => {
       </div>
       
       {/* Grid */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
+        {/* Busy indicator overlay */}
+        {(snapshotMode === 'requesting' || snapshotMode === 'receiving') && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="text-lg font-medium">
+                  {snapshotMode === 'requesting' ? 'Waiting for snapshot...' : 'Receiving snapshot data...'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {snapshotMode === 'requesting' 
+                    ? 'The shared connection is loading the data' 
+                    : `${messageCountDisplay} rows received`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <AgGridReact<RowData>
           theme={theme}
           rowData={rowData}

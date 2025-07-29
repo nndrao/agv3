@@ -94,7 +94,9 @@ async function createProviderConnection(providerId: string, config: any): Promis
       updateBytesReceived: 0,
       mode: 'idle'
     },
-    isConnecting: false
+    isConnecting: false,
+    isSnapshotComplete: false,
+    pendingSnapshotRequests: []
   };
 
   providers.set(providerId, provider);
@@ -159,6 +161,7 @@ async function connectProvider(provider: ProviderConnection) {
       console.log(`[SharedWorker] Provider ${provider.providerId} disconnected`);
       provider.statistics.isConnected = false;
       provider.statistics.disconnectionCount++;
+      provider.isSnapshotComplete = false;
       
       broadcastToSubscribers(provider.providerId, {
         type: 'status',
@@ -225,6 +228,27 @@ async function connectProvider(provider: ProviderConnection) {
       isSnapshotMode = false;
       provider.statistics.mode = 'realtime';
       provider.statistics.snapshotRowsReceived = rowCount;
+      provider.isSnapshotComplete = true;
+      
+      // Process any pending snapshot requests
+      if (provider.pendingSnapshotRequests.length > 0) {
+        console.log(`[SharedWorker] Processing ${provider.pendingSnapshotRequests.length} pending snapshot requests`);
+        const snapshotData = Array.from(provider.snapshot.values());
+        
+        provider.pendingSnapshotRequests.forEach(({ port, request }) => {
+          sendToPort(port, {
+            type: 'snapshot',
+            providerId: provider.providerId,
+            requestId: request.requestId,
+            data: snapshotData,
+            statistics: provider.statistics,
+            timestamp: Date.now()
+          });
+        });
+        
+        // Clear pending requests
+        provider.pendingSnapshotRequests = [];
+      }
       
       broadcastToSubscribers(provider.providerId, {
         type: 'status',
@@ -381,8 +405,15 @@ function handleGetSnapshot(port: MessagePort, request: WorkerRequest) {
     return;
   }
 
+  // Check if snapshot is complete
+  if (!provider.isSnapshotComplete) {
+    console.log(`[SharedWorker] Snapshot not complete for provider ${providerId}, queuing request`);
+    provider.pendingSnapshotRequests.push({ port, request });
+    return;
+  }
+
   const snapshotData = Array.from(provider.snapshot.values());
-  console.log(`[SharedWorker] Sending snapshot for provider ${providerId}: ${snapshotData.length} rows`);
+  console.log(`[SharedWorker] Sending complete snapshot for provider ${providerId}: ${snapshotData.length} rows`);
   
   sendToPort(port, {
     type: 'snapshot',

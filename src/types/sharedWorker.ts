@@ -54,6 +54,8 @@ export interface ProviderConnection {
   connection: any; // StompDatasourceProvider instance
   statistics: StompStatistics;
   isConnecting: boolean;
+  isSnapshotComplete: boolean;
+  pendingSnapshotRequests: Array<{port: MessagePort; request: WorkerRequest}>;
   error?: string;
 }
 
