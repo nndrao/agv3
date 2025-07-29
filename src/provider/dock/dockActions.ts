@@ -72,28 +72,7 @@ export function getDockCustomActions(): CustomActionsMap {
     },
     
     // DataGrid Simplified
-    'new-datagrid-stomp-simplified': async (payload: CustomActionPayload): Promise<void> => {
-      if (payload.callerType === CustomActionCallerType.CustomButton) {
-        console.log('[DockActions] Opening simplified DataGrid with direct STOMP connection...');
-        try {
-          await WindowManager.openDataGridStompSimplified();
-        } catch (error) {
-          console.error('[DockActions] Failed to open DataGrid STOMP Simplified:', error);
-        }
-      }
-    },
-    
-    // Manage DataGrid Instances
-    'manage-datagrid-instances': async (payload: CustomActionPayload): Promise<void> => {
-      if (payload.callerType === CustomActionCallerType.CustomButton) {
-        console.log('[DockActions] Opening DataGrid STOMP Instance Manager...');
-        try {
-          await WindowManager.openDataGridStompManager();
-        } catch (error) {
-          console.error('[DockActions] Failed to open DataGrid STOMP Manager:', error);
-        }
-      }
-    },
+    // Removed new-datagrid-stomp-simplified and manage-datagrid-instances actions
     
     // Developer Tools - DataTable
     'new-datatable': async (payload: CustomActionPayload): Promise<void> => {
@@ -131,17 +110,7 @@ export function getDockCustomActions(): CustomActionsMap {
       }
     },
     
-    // Developer Tools - DataGrid Channel
-    'new-datagrid-channel': async (payload: CustomActionPayload): Promise<void> => {
-      if (payload.callerType === CustomActionCallerType.CustomDropdownItem) {
-        console.log('[DockActions] Opening DataGrid with channel connection...');
-        try {
-          await WindowManager.openDataGridChannel();
-        } catch (error) {
-          console.error('[DockActions] Failed to open DataGrid Channel:', error);
-        }
-      }
-    },
+    // Removed new-datagrid-channel action
     
     // Developer Tools - Active Providers
     'show-providers': async (payload: CustomActionPayload): Promise<void> => {

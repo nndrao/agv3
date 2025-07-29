@@ -41,7 +41,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
     
     // Fallback: Search all known component types
-    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings', 'DataGridStomp', 'DataGridChannel', 'DataTable'];
+    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings', 'DataGridStomp', 'DataTable'];
     
     for (const type of types) {
       const key = this.getKey(type, configId);

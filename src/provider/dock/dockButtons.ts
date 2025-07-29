@@ -86,34 +86,6 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
       type: 'Custom' as const
     },
     {
-      tooltip: 'DataGrid Simplified',
-      iconUrl: createDynamicIcon({
-        text: 'DS',
-        backgroundColor: '#8B5CF6',
-        textColor: '#FFFFFF',
-        fontSize: 10
-      }),
-      action: {
-        id: 'new-datagrid-stomp-simplified',
-        customData: {}
-      },
-      type: 'Custom' as const
-    },
-    {
-      tooltip: 'Manage DataGrid Instances',
-      iconUrl: createDynamicIcon({
-        text: 'M',
-        backgroundColor: '#F59E0B',
-        textColor: '#FFFFFF',
-        fontSize: 12
-      }),
-      action: {
-        id: 'manage-datagrid-instances',
-        customData: {}
-      },
-      type: 'Custom' as const
-    },
-    {
       tooltip: themeTooltip,
       iconUrl: createColorfulIcon(currentTheme === 'dark' ? 'sun' : 'moon'),
       action: {
@@ -153,14 +125,6 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
           iconUrl: `${baseUrl}/icons/database.svg`,
           action: {
             id: 'configure-datasource',
-            customData: {}
-          }
-        },
-        {
-          tooltip: 'DataGrid (Channel)',
-          iconUrl: `${baseUrl}/icons/grid-channel.svg`,
-          action: {
-            id: 'new-datagrid-channel',
             customData: {}
           }
         },
