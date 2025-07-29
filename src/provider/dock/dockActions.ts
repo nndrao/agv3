@@ -71,6 +71,18 @@ export function getDockCustomActions(): CustomActionsMap {
       }
     },
     
+    // DataGrid Shared STOMP
+    'new-datagrid-stomp-shared': async (payload: CustomActionPayload): Promise<void> => {
+      if (payload.callerType === CustomActionCallerType.CustomButton) {
+        console.log('[DockActions] Opening DataGrid with shared STOMP connection...');
+        try {
+          await WindowManager.openDataGridStompShared();
+        } catch (error) {
+          console.error('[DockActions] Failed to open DataGrid STOMP Shared:', error);
+        }
+      }
+    },
+    
     // DataGrid Simplified
     // Removed new-datagrid-stomp-simplified and manage-datagrid-instances actions
     

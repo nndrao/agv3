@@ -202,6 +202,78 @@ export class WindowManager {
   
   // Removed methods for DataGridChannel, DataGridStompSimplified, and DataGridStompManager as they are no longer used
   
+  static async openDataGridStompShared(instanceName?: string): Promise<any> {
+    // Load existing instances
+    this.loadViewInstances();
+    
+    let id: string;
+    let viewName: string;
+    
+    if (instanceName) {
+      // Use provided instance name to find or create instance
+      const existingInstance = Array.from(this.viewInstances.values())
+        .find(instance => instance.type === 'DataGridStompShared' && instance.name === instanceName);
+      
+      if (existingInstance) {
+        id = existingInstance.id;
+      } else {
+        // Create new instance with stable ID based on name
+        id = `datagrid-stomp-shared-${instanceName.toLowerCase().replace(/\s+/g, '-')}`;
+      }
+      viewName = instanceName;
+    } else {
+      // Create a new numbered instance
+      const existingCount = Array.from(this.viewInstances.values())
+        .filter(instance => instance.type === 'DataGridStompShared').length;
+      
+      id = `datagrid-stomp-shared-instance-${existingCount + 1}`;
+      viewName = `DataGrid STOMP Shared ${existingCount + 1}`;
+    }
+    
+    // Get the platform
+    const platform = fin.Platform.getCurrentSync();
+    
+    // Check if view already exists
+    try {
+      const existingView = await fin.View.wrapSync({ 
+        uuid: fin.me.uuid, 
+        name: `datagrid-stomp-shared-view-${id}` 
+      });
+      if (existingView) {
+        await existingView.focus();
+        return existingView;
+      }
+    } catch (error) {
+      // View doesn't exist, create it
+    }
+    
+    // Check if there's a saved title for this view
+    let viewTitle = viewName;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const savedTitle = localStorage.getItem(`viewTitle_${id}`);
+      if (savedTitle) {
+        viewTitle = savedTitle;
+      }
+    }
+    
+    // Create view for DataGrid with SharedWorker connection
+    const view = await platform.createView({
+      url: getViewUrl(`/datagrid-stomp-shared?id=${id}`),
+      name: `datagrid-stomp-shared-view-${id}`,
+      title: viewTitle,
+      titleOrder: 'options',
+      customData: {
+        instanceName: viewName,
+        instanceId: id
+      }
+    });
+    
+    // Save instance
+    this.saveViewInstance(id, viewName, 'DataGridStompShared');
+    
+    return view;
+  }
+  
   static async createHeadlessProvider(providerId: string, config: any): Promise<any> {
     const windowName = `provider-${providerId}`;
     

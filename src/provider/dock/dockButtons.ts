@@ -86,6 +86,20 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
       type: 'Custom' as const
     },
     {
+      tooltip: 'DataGrid (Shared STOMP)',
+      iconUrl: createDynamicIcon({
+        text: 'DS',
+        backgroundColor: '#3B82F6',
+        textColor: '#FFFFFF',
+        fontSize: 10
+      }),
+      action: {
+        id: 'new-datagrid-stomp-shared',
+        customData: {}
+      },
+      type: 'Custom' as const
+    },
+    {
       tooltip: themeTooltip,
       iconUrl: createColorfulIcon(currentTheme === 'dark' ? 'sun' : 'moon'),
       action: {
