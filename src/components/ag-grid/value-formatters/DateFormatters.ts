@@ -43,7 +43,7 @@ const createDateFormatter = (formatter: (date: Date) => string) => {
     
     try {
       return formatter(date);
-    } catch (e) {
+    } catch {
       return '';
     }
   };

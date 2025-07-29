@@ -45,7 +45,7 @@ interface StatusMessage {
 const PORT = 8081;
 const EXTREME_BATCH_SIZE = 3000;
 const EXTREME_INTERVAL_MS = 20; // 20ms = 150,000 updates/sec
-const USE_BINARY = false; // Set to true for binary protocol (future enhancement)
+// const USE_BINARY = false; // Set to true for binary protocol (future enhancement)
 
 // Sample data
 const PRODUCTS = ['Palm Oil','Rubber','Wool','Amber','Copper','Lead','Zinc','Tin','Aluminium',
@@ -302,5 +302,5 @@ class PerformanceTestServer {
 }
 
 // Start the server
-const server = new PerformanceTestServer();
+new PerformanceTestServer();
 console.log('AG-Grid extreme performance test server started');

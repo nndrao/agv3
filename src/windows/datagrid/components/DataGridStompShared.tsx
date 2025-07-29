@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ModuleRegistry, themeQuartz, ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
-import { AllEnterpriseModule } from "ag-grid-enterprise";
+import { themeQuartz, ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
+// import { AllEnterpriseModule } from "ag-grid-enterprise";
 import { AgGridReact } from "ag-grid-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Moon, Sun, Play, Square, Save, Loader2, Info, MoreVertical, Edit2, ChevronDown, Plus, Settings } from "lucide-react";
+import { Moon, Sun, Play, Square, Save, Loader2, MoreVertical, Edit2, ChevronDown, Plus, Settings } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { ProviderSelector } from "../../datatable/components/ProviderSelector";
 import { StorageClient } from "../../../services/storage/storageClient";
 import { SharedWorkerClient } from "../../../services/sharedWorker/SharedWorkerClient";
 import { useToast } from "@/hooks/use-toast";
 import { useProfileManagement, BaseProfile } from "@/hooks/useProfileManagement";
-import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
+// import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
 import { ProfileManagementDialog } from "@/components/ProfileManagementDialog";
+import { ConfigVersion } from "@/services/storage/types";
 import { SaveProfileDialog } from "@/components/SaveProfileDialog";
 import { RenameViewDialog } from "@/components/RenameViewDialog";
 import { getViewInstanceId } from "@/utils/viewUtils";
@@ -159,17 +160,17 @@ const DataGridStompSharedComponent = () => {
   const [snapshotMode, setSnapshotMode] = useState<'idle' | 'requesting' | 'receiving' | 'complete'>('idle');
   const messageCountRef = useRef(0);
   const [messageCountDisplay, setMessageCountDisplay] = useState(0);
-  const lastUpdateTimeRef = useRef<number>(Date.now());
+  // const lastUpdateTimeRef = useRef<number>(Date.now());
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [currentViewTitle, setCurrentViewTitle] = useState('');
-  const [statistics, setStatistics] = useState<any>({
-    snapshotRowsReceived: 0,
-    updateRowsReceived: 0,
-    isConnected: false,
-    mode: 'idle'
-  });
+  // const [statistics, setStatistics] = useState<any>({
+  //   snapshotRowsReceived: 0,
+  //   updateRowsReceived: 0,
+  //   isConnected: false,
+  //   mode: 'idle'
+  // });
   
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
   const sharedWorkerClientRef = useRef<SharedWorkerClient | null>(null);
@@ -326,16 +327,16 @@ const DataGridStompSharedComponent = () => {
         handleRealtimeUpdate(data.data);
         
         // Update statistics if provided
-        if (data.statistics) {
-          setStatistics(data.statistics);
-        }
+        // if (data.statistics) {
+        //   setStatistics(data.statistics);
+        // }
       }
     };
     
     const handleStatus = (data: { providerId: string; statistics: any }) => {
       if (data.providerId === selectedProviderId) {
         console.log('[DataGridStompShared] Processing status update:', data.statistics);
-        setStatistics(data.statistics);
+        // setStatistics(data.statistics);
         setIsConnected(data.statistics.isConnected);
         
         // Update snapshot mode based on statistics
@@ -415,9 +416,8 @@ const DataGridStompSharedComponent = () => {
           gridApiRef.current.setFilterModel(profile.filterModel);
         }
         
-        if (profile.sortModel && profile.sortModel.length > 0 && typeof gridApiRef.current.getSortModel === 'function') {
-          gridApiRef.current.setSortModel(profile.sortModel);
-        }
+        // AG-Grid doesn't have getSortModel/setSortModel - sorting is handled via column state
+        // Sort model is included in column state which is already applied above
       } catch (error) {
         console.warn('[DataGridStompShared] Error applying grid state:', error);
       }
@@ -439,11 +439,11 @@ const DataGridStompSharedComponent = () => {
     saveProfile,
     loadProfile,
     deleteProfile,
-    createProfile,
+    // createProfile,
     setActiveProfile,
     exportProfile,
-    importProfile,
-    resetToDefault
+    importProfile
+    // resetToDefault
   } = useProfileManagement<DataGridStompSharedProfile>({
     viewInstanceId,
     componentType: 'DataGridStompShared',
@@ -465,7 +465,7 @@ const DataGridStompSharedComponent = () => {
   
   // Removed debug state tracking to prevent re-renders
   // Memoize the key column
-  const keyColumn = useMemo(() => providerConfig?.keyColumn || 'positionId', [providerConfig?.keyColumn]);
+  // const keyColumn = useMemo(() => providerConfig?.keyColumn || 'positionId', [providerConfig?.keyColumn]);
 
   // Load provider configuration when selected
   useEffect(() => {
@@ -712,7 +712,7 @@ const DataGridStompSharedComponent = () => {
         const status = await sharedWorkerClientRef.current.getStatus(selectedProviderId!);
         if (status) {
           console.log('[DataGridStompShared] Got status from SharedWorker:', status);
-          setStatistics(status);
+          // setStatistics(status);
         }
       } catch (error) {
         console.error('[DataGridStompShared] Failed to get status:', error);
@@ -748,12 +748,12 @@ const DataGridStompSharedComponent = () => {
         // Reset message count and statistics
         messageCountRef.current = 0;
         setMessageCountDisplay(0);
-        setStatistics({
-          snapshotRowsReceived: 0,
-          updateRowsReceived: 0,
-          isConnected: false,
-          mode: 'idle'
-        });
+        // setStatistics({
+        //   snapshotRowsReceived: 0,
+        //   updateRowsReceived: 0,
+        //   isConnected: false,
+        //   mode: 'idle'
+        // });
         // Set flag to prevent auto-reconnect
         wasManuallyDisconnected.current = true;
         isConnecting.current = false;
@@ -851,7 +851,7 @@ const DataGridStompSharedComponent = () => {
       return new Promise((resolve) => {
         // Get current title
         const currentView = fin.View.getCurrent();
-        currentView.getOptions().then(options => {
+        currentView.getOptions().then((options: any) => {
           const title = document.title || options.title || options.name || 'Untitled';
           setCurrentViewTitle(title);
           setShowRenameDialog(true);
@@ -932,9 +932,8 @@ const DataGridStompSharedComponent = () => {
         params.api.setFilterModel(activeProfileData.filterModel);
       }
       
-      if (activeProfileData?.sortModel && activeProfileData.sortModel.length > 0 && typeof params.api.setSortModel === 'function') {
-        params.api.setSortModel(activeProfileData.sortModel);
-      }
+      // AG-Grid doesn't have setSortModel - sorting is handled via column state
+      // Sort model is included in column state which is already applied above
     } catch (error) {
       console.warn('[DataGridStompShared] Error applying saved state on grid ready:', error);
     }
@@ -950,21 +949,20 @@ const DataGridStompSharedComponent = () => {
     });
     
     // Extract grid state only when updating existing profile (not for new profiles)
-    let columnState = [];
+    let columnState: any[] = [];
     let filterModel = {};
-    let sortModel = [];
+    let sortModel: any[] = [];
     
     // Only extract grid state if we're updating an existing profile, not creating a new one
-    if (!saveAsNew && validateGridApi(gridApiRef.current)) {
+    if (!saveAsNew && gridApiRef.current && validateGridApi(gridApiRef.current)) {
       try {
         columnState = gridApiRef.current.getColumnState();
         filterModel = gridApiRef.current.getFilterModel();
-        // Check if getSortModel exists (it might be part of sortController)
-        if (typeof gridApiRef.current.getSortModel === 'function') {
-          sortModel = gridApiRef.current.getSortModel();
-        } else if (gridApiRef.current.sortController && typeof gridApiRef.current.sortController.getSortModel === 'function') {
-          sortModel = gridApiRef.current.sortController.getSortModel();
-        }
+        // Extract sort model from column state
+        sortModel = columnState
+          .filter((col: any) => col.sort !== null && col.sort !== undefined)
+          .map((col: any) => ({ colId: col.colId, sort: col.sort, sortIndex: col.sortIndex }))
+          .sort((a: any, b: any) => (a.sortIndex || 0) - (b.sortIndex || 0));
       } catch (error) {
         console.warn('[DataGridStompShared] Error extracting grid state:', error);
       }
@@ -1074,7 +1072,7 @@ const DataGridStompSharedComponent = () => {
     setShowProfileDialog(true);
   }, []);
   
-  const handleSaveNewProfile = useCallback(async (name: string, description?: string) => {
+  const handleSaveNewProfile = useCallback(async (name: string, _description?: string) => {
     await saveCurrentState(true, name); // Always create new when using dialog
     setShowSaveDialog(false);
   }, [saveCurrentState]);
@@ -1387,7 +1385,15 @@ const DataGridStompSharedComponent = () => {
         onOpenChange={setShowProfileDialog}
         profiles={profiles}
         activeProfileId={activeProfile?.versionId}
-        onSave={saveProfile}
+        onSave={async (profile: ConfigVersion, name: string) => {
+          // Create a full profile with required fields
+          const fullProfile: DataGridStompSharedProfile = {
+            ...activeProfileData!,
+            ...profile,
+            name
+          };
+          await saveProfile(fullProfile, false, name);
+        }}
         onDelete={deleteProfile}
         onRename={handleProfileRename}
         onSetDefault={handleSetDefault}

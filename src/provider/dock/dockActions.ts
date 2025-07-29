@@ -173,7 +173,7 @@ export function getDockCustomActions(): CustomActionsMap {
           const runningApps = await fin.System.getAllApplications();
           let devtoolsOpened = false;
           
-          console.log('[DockActions] Running applications:', runningApps.map(app => app.uuid));
+          console.log('[DockActions] Running applications:', runningApps.map((app: any) => app.uuid));
           
           // Look for OpenFin Workspace applications
           for (const app of runningApps) {
@@ -184,7 +184,7 @@ export function getDockCustomActions(): CustomActionsMap {
                 const application = fin.Application.wrapSync({ uuid: app.uuid });
                 const childWindows = await application.getChildWindows();
                 
-                console.log(`[DockActions] Child windows for ${app.uuid}:`, childWindows.map((w: OpenFin.Window) => w.identity.name));
+                console.log(`[DockActions] Child windows for ${app.uuid}:`, childWindows.map((w: any) => w.identity.name));
                 
                 // Look for dock-related windows
                 for (const window of childWindows) {

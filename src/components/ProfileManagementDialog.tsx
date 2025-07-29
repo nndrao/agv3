@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -151,9 +151,6 @@ export function ProfileManagementDialog({
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
                             Created {formatDistanceToNow(new Date(profile.createdTime), { addSuffix: true })}
-                            {profile.modifiedTime && (
-                              <> • Modified {formatDistanceToNow(new Date(profile.modifiedTime), { addSuffix: true })}</>
-                            )}
                           </p>
                         </div>
                       )}

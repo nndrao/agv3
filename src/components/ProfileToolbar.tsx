@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Save, SaveAll, Settings2, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';

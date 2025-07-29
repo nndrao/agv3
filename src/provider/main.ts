@@ -8,10 +8,9 @@ import type { CustomActionsMap, WorkspacePlatformProvider } from '@openfin/works
 import { DockProvider } from './dock/dockProvider';
 import { setDeveloperMode, refreshDockButtons } from './dock/dockButtons';
 import { getDockCustomActions } from './dock/dockActions';
-import { initColorScheme, createThemingOverride } from './theming';
+// import { createThemingOverride } from './theming';
 import { StorageService } from '../services/storage/storageService';
 import { ChannelService } from '../services/channels/channelService';
-import { WindowManager } from '../services/window/windowManager';
 import { AppVariablesService } from '../services/appVariables/appVariablesService';
 
 const PLATFORM_ID = 'agv3-workspace-platform';
@@ -186,8 +185,8 @@ async function initializeWorkspaceComponents() {
   } catch (error) {
     console.error('❌ Failed to register dock:', error);
     console.error('Error details:', {
-      message: error?.message,
-      stack: error?.stack,
+      message: (error as Error)?.message,
+      stack: (error as Error)?.stack,
       error
     });
     // Continue without dock - don't break the entire app
@@ -353,7 +352,7 @@ function overrideCallback(
   class Override extends WorkspacePlatformProvider {
     // Override openViewTabContextMenuInternal to inject rename option
     // @ts-ignore - This method exists but is not in the TypeScript definitions
-    async openViewTabContextMenuInternal(req: any): Promise<any> {
+    async openViewTabContextMenuInternal(req: any, viewIdentity: any): Promise<any> {
       try {
         // Modify template to add rename option
         if (req?.template && Array.isArray(req.template)) {
@@ -387,26 +386,14 @@ function overrideCallback(
           }
         }
         
-        return super.openViewTabContextMenuInternal(req);
+        // @ts-ignore
+        return super.openViewTabContextMenuInternal(req, viewIdentity);
       } catch (error) {
-        return super.openViewTabContextMenuInternal(req);
+        // @ts-ignore
+        return super.openViewTabContextMenuInternal(req, viewIdentity);
       }
     }
     
-    // Override handleAction to handle custom menu actions
-    async handleAction(action: any): Promise<void> {
-      if (action.id === 'rename-tab') {
-        // Call the rename-tab custom action
-        const customActions = getAllCustomActions();
-        if (customActions['rename-tab']) {
-          await customActions['rename-tab'](action);
-        }
-        return;
-      }
-      
-      // Call parent for other actions
-      return super.handleAction(action);
-    }
   }
   
   platformInstance = new Override();
@@ -445,7 +432,7 @@ function setupDeveloperModeShortcut() {
           });
           await notification.show();
         } catch (notifError) {
-          console.log('[Main] Notification skipped:', notifError.message);
+          console.log('[Main] Notification skipped:', (notifError as Error).message);
         }
       });
       

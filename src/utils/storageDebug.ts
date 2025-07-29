@@ -30,7 +30,7 @@ export function debugStorage(context: string) {
   // Check OpenFin context
   if (typeof fin !== 'undefined') {
     console.log('OpenFin available: YES');
-    fin.System.getVersion().then(version => {
+    fin.System.getVersion().then((version: any) => {
       console.log('OpenFin version:', version);
     });
   } else {

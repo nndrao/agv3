@@ -39,7 +39,7 @@ export class TemplateResolver {
    * If sessionId is provided, uses consistent UUIDs for the session
    */
   resolveSquareBrackets(template: string, sessionId?: string): string {
-    return template.replace(/\[([^\]]+)\]/g, (match, variable) => {
+    return template.replace(/\[([^\]]+)\]/g, (_, variable) => {
       const cacheKey = sessionId ? `${sessionId}:${variable}` : variable;
       
       // Check if we already have a UUID for this variable in this session
@@ -115,7 +115,7 @@ export class TemplateResolver {
   clearSession(sessionId: string): void {
     const keysToDelete: string[] = [];
     
-    this.uuidCache.forEach((value, key) => {
+    this.uuidCache.forEach((_, key) => {
       if (key.startsWith(`${sessionId}:`)) {
         keysToDelete.push(key);
       }

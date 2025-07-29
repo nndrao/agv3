@@ -155,7 +155,7 @@ export class StorageManager {
     );
     
     // Clone all component configs
-    for (const [viewId, config] of configs) {
+    for (const [, config] of configs) {
       const newConfig: ComponentConfig = {
         ...config,
         workspaceId: newWorkspaceId,

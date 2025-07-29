@@ -7,7 +7,7 @@ import {
 } from '../types/sharedWorker';
 
 // Import StompClient dynamically to avoid module issues in worker
-let StompClient: any;
+let StompClient: typeof import('../services/stomp/StompClient').StompClient;
 
 // Track all provider connections
 const providers = new Map<string, ProviderConnection>();
@@ -46,7 +46,7 @@ function broadcastToSubscribers(providerId: string, response: WorkerResponse) {
 }
 
 // Apply updates to snapshot cache
-function applyUpdatesToSnapshot(provider: ProviderConnection, updates: any[]) {
+function applyUpdatesToSnapshot(provider: ProviderConnection, updates: Record<string, unknown>[]) {
   const keyColumn = provider.config.keyColumn;
   if (!keyColumn) {
     console.warn(`[SharedWorker] No keyColumn defined for provider ${provider.providerId}, cannot cache snapshot`);
@@ -67,7 +67,7 @@ function applyUpdatesToSnapshot(provider: ProviderConnection, updates: any[]) {
 }
 
 // Create provider connection
-async function createProviderConnection(providerId: string, config: any): Promise<ProviderConnection> {
+async function createProviderConnection(providerId: string, config: Record<string, unknown>): Promise<ProviderConnection> {
   console.log(`[SharedWorker] Creating provider connection for ${providerId}`);
   
   // Dynamically import StompClient
@@ -184,7 +184,7 @@ async function connectProvider(provider: ProviderConnection) {
       });
     });
 
-    connection.on('data', (data: any[]) => {
+    connection.on('data', (data: Record<string, unknown>[]) => {
       console.log(`[SharedWorker] Provider ${provider.providerId} received ${data.length} rows (mode: ${isSnapshotMode ? 'snapshot' : 'realtime'})`);
       
       // Log first item to verify structure
@@ -451,7 +451,7 @@ function handleGetStatus(port: MessagePort, request: WorkerRequest) {
 }
 
 // Handle new connection
-self.addEventListener('connect', (event: any) => {
+(self as any).onconnect = (event: MessageEvent) => {
   const port = event.ports[0];
   const portId = generatePortId();
   
@@ -521,7 +521,7 @@ self.addEventListener('connect', (event: any) => {
   });
 
   port.start();
-});
+};
 
 // Log worker startup
 console.log('[SharedWorker] STOMP SharedWorker started');

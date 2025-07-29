@@ -7,21 +7,20 @@ import {
   DataSourceConfig 
 } from '../interfaces';
 
-interface StompConfig extends DataSourceConfig {
-  websocketUrl: string;
-  listenerTopic: string;
-  requestMessage?: string;
-  requestBody?: string;
-  snapshotEndToken?: string;
-  snapshotTimeoutMs?: number;
-}
+// interface StompConfig extends DataSourceConfig {
+//   websocketUrl: string;
+//   listenerTopic: string;
+//   requestMessage?: string;
+//   requestBody?: string;
+//   snapshotEndToken?: string;
+//   snapshotTimeoutMs?: number;
+// }
 
 export class StompDataSourceClient extends BaseDataSourceClient {
   readonly type: ProviderType = 'stomp';
   
   private channel: ChannelSubscriber;
   private providerId: string;
-  private config: StompConfig;
   
   // Snapshot tracking
   private snapshotStartTime: number = 0;
@@ -36,7 +35,6 @@ export class StompDataSourceClient extends BaseDataSourceClient {
     super(config);
     
     this.providerId = providerId;
-    this.config = config as StompConfig;
     this.channel = new ChannelSubscriber(`data-provider-${providerId}`);
   }
   
@@ -93,13 +91,15 @@ export class StompDataSourceClient extends BaseDataSourceClient {
     
     try {
       // Reset state
-      this.sequenceTracker.reset();
-      this.messageQueue.clear();
-      this.performanceMonitor.reset();
+      // Reset internal state
+      this.snapshotStartTime = 0;
+      this.snapshotRowCount = 0;
+      this.isReceivingSnapshot = false;
+      this.batchNumber = 0;
       this._mode = 'idle';
       
       // Send refresh request to provider
-      const response = await this.channel.request('refresh-request', {
+      await this.channel.request('refresh-request', {
         clientId: this.providerId,
         timestamp: Date.now()
       });
@@ -146,7 +146,7 @@ export class StompDataSourceClient extends BaseDataSourceClient {
       this.batchNumber = 0;
     });
     
-    this.channel.on('refresh-complete', (event: any) => {
+    this.channel.on('refresh-complete', () => {
       // Refresh complete
     });
   }
@@ -233,7 +233,7 @@ export class StompDataSourceClient extends BaseDataSourceClient {
       this.batchNumber = 0;
       
       // Send snapshot request to provider using the correct handler name
-      const response = await this.channel.request('getSnapshot', {
+      await this.channel.request('getSnapshot', {
         clientId: this.providerId,
         timestamp: Date.now()
       });

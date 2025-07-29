@@ -118,33 +118,33 @@ export function useDataTableUpdates({
       });
 
       // Use applyTransactionAsync for better performance
-      const result = gridApi.applyTransactionAsync(transaction);
-
-      if (result) {
-        console.log('[useDataTableUpdates] Transaction result:', {
-          add: result.add?.length || 0,
-          update: result.update?.length || 0,
-          remove: result.remove?.length || 0
-        });
-        
-        const latency = Date.now() - startTime;
-        
-        // Update metrics
-        metricsRef.current.totalUpdates += batch.length;
-        metricsRef.current.successfulUpdates += batch.length;
-        metricsRef.current.lastUpdateTime = Date.now();
-        metricsRef.current.updateLatency = latency;
-        metricsRef.current.batchSize = batch.length;
-
-        console.log('[useDataTableUpdates] Transaction applied successfully:', {
-          batchSize: batch.length,
-          latency: `${latency}ms`
-        });
-
-        // Report metrics if callback provided
-        if (onUpdateMetrics) {
-          onUpdateMetrics({ ...metricsRef.current });
+      gridApi.applyTransactionAsync(transaction, (res) => {
+        if (res) {
+          console.log('[useDataTableUpdates] Transaction result:', {
+            add: res.add?.length || 0,
+            update: res.update?.length || 0,
+            remove: res.remove?.length || 0
+          });
         }
+      });
+      
+      const latency = Date.now() - startTime;
+      
+      // Update metrics
+      metricsRef.current.totalUpdates += batch.length;
+      metricsRef.current.successfulUpdates += batch.length;
+      metricsRef.current.lastUpdateTime = Date.now();
+      metricsRef.current.updateLatency = latency;
+      metricsRef.current.batchSize = batch.length;
+
+      console.log('[useDataTableUpdates] Transaction applied successfully:', {
+        batchSize: batch.length,
+        latency: `${latency}ms`
+      });
+
+      // Report metrics if callback provided
+      if (onUpdateMetrics) {
+        onUpdateMetrics({ ...metricsRef.current });
       }
     } catch (error) {
       console.error('[useDataTableUpdates] Error applying transaction:', error);

@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ModuleRegistry, themeQuartz, ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
-import { AllEnterpriseModule } from "ag-grid-enterprise";
+import { themeQuartz, ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
+// import { AllEnterpriseModule } from "ag-grid-enterprise";
 import { AgGridReact } from "ag-grid-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Moon, Sun, Play, Square, Save, Loader2, Info, MoreVertical, Edit2, ChevronDown, Plus, Settings } from "lucide-react";
+import { Moon, Sun, Play, Square, Save, Loader2, MoreVertical, Edit2, ChevronDown, Plus, Settings } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { ProviderSelector } from "../../datatable/components/ProviderSelector";
 import { StorageClient } from "../../../services/storage/storageClient";
 import { StompClient, StompClientConfig } from "../../../services/stomp/StompClient";
 import { useToast } from "@/hooks/use-toast";
 import { useProfileManagement, BaseProfile } from "@/hooks/useProfileManagement";
-import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
+// import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
 import { ProfileManagementDialog } from "@/components/ProfileManagementDialog";
+import { ConfigVersion } from "@/services/storage/types";
 import { SaveProfileDialog } from "@/components/SaveProfileDialog";
 import { RenameViewDialog } from "@/components/RenameViewDialog";
 import { getViewInstanceId } from "@/utils/viewUtils";
@@ -246,9 +247,8 @@ const DataGridStompComponent = () => {
           gridApiRef.current.setFilterModel(profile.filterModel);
         }
         
-        if (profile.sortModel && profile.sortModel.length > 0 && typeof gridApiRef.current.getSortModel === 'function') {
-          gridApiRef.current.setSortModel(profile.sortModel);
-        }
+        // AG-Grid doesn't have getSortModel/setSortModel - sorting is handled via column state
+        // Sort model is included in column state which is already applied above
       } catch (error) {
         console.warn('[DataGridStomp] Error applying grid state:', error);
       }
@@ -270,11 +270,11 @@ const DataGridStompComponent = () => {
     saveProfile,
     loadProfile,
     deleteProfile,
-    createProfile,
+    // createProfile,
     setActiveProfile,
     exportProfile,
-    importProfile,
-    resetToDefault
+    importProfile
+    // resetToDefault
   } = useProfileManagement<DataGridStompProfile>({
     viewInstanceId,
     componentType: 'DataGridStomp',
@@ -296,7 +296,7 @@ const DataGridStompComponent = () => {
   
   // Removed debug state tracking to prevent re-renders
   // Memoize the key column
-  const keyColumn = useMemo(() => providerConfig?.keyColumn || 'positionId', [providerConfig?.keyColumn]);
+  // const keyColumn = useMemo(() => providerConfig?.keyColumn || 'positionId', [providerConfig?.keyColumn]);
 
   // Load provider configuration when selected
   useEffect(() => {
@@ -701,7 +701,7 @@ const DataGridStompComponent = () => {
       return new Promise((resolve) => {
         // Get current title
         const currentView = fin.View.getCurrent();
-        currentView.getOptions().then(options => {
+        currentView.getOptions().then((options: any) => {
           const title = document.title || options.title || options.name || 'Untitled';
           setCurrentViewTitle(title);
           setShowRenameDialog(true);
@@ -783,9 +783,8 @@ const DataGridStompComponent = () => {
         params.api.setFilterModel(activeProfileData.filterModel);
       }
       
-      if (activeProfileData?.sortModel && activeProfileData.sortModel.length > 0 && typeof params.api.setSortModel === 'function') {
-        params.api.setSortModel(activeProfileData.sortModel);
-      }
+      // AG-Grid doesn't have setSortModel - sorting is handled via column state
+      // Sort model is included in column state which is already applied above
     } catch (error) {
       console.warn('[DataGridStomp] Error applying saved state on grid ready:', error);
     }
@@ -801,21 +800,20 @@ const DataGridStompComponent = () => {
     });
     
     // Extract grid state only when updating existing profile (not for new profiles)
-    let columnState = [];
+    let columnState: any[] = [];
     let filterModel = {};
-    let sortModel = [];
+    let sortModel: any[] = [];
     
     // Only extract grid state if we're updating an existing profile, not creating a new one
-    if (!saveAsNew && validateGridApi(gridApiRef.current)) {
+    if (!saveAsNew && gridApiRef.current && validateGridApi(gridApiRef.current)) {
       try {
         columnState = gridApiRef.current.getColumnState();
         filterModel = gridApiRef.current.getFilterModel();
-        // Check if getSortModel exists (it might be part of sortController)
-        if (typeof gridApiRef.current.getSortModel === 'function') {
-          sortModel = gridApiRef.current.getSortModel();
-        } else if (gridApiRef.current.sortController && typeof gridApiRef.current.sortController.getSortModel === 'function') {
-          sortModel = gridApiRef.current.sortController.getSortModel();
-        }
+        // Extract sort model from column state
+        sortModel = columnState
+          .filter((col: any) => col.sort !== null && col.sort !== undefined)
+          .map((col: any) => ({ colId: col.colId, sort: col.sort, sortIndex: col.sortIndex }))
+          .sort((a: any, b: any) => (a.sortIndex || 0) - (b.sortIndex || 0));
       } catch (error) {
         console.warn('[DataGridStomp] Error extracting grid state:', error);
       }
@@ -925,7 +923,7 @@ const DataGridStompComponent = () => {
     setShowProfileDialog(true);
   }, []);
   
-  const handleSaveNewProfile = useCallback(async (name: string, description?: string) => {
+  const handleSaveNewProfile = useCallback(async (name: string, _description?: string) => {
     await saveCurrentState(true, name); // Always create new when using dialog
     setShowSaveDialog(false);
   }, [saveCurrentState]);
@@ -1220,7 +1218,15 @@ const DataGridStompComponent = () => {
         onOpenChange={setShowProfileDialog}
         profiles={profiles}
         activeProfileId={activeProfile?.versionId}
-        onSave={saveProfile}
+        onSave={async (profile: ConfigVersion, name: string) => {
+          // Create a full profile with required fields
+          const fullProfile: DataGridStompProfile = {
+            ...activeProfileData!,
+            ...profile,
+            name
+          };
+          await saveProfile(fullProfile, false, name);
+        }}
         onDelete={deleteProfile}
         onRename={handleProfileRename}
         onSetDefault={handleSetDefault}

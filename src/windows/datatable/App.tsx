@@ -81,7 +81,7 @@ function setDarkMode(enabled: boolean) {
 
 // Define row data interface
 interface RowData {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function App() {
@@ -90,10 +90,10 @@ export function App() {
   const [rowData, setRowData] = useState<RowData[]>([]);
   const [columnDefs, setColumnDefs] = useState<ColDef<RowData>[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [statistics, setStatistics] = useState<any>(null);
+  const [statistics, setStatistics] = useState<Record<string, unknown> | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
   const [darkMode, setDarkModeState] = useState<boolean>(true);
-  const [keyColumn, setKeyColumn] = useState<string>('id');
+  // const keyColumn = 'id';
   const keyColumnRef = useRef<string>('id');
   const subscriberRef = useRef<ChannelSubscriber | null>(null);
   const [snapshotMode, setSnapshotMode] = useState<'idle' | 'requesting' | 'receiving' | 'complete'>('idle');
@@ -182,7 +182,7 @@ export function App() {
         setRowData([]);
       });
       
-      subscriberRef.current.on('SNAPSHOT_COMPLETE', (data: any) => {
+      subscriberRef.current.on('SNAPSHOT_COMPLETE', (data: Record<string, unknown>) => {
         console.log('✅ SNAPSHOT_COMPLETE event received:', data);
         setSnapshotMode('complete');
         snapshotModeRef.current = 'complete';
@@ -238,10 +238,11 @@ export function App() {
       });
       
       // Handle snapshot batch updates
-      subscriberRef.current.on('update', (data: any) => {
+      subscriberRef.current.on('update', (data: Record<string, unknown>) => {
         const currentMode = snapshotModeRef.current;
-        console.log(`📨 Update event received, mode: ${currentMode}, has updates: ${!!data.updates}, length: ${data.updates?.length}`);
-        if (!data.updates || data.updates.length === 0) {
+        const updates = data.updates as RowData[] | undefined;
+        console.log(`📨 Update event received, mode: ${currentMode}, has updates: ${!!updates}, length: ${updates?.length}`);
+        if (!updates || updates.length === 0) {
           console.warn('Update event has no data');
           return;
         }
@@ -250,21 +251,22 @@ export function App() {
           // During snapshot, accumulate data
           setSnapshotMode('receiving');
           snapshotModeRef.current = 'receiving';
-          snapshotDataRef.current.push(...data.updates);
-          console.log(`📦 Snapshot batch: ${data.updates.length} rows, total: ${snapshotDataRef.current.length}`);
+          snapshotDataRef.current.push(...updates);
+          console.log(`📦 Snapshot batch: ${updates.length} rows, total: ${snapshotDataRef.current.length}`);
         } else {
           console.log(`Ignoring update in mode: ${currentMode}`);
         }
       });
       
       // Handle real-time updates
-      subscriberRef.current.on('realtime-update', (data: any) => {
-        if (!data.updates || data.updates.length === 0) return;
+      subscriberRef.current.on('realtime-update', (data: Record<string, unknown>) => {
+        const updates = data.updates as RowData[] | undefined;
+        if (!updates || updates.length === 0) return;
         
         if (snapshotModeRef.current === 'complete' && gridApiRef.current) {
-          console.log(`🔄 Real-time update: ${data.updates.length} rows`);
+          console.log(`🔄 Real-time update: ${updates.length} rows`);
           gridApiRef.current.applyTransactionAsync({
-            update: data.updates
+            update: updates
           });
         } else {
           console.log(`⚠️ Received real-time update but snapshot not complete, mode: ${snapshotModeRef.current}`);
@@ -272,13 +274,13 @@ export function App() {
       });
       
       // Handle errors
-      subscriberRef.current.on('error', (data: any) => {
+      subscriberRef.current.on('error', (data: Record<string, unknown>) => {
         console.error('Provider error:', data);
       });
       
       // Handle statistics - throttle updates to reduce re-renders
       let statisticsTimeout: NodeJS.Timeout | null = null;
-      subscriberRef.current.on('statistics', (stats: any) => {
+      subscriberRef.current.on('statistics', (stats: Record<string, unknown>) => {
         if (statisticsTimeout) clearTimeout(statisticsTimeout);
         statisticsTimeout = setTimeout(() => {
           setStatistics(stats);
@@ -332,14 +334,14 @@ export function App() {
         
         if (config.config.keyColumn) {
           console.log(`Setting keyColumn: ${config.config.keyColumn}`);
-          setKeyColumn(config.config.keyColumn);
+          // setKeyColumn(config.config.keyColumn);
           keyColumnRef.current = config.config.keyColumn;
         }
         
         if (config.config.columnDefinitions) {
           const cols: ColDef<RowData>[] = config.config.columnDefinitions
-            .filter((col: any) => col.type !== 'object') // Skip object columns
-            .map((col: any) => ({
+            .filter((col: Record<string, unknown>) => col.type !== 'object') // Skip object columns
+            .map((col: Record<string, unknown>) => ({
               field: col.field,
               headerName: col.headerName || col.field,
               width: col.width,
@@ -374,10 +376,10 @@ export function App() {
     }
   };
   
-  const getRowId = (params: any) => {
-    if (!params.data) return undefined;
+  const getRowId = (params: { data: RowData }): string => {
+    if (!params.data) return `missing-data-${Math.random()}`;
     const id = params.data[keyColumnRef.current];
-    return id != null ? String(id) : undefined;
+    return id != null ? String(id) : `missing-key-${Math.random()}`;
   };
   
   return (
@@ -410,8 +412,8 @@ export function App() {
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <span>Rows: {rowData.length}</span>
               <span>Mode: {snapshotMode}</span>
-              <span>Messages: {statistics.messageCount || 0}</span>
-              <span>Uptime: {statistics.uptime ? Math.floor(statistics.uptime / 1000) : 0}s</span>
+              <span>Messages: {(statistics as any).messageCount || 0}</span>
+              <span>Uptime: {(statistics as any).uptime ? Math.floor((statistics as any).uptime / 1000) : 0}s</span>
             </div>
           )}
         </div>

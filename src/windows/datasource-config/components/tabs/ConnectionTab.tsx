@@ -3,14 +3,14 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
+// import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   PlayCircle, 
   CheckCircle2, 
   AlertCircle, 
   Loader2,
-  Database
+  // Database
 } from 'lucide-react';
 
 interface ConnectionTabProps {
@@ -28,9 +28,9 @@ export function ConnectionTab({
   config, 
   onChange, 
   onTest, 
-  onInferFields,
+  // onInferFields,
   testing,
-  inferring,
+  // inferring,
   testResult,
   testError
 }: ConnectionTabProps) {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronRight, ChevronDown } from 'lucide-react';
@@ -55,7 +55,7 @@ export function TreeItem({
   level = 0,
   isExpanded,
   isSelected,
-  onToggle,
+  // onToggle,
   onSelect,
   onExpandToggle,
   renderChild,
@@ -63,7 +63,7 @@ export function TreeItem({
 }: TreeItemProps) {
   const hasChildren = field.children && field.children.length > 0;
   const isObjectField = field.type === 'object';
-  const typeColors = typeColorMap[field.type] || typeColorMap.string;
+  const typeColors = typeColorMap[field.type as keyof typeof typeColorMap] || typeColorMap.string;
   
   // Debug logging
   if (level === 0) {

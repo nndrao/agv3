@@ -69,7 +69,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
         id: 'configure-datasource-main',
         customData: {}
       },
-      type: 'Custom' as const
+      type: 'Custom' as any
     },
     {
       tooltip: 'DataGrid (Direct STOMP)',
@@ -83,7 +83,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
         id: 'new-datagrid-stomp-main',
         customData: {}
       },
-      type: 'Custom' as const
+      type: 'Custom' as any
     },
     {
       tooltip: 'DataGrid (Shared STOMP)',
@@ -97,7 +97,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
         id: 'new-datagrid-stomp-shared',
         customData: {}
       },
-      type: 'Custom' as const
+      type: 'Custom' as any
     },
     {
       tooltip: themeTooltip,
@@ -106,7 +106,7 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
         id: 'toggle-theme',
         customData: {}
       },
-      type: 'Custom' as const
+      type: 'Custom' as any
     }
   ];
   

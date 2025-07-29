@@ -99,8 +99,6 @@ export class StompDatasourceProvider extends EventEmitter {
   private connectionPromise: Promise<void> | null = null;
   private isConnected = false;
   private activeSubscriptions: any[] = [];
-  private snapshotSubscription: any = null;
-  private realtimeSubscription: any = null;
   private statistics: StompStatistics = {
     snapshotRowsReceived: 0,
     updateRowsReceived: 0,
@@ -216,12 +214,12 @@ export class StompDatasourceProvider extends EventEmitter {
   async checkConnection(config?: StompProviderConfig | StompConfig): Promise<boolean> {
     try {
       // Handle both config types
-      if (config && 'websocketUrl' in config) {
+      if (config && 'listenerTopic' in config) {
         // StompConfig type - use new connection logic
-        return this.checkConnectionWithStompConfig(config);
+        return this.checkConnectionWithStompConfig(config as StompConfig);
       } else if (config) {
         // StompProviderConfig type - use existing logic
-        return this.checkConnectionWithProviderConfig(config);
+        return this.checkConnectionWithProviderConfig(config as StompProviderConfig);
       } else if (this.stompConfig) {
         // Use constructor config
         return this.checkConnectionWithStompConfig(this.stompConfig);
@@ -312,8 +310,8 @@ export class StompDatasourceProvider extends EventEmitter {
   }
   
   private async getWebSocketUrl(config: StompProviderConfig): Promise<string> {
-    if (config.webSocketUrl) {
-      return config.webSocketUrl;
+    if (config.websocketUrl) {
+      return config.websocketUrl;
     }
     
     if (config.httpUrl) {
@@ -623,7 +621,7 @@ export class StompDatasourceProvider extends EventEmitter {
       }
       
       // Subscribe to the resolved listener topic
-      this.snapshotSubscription = this.client!.subscribe(this.resolvedListenerTopic, (message: IMessage) => {
+      const snapshotSubscription = this.client!.subscribe(this.resolvedListenerTopic, (message: IMessage) => {
         try {
           const messageSize = new TextEncoder().encode(message.body).length;
           this.statistics.bytesReceived += messageSize;
@@ -722,7 +720,8 @@ export class StompDatasourceProvider extends EventEmitter {
         }
       });
 
-      // No need to track in activeSubscriptions as we have dedicated snapshotSubscription
+      // Track subscription
+      this.activeSubscriptions.push(snapshotSubscription);
 
       // Send request message if configured
       if (this.resolvedRequestMessage && this.stompConfig!.requestBody) {

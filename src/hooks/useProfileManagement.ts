@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { StorageClient } from '@/services/storage/storageClient';
-import { UnifiedConfig, ConfigVersion } from '@/services/storage/types';
+import { UnifiedConfig, ConfigVersion, ComponentType } from '@/services/storage/types';
 import { useToast } from '@/hooks/use-toast';
 
 // Base profile interface that all component profiles must extend
@@ -163,14 +163,14 @@ export function useProfileManagement<T extends BaseProfile>({
           versionNumber: 1,
           name: defaultProfile.name,
           config: defaultProfile,
-          createdTime: new Date().toISOString(),
+          createdTime: new Date(),
           createdBy: 'system',
           isActive: true
         };
 
         const newConfig: UnifiedConfig = {
           configId: viewInstanceId,
-          componentType,
+          componentType: componentType as ComponentType,
           componentSubType: componentSubType || 'default',
           name: `${componentType} Configuration`,
           appId: 'agv3',
@@ -178,7 +178,10 @@ export function useProfileManagement<T extends BaseProfile>({
           settings: [defaultVersion],
           activeSetting: defaultVersion.versionId,
           createdBy: 'system',
-          createdTime: new Date().toISOString()
+          userId: 'default',
+          lastUpdatedBy: 'system',
+          creationTime: new Date(),
+          lastUpdated: new Date()
         };
 
         await StorageClient.save(newConfig);
@@ -197,14 +200,14 @@ export function useProfileManagement<T extends BaseProfile>({
         versionNumber: 1,
         name: defaultProfile.name,
         config: defaultProfile,
-        createdTime: new Date().toISOString(),
+        createdTime: new Date(),
         createdBy: 'system',
         isActive: true
       };
 
       setConfig({
         configId: viewInstanceId,
-        componentType,
+        componentType: componentType as ComponentType,
         componentSubType: componentSubType || 'default',
         name: `${componentType} Configuration`,
         appId: 'agv3',
@@ -212,7 +215,10 @@ export function useProfileManagement<T extends BaseProfile>({
         settings: [defaultVersion],
         activeSetting: defaultVersion.versionId,
         createdBy: 'system',
-        createdTime: new Date().toISOString()
+        userId: 'default',
+        lastUpdatedBy: 'system',
+        creationTime: new Date(),
+        lastUpdated: new Date()
       });
       setProfiles([defaultVersion]);
       setActiveProfile(defaultVersion);
@@ -240,7 +246,7 @@ export function useProfileManagement<T extends BaseProfile>({
           versionNumber: (profiles.length || 0) + 1,
           name: name || `Profile ${(profiles.length || 0) + 1}`,
           config: data,
-          createdTime: new Date().toISOString(),
+          createdTime: new Date(),
           createdBy: 'user',
           isActive: true
         };
@@ -253,8 +259,8 @@ export function useProfileManagement<T extends BaseProfile>({
           ...config,
           settings: updatedSettings,
           activeSetting: newVersion.versionId,
-          modifiedTime: new Date().toISOString(),
-          modifiedBy: 'user'
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'user'
         };
 
         setActiveProfile(newVersion);
@@ -266,8 +272,8 @@ export function useProfileManagement<T extends BaseProfile>({
             ? {
                 ...p,
                 config: data,
-                modifiedTime: new Date().toISOString(),
-                modifiedBy: 'user'
+                lastUpdated: new Date(),
+                lastUpdatedBy: 'user'
               }
             : p
         );
@@ -275,8 +281,8 @@ export function useProfileManagement<T extends BaseProfile>({
         updatedConfig = {
           ...config,
           settings: updatedSettings,
-          modifiedTime: new Date().toISOString(),
-          modifiedBy: 'user'
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'user'
         };
       }
 
@@ -337,7 +343,7 @@ export function useProfileManagement<T extends BaseProfile>({
       const updatedConfig = {
         ...config,
         activeSetting: versionId,
-        modifiedTime: new Date().toISOString(),
+        lastUpdated: new Date(),
         modifiedBy: 'user'
       };
 
@@ -388,7 +394,7 @@ export function useProfileManagement<T extends BaseProfile>({
         ...config,
         settings: updatedSettings,
         activeSetting: newActiveId,
-        modifiedTime: new Date().toISOString(),
+        lastUpdated: new Date(),
         modifiedBy: 'user'
       };
 

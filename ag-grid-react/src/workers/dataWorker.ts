@@ -123,8 +123,6 @@ function sendMessagesWithThrottle(thisTestNumber: number): void {
     };
     self.postMessage(message);
 
-    let intervalId: ReturnType<typeof setInterval>;
-
     function intervalFunc() {
         const updateMessage: WorkerMessage = {
             type: 'updateData',
@@ -137,7 +135,7 @@ function sendMessagesWithThrottle(thisTestNumber: number): void {
         }
     }
 
-    intervalId = setInterval(intervalFunc, LOAD_TEST_MILLISECONDS_BETWEEN_MESSAGES);
+    const intervalId = setInterval(intervalFunc, LOAD_TEST_MILLISECONDS_BETWEEN_MESSAGES);
 }
 
 function sendMessagesNoThrottle(): void {
@@ -194,8 +192,6 @@ function sendExtremeStressTest(thisTestNumber: number): void {
     
     console.log(`Starting extreme stress test: ${batchSize} updates every ${intervalMs}ms = ${(1000/intervalMs) * batchSize} updates/sec`);
     
-    let intervalId: ReturnType<typeof setInterval>;
-    
     function intervalFunc() {
         const elapsed = Date.now() - startTime;
         if (elapsed >= EXTREME_TEST_DURATION_MS || thisTestNumber !== latestTestNumber) {
@@ -225,7 +221,7 @@ function sendExtremeStressTest(thisTestNumber: number): void {
         totalUpdates += batchSize;
     }
     
-    intervalId = setInterval(intervalFunc, intervalMs);
+    const intervalId = setInterval(intervalFunc, intervalMs);
 }
 
 // Listen for messages from main thread

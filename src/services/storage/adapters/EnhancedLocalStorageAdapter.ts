@@ -1,5 +1,5 @@
-import { IStorageAdapter, WorkspaceData, ComponentConfig, ViewState } from '../interfaces/IStorageAdapter';
-import { v4 as uuidv4 } from 'uuid';
+import { IStorageAdapter, WorkspaceData, ComponentConfig } from '../interfaces/IStorageAdapter';
+// import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Enhanced LocalStorage adapter that implements the full IStorageAdapter interface
@@ -128,12 +128,13 @@ export class EnhancedLocalStorageAdapter implements IStorageAdapter {
       throw new Error(`Component config ${configId} not found`);
     }
     
-    const updated = {
+    const updated: ComponentConfig = {
       ...existing,
       ...updates,
       metadata: {
         ...existing.metadata,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        createdAt: existing.metadata?.createdAt || new Date().toISOString()
       }
     };
     

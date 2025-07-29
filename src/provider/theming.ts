@@ -110,8 +110,8 @@ async function updateAllWindowsTheme(theme: 'light' | 'dark'): Promise<void> {
           `);
           
           // Update child views if any
-          if (window.childWindows) {
-            for (const childWindow of window.childWindows) {
+          if ((window as any).childWindows) {
+            for (const childWindow of (window as any).childWindows) {
               for (const view of childWindow.views || []) {
                 try {
                   const viewObj = fin.View.wrapSync({ uuid: view.uuid || fin.me.uuid, name: view.name });
@@ -190,6 +190,7 @@ function getSystemPreferredColorScheme(): 'light' | 'dark' {
 export function createThemingOverride<T extends WorkspacePlatformProvider>(
   Base: OpenFin.Constructor<T>
 ): OpenFin.Constructor<T> {
+  // @ts-ignore - Type mismatch with OpenFin.Constructor
   return class ThemingOverride extends Base {
     /**
      * Handle theme selection changes
@@ -205,8 +206,8 @@ export function createThemingOverride<T extends WorkspacePlatformProvider>(
     /**
      * Get the current selected scheme
      */
-    public async getSelectedScheme(): Promise<ColorSchemeOptionType> {
-      return currentColorScheme;
+    public getSelectedScheme(): ColorSchemeOptionType | null | undefined {
+      return currentColorScheme as ColorSchemeOptionType;
     }
   };
 }

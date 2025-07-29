@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Search, Database, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { FieldNode } from '../FieldSelector';
 import { TreeItem } from '../TreeItem';
 
@@ -74,7 +73,7 @@ export function FieldsTab({
   };
   
   const renderFieldItem = (field: FieldNode, level: number = 0) => {
-    const hasChildren = field.children && field.children.length > 0;
+    // const hasChildren = field.children && field.children.length > 0;
     const isExpanded = expandedFields.has(field.path);
     const isSelected = selectedFields.has(field.path);
     const isObjectField = field.type === 'object';

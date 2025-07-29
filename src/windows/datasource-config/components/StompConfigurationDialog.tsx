@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConnectionTab } from './tabs/ConnectionTab';
 import { FieldsTab } from './tabs/FieldsTab';
 import { ColumnsTab } from './tabs/ColumnsTab';
-import { ProviderManager } from '../../../services/providers/providerManager';
+// import { ProviderManager } from '../../../services/providers/providerManager';
 import { StompDatasourceProvider, FieldInfo } from '../../../providers/StompDatasourceProvider';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
@@ -51,9 +51,9 @@ const getDefaultConfig = () => ({
 
 export function StompConfigurationDialog({ 
   config, 
-  onSave, 
-  onCancel,
-  onDelete 
+  onSave
+  // onCancel,
+  // onDelete 
 }: StompConfigurationDialogProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState(config || getDefaultConfig());
@@ -542,24 +542,24 @@ export function StompConfigurationDialog({
     }
   };
   
-  const handleStartProvider = async () => {
-    // Save first
-    handleSave();
-    
-    // Then start provider
-    try {
-      await ProviderManager.startProvider({
-        providerId: formData.id,
-        configId: formData.id,
-        config: formData,
-        type: 'stomp'
-      });
-      
-      alert('Provider started successfully!');
-    } catch (error) {
-      alert('Failed to start provider: ' + (error instanceof Error ? error.message : String(error)));
-    }
-  };
+  // const handleStartProvider = async () => {
+  //   // Save first
+  //   handleSave();
+  //   
+  //   // Then start provider
+  //   try {
+  //     await ProviderManager.startProvider({
+  //       providerId: formData.id,
+  //       configId: formData.id,
+  //       config: formData,
+  //       type: 'stomp'
+  //     });
+  //     
+  //     alert('Provider started successfully!');
+  //   } catch (error) {
+  //     alert('Failed to start provider: ' + (error instanceof Error ? error.message : String(error)));
+  //   }
+  // };
   
   const updateFormData = (updates: Partial<typeof formData>) => {
     setFormData((prev: typeof formData) => ({ ...prev, ...updates }));

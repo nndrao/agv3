@@ -41,13 +41,15 @@ export class DockProvider {
       console.log('[DockProvider] Registering dock with config:', {
         id: this.dockId,
         title: dockConfig.title,
-        buttonCount: dockConfig.buttons.length,
+        buttonCount: dockConfig.buttons?.length || 0,
         workspaceComponents: dockConfig.workspaceComponents
       });
       
       // Log first few buttons to check icon URLs
-      console.log('[DockProvider] First button:', dockConfig.buttons[0]);
-      console.log('[DockProvider] Icon URL sample:', dockConfig.buttons[0]?.iconUrl?.substring(0, 100));
+      if (dockConfig.buttons && dockConfig.buttons.length > 0) {
+        console.log('[DockProvider] First button:', dockConfig.buttons[0]);
+        console.log('[DockProvider] Icon URL sample:', dockConfig.buttons[0]?.iconUrl?.substring(0, 100));
+      }
       
       // Try different configurations if the first one fails
       let registrationPromise;
@@ -86,7 +88,7 @@ export class DockProvider {
       }
       
       // Log detailed button information
-      console.log('[DockProvider] Registered dock with buttons:', dockConfig.buttons.map((b, i) => ({
+      console.log('[DockProvider] Registered dock with buttons:', (dockConfig.buttons || []).map((b, i) => ({
         index: i,
         tooltip: 'tooltip' in b ? b.tooltip : 'Dropdown',
         iconUrl: 'iconUrl' in b ? b.iconUrl : 'N/A',

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Settings2, Plus, FileDown, FileUp } from 'lucide-react';
@@ -14,7 +13,6 @@ interface ProfileSelectorProps {
   onImportProfile?: () => void;
   loading?: boolean;
   className?: string;
-  hasUnsavedChanges?: boolean;
 }
 
 export function ProfileSelector({
@@ -26,8 +24,7 @@ export function ProfileSelector({
   onExportProfile,
   onImportProfile,
   loading = false,
-  className = '',
-  hasUnsavedChanges = false
+  className = ''
 }: ProfileSelectorProps) {
   if (loading) {
     return (

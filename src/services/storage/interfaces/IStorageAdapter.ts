@@ -1,4 +1,4 @@
-import { UnifiedConfig } from '../types';
+// import { UnifiedConfig } from '../types';
 
 /**
  * Workspace data structure for OpenFin workspaces

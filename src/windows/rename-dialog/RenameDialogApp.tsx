@@ -79,7 +79,7 @@ export function RenameDialogApp() {
   }
 
   return (
-    <ThemeProvider defaultTheme="dark" forcedTheme="dark">
+    <ThemeProvider defaultTheme="dark">
       <div 
         className="h-full w-full dialog-overlay flex items-center justify-center"
         onClick={() => handleOpenChange(false)}

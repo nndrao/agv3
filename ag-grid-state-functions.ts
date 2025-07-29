@@ -834,12 +834,12 @@ export const AgGridStateManager: React.FC<AgGridStateManagerProps> = ({
   }, [storageKey]);
 
   if (children) {
-    return <>{children({
+    return <React.Fragment>{children({
       saveState: handleSaveState,
       loadState: handleLoadState,
       clearState: handleClearState,
       hasState
-    })}</>;
+    })}</React.Fragment>;
   }
 
   return (
