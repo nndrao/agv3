@@ -7,6 +7,8 @@ import { ChannelSubscriber } from '../../services/channels/channelSubscriber';
 import { ProviderSelector } from './components/ProviderSelector';
 import { StorageClient } from '../../services/storage/storageClient';
 import { ProviderManager } from '../../services/providers/providerManager';
+import { agGridValueFormatters } from '../../components/ag-grid/value-formatters';
+import { agGridComponents } from '../../components/ag-grid/cell-renderers';
 
 ModuleRegistry.registerModules([AllEnterpriseModule]);
 
@@ -346,12 +348,11 @@ export function App() {
               resizable: col.resizable !== false,
               hide: col.hide === true,
               enableCellChangeFlash: true,
-              valueFormatter: col.type === 'number' 
-                ? (params: any) => {
-                    if (params.value == null) return '';
-                    return Number(params.value).toFixed(2);
-                  }
-                : undefined
+              // Resolve string-based valueFormatter to actual function
+              valueFormatter: col.valueFormatter && agGridValueFormatters[col.valueFormatter as keyof typeof agGridValueFormatters] 
+                ? agGridValueFormatters[col.valueFormatter as keyof typeof agGridValueFormatters]
+                : undefined,
+              cellRenderer: col.cellRenderer || undefined
             }));
           console.log(`✅ Loaded and setting ${cols.length} column definitions:`, cols.map(c => c.field));
           setColumnDefs(cols);
@@ -431,6 +432,12 @@ export function App() {
             filter: true,
             sortable: true,
             resizable: true
+          }}
+          // Components
+          components={agGridComponents}
+          // Context to pass formatters
+          context={{
+            valueFormatters: agGridValueFormatters
           }}
           // Performance settings
           rowBuffer={10}

@@ -19,6 +19,8 @@ import { RenameViewDialog } from "@/components/RenameViewDialog";
 import { getViewInstanceId } from "@/utils/viewUtils";
 import { WindowManager } from "@/services/window/windowManager";
 import { debugStorage } from "@/utils/storageDebug";
+import { agGridValueFormatters } from '@/components/ag-grid/value-formatters';
+import { agGridComponents } from '@/components/ag-grid/cell-renderers';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -307,6 +309,19 @@ const DataGridStompComponent = () => {
     loadProviderConfig(selectedProviderId);
   }, [selectedProviderId]);
   
+  // Monitor columnDefs changes and update grid if ready
+  useEffect(() => {
+    if (columnDefs.length > 0 && gridApiRef.current) {
+      // Update grid column definitions
+      gridApiRef.current.setGridOption('columnDefs', columnDefs);
+      
+      // Force grid to refresh after setting columns
+      setTimeout(() => {
+        gridApiRef.current?.refreshCells({ force: true });
+      }, 100);
+    }
+  }, [columnDefs]);
+  
   // Handle auto-connect when provider config is loaded
   useEffect(() => {
     if (!providerConfig || !selectedProviderId) {
@@ -354,8 +369,61 @@ const DataGridStompComponent = () => {
         
         // Set column definitions from config
         if (stompConfig.columnDefinitions && stompConfig.columnDefinitions.length > 0) {
-          setColumnDefs(stompConfig.columnDefinitions);
-          console.log('Set column definitions:', stompConfig.columnDefinitions.length, 'columns');
+          // Process column definitions to resolve valueFormatter and cellRenderer strings
+          const processedColumns: ColDef[] = stompConfig.columnDefinitions.map((col: any) => {
+            const processedCol = { ...col };
+            
+            // Debug logging
+            if (col.valueFormatter || col.cellRenderer) {
+              console.log(`Processing column ${col.field}:`, {
+                originalValueFormatter: col.valueFormatter,
+                originalCellRenderer: col.cellRenderer
+              });
+            }
+            
+            // Resolve string-based valueFormatter to actual function
+            if (col.valueFormatter && typeof col.valueFormatter === 'string') {
+              const formatterFunc = agGridValueFormatters[col.valueFormatter as keyof typeof agGridValueFormatters];
+              if (formatterFunc) {
+                processedCol.valueFormatter = formatterFunc;
+                console.log(`✅ Resolved valueFormatter '${col.valueFormatter}' for column ${col.field}`);
+              } else {
+                console.warn(`❌ Could not resolve valueFormatter '${col.valueFormatter}' for column ${col.field}. Available formatters:`, Object.keys(agGridValueFormatters));
+                processedCol.valueFormatter = undefined;
+              }
+            }
+            
+            // Keep cellRenderer as string - AG-Grid will resolve it from components
+            // But verify it exists in our components
+            if (col.cellRenderer && typeof col.cellRenderer === 'string') {
+              if (agGridComponents[col.cellRenderer as keyof typeof agGridComponents]) {
+                console.log(`✅ CellRenderer '${col.cellRenderer}' exists in components for column ${col.field}`);
+              } else {
+                console.warn(`❌ CellRenderer '${col.cellRenderer}' not found in components for column ${col.field}. Available components:`, Object.keys(agGridComponents));
+              }
+            }
+            
+            return processedCol;
+          });
+          
+          setColumnDefs(processedColumns);
+          console.log('Set column definitions:', processedColumns.length, 'columns');
+          console.log('Processed columns:', processedColumns);
+          
+          // Log a sample column to see the structure
+          const sampleNumericCol = processedColumns.find(col => col.cellDataType === 'number');
+          const sampleDateCol = processedColumns.find(col => col.cellDataType === 'date' || col.cellDataType === 'dateString');
+          console.log('Sample numeric column:', sampleNumericCol);
+          console.log('Sample date column:', sampleDateCol);
+          
+          // Check if numeric columns have formatters
+          const numColsWithFormatters = processedColumns.filter(col => 
+            col.cellDataType === 'number' && (col.valueFormatter || col.cellRenderer)
+          );
+          console.log(`Numeric columns with formatters: ${numColsWithFormatters.length} out of ${processedColumns.filter(col => col.cellDataType === 'number').length}`);
+          if (numColsWithFormatters.length > 0) {
+            console.log('Example numeric column with formatter:', numColsWithFormatters[0]);
+          }
         }
       }
     } catch (error) {
@@ -617,6 +685,14 @@ const DataGridStompComponent = () => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(isDarkMode ? 'dark' : 'light');
+    
+    // Refresh grid cells when theme changes to update cell renderer colors
+    if (gridApiRef.current) {
+      // Small delay to ensure theme classes are applied
+      setTimeout(() => {
+        gridApiRef.current?.refreshCells({ force: true });
+      }, 50);
+    }
   }, [isDarkMode]);
   
   // Expose rename dialog function to be called from context menu
@@ -662,7 +738,9 @@ const DataGridStompComponent = () => {
     filter: true,
     sortable: true,
     resizable: true,
-    enableCellChangeFlash: true
+    enableCellChangeFlash: true,
+    // Allow value formatters to work
+    useValueFormatterForExport: true
   }), []);
 
   // Memoize getRowId function to prevent unnecessary row ID recalculations
@@ -690,7 +768,6 @@ const DataGridStompComponent = () => {
 
   // Grid ready handler
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
-    // console.log('[DataGridStomp] Grid ready event fired');
     gridApiRef.current = params.api;
     
     // Apply saved state if available and valid
@@ -1128,6 +1205,12 @@ const DataGridStompComponent = () => {
           suppressColumnVirtualisation={false}
           suppressRowVirtualisation={false}
           statusBar={statusBarConfig}
+          // Components
+          components={agGridComponents}
+          // Context to pass formatters
+          context={{
+            valueFormatters: agGridValueFormatters
+          }}
         />
       </div>
       

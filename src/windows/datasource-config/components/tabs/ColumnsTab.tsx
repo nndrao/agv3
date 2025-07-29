@@ -11,6 +11,74 @@ import { ColumnDefinition } from '../StompConfigurationDialog';
 // Register AG-Grid modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
 
+// Helper functions to get formatter/renderer options by type
+const getValueFormatterOptions = (cellDataType?: string): string[] => {
+  if (!cellDataType) return [];
+  
+  switch (cellDataType) {
+    case 'number':
+      return [
+        '',
+        '0Decimal',
+        '1Decimal',
+        '2Decimal',
+        '3Decimal',
+        '4Decimal',
+        '5Decimal',
+        '6Decimal',
+        '7Decimal',
+        '8Decimal',
+        '9Decimal',
+        '0DecimalWithThousandSeparator',
+        '1DecimalWithThousandSeparator',
+        '2DecimalWithThousandSeparator',
+        '3DecimalWithThousandSeparator',
+        '4DecimalWithThousandSeparator',
+        '5DecimalWithThousandSeparator',
+        '6DecimalWithThousandSeparator',
+        '7DecimalWithThousandSeparator',
+        '8DecimalWithThousandSeparator',
+        '9DecimalWithThousandSeparator',
+      ];
+    case 'date':
+    case 'dateString':
+      return [
+        '',
+        'ISODate',
+        'ISODateTime',
+        'ISODateTimeMillis',
+        'USDate',
+        'USDateTime',
+        'USDateTime12Hour',
+        'EUDate',
+        'EUDateTime',
+        'LongDate',
+        'ShortDate',
+        'LongDateTime',
+        'ShortDateTime',
+        'Time24Hour',
+        'Time12Hour',
+        'TimeShort',
+        'DateFromNow',
+        'UnixTimestamp',
+        'UnixTimestampMillis',
+      ];
+    default:
+      return [''];
+  }
+};
+
+const getCellRendererOptions = (cellDataType?: string): string[] => {
+  if (!cellDataType) return [''];
+  
+  switch (cellDataType) {
+    case 'number':
+      return ['', 'NumericCellRenderer'];
+    default:
+      return [''];
+  }
+};
+
 interface ColumnsTabProps {
   selectedFields: Set<string>;
   inferredFields: FieldNode[];
@@ -62,18 +130,34 @@ export function ColumnsTab({
                                                     fieldType === 'boolean' ? 'boolean' : 
                                                     fieldType === 'date' ? 'date' : 'text');
       
+      // Set defaults for numeric columns
+      const valueFormatter = override.valueFormatter !== undefined ? override.valueFormatter :
+                           (cellDataType === 'number' ? '2DecimalWithThousandSeparator' : '');
+      const cellRenderer = override.cellRenderer !== undefined ? override.cellRenderer :
+                         (cellDataType === 'number' ? 'NumericCellRenderer' : '');
+      
       columns.push({
         field: path,
         headerName: override.headerName || path.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' '),
         cellDataType: cellDataType,
+        valueFormatter: valueFormatter,
+        cellRenderer: cellRenderer,
         source: 'field',
       });
     });
     
     // Add manual columns
     manualColumns.forEach(col => {
+      // Set defaults for numeric columns
+      const valueFormatter = col.valueFormatter !== undefined ? col.valueFormatter :
+                           (col.cellDataType === 'number' ? '2DecimalWithThousandSeparator' : '');
+      const cellRenderer = col.cellRenderer !== undefined ? col.cellRenderer :
+                         (col.cellDataType === 'number' ? 'NumericCellRenderer' : '');
+      
       columns.push({
         ...col,
+        valueFormatter: valueFormatter,
+        cellRenderer: cellRenderer,
         source: 'manual',
       });
     });
@@ -135,6 +219,36 @@ export function ColumnsTab({
       filter: true,
       editable: true,
     },
+    {
+      field: 'valueFormatter',
+      headerName: 'Value Formatter',
+      width: 180,
+      sortable: true,
+      filter: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: (params: any) => {
+        const cellDataType = params.data?.cellDataType;
+        return {
+          values: getValueFormatterOptions(cellDataType),
+        };
+      },
+      editable: true,
+    },
+    {
+      field: 'cellRenderer',
+      headerName: 'Cell Renderer',
+      width: 160,
+      sortable: true,
+      filter: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: (params: any) => {
+        const cellDataType = params.data?.cellDataType;
+        return {
+          values: getCellRendererOptions(cellDataType),
+        };
+      },
+      editable: true,
+    },
   ], [manualColumns, onManualColumnsChange]);
   
   // Grid theme configuration
@@ -167,21 +281,44 @@ export function ColumnsTab({
       if (index !== -1) {
         const updated = [...manualColumns];
         if (colDef?.field === 'cellDataType') {
-          updated[index] = { ...updated[index], cellDataType: newValue };
+          // When type changes, set appropriate defaults
+          updated[index] = { 
+            ...updated[index], 
+            cellDataType: newValue,
+            valueFormatter: newValue === 'number' ? '2DecimalWithThousandSeparator' : '',
+            cellRenderer: newValue === 'number' ? 'NumericCellRenderer' : '',
+          };
         } else if (colDef?.field === 'headerName') {
           updated[index] = { ...updated[index], headerName: newValue };
+        } else if (colDef?.field === 'valueFormatter') {
+          updated[index] = { ...updated[index], valueFormatter: newValue };
+        } else if (colDef?.field === 'cellRenderer') {
+          updated[index] = { ...updated[index], cellRenderer: newValue };
         }
         onManualColumnsChange(updated);
       }
     } else if (data.source === 'field') {
       // Handle field-based columns
-      onFieldColumnOverridesChange({
-        ...fieldColumnOverrides,
-        [data.field]: {
-          ...fieldColumnOverrides[data.field],
-          [colDef?.field as string]: newValue,
-        },
-      });
+      if (colDef?.field === 'cellDataType') {
+        // When type changes, set appropriate defaults
+        onFieldColumnOverridesChange({
+          ...fieldColumnOverrides,
+          [data.field]: {
+            ...fieldColumnOverrides[data.field],
+            cellDataType: newValue,
+            valueFormatter: newValue === 'number' ? '2DecimalWithThousandSeparator' : '',
+            cellRenderer: newValue === 'number' ? 'NumericCellRenderer' : '',
+          },
+        });
+      } else {
+        onFieldColumnOverridesChange({
+          ...fieldColumnOverrides,
+          [data.field]: {
+            ...fieldColumnOverrides[data.field],
+            [colDef?.field as string]: newValue,
+          },
+        });
+      }
     }
   }, [manualColumns, fieldColumnOverrides, onManualColumnsChange, onFieldColumnOverridesChange]);
   
@@ -194,6 +331,8 @@ export function ColumnsTab({
       field: newColumn.field,
       headerName: newColumn.header,
       cellDataType: newColumn.type,
+      valueFormatter: newColumn.type === 'number' ? '2DecimalWithThousandSeparator' : '',
+      cellRenderer: newColumn.type === 'number' ? 'NumericCellRenderer' : '',
     };
     
     onManualColumnsChange([...manualColumns, column]);

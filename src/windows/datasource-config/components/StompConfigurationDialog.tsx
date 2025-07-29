@@ -23,6 +23,7 @@ export interface ColumnDefinition {
   hide?: boolean;
   type?: string;
   valueFormatter?: string;
+  cellRenderer?: string;
 }
 
 interface StompConfigurationDialogProps {
@@ -100,14 +101,36 @@ export function StompConfigurationDialog({
         );
         setManualColumns(manual);
         
-        // Build selected fields set
-        const selected = new Set<string>(config.columnDefinitions
-          .filter((col: ColumnDefinition) => 
-            config.inferredFields?.some((field: any) => field.path === col.field)
-          )
-          .map((col: ColumnDefinition) => col.field)
-        );
+        // Build selected fields set and field column overrides
+        const selected = new Set<string>();
+        const overrides: Record<string, Partial<ColumnDefinition>> = {};
+        
+        config.columnDefinitions.forEach((col: ColumnDefinition) => {
+          if (config.inferredFields?.some((field: any) => field.path === col.field)) {
+            // This is a field-based column
+            selected.add(col.field);
+            
+            // Extract overrides (properties that differ from defaults)
+            const fieldOverride: Partial<ColumnDefinition> = {};
+            if (col.headerName) fieldOverride.headerName = col.headerName;
+            if (col.cellDataType) fieldOverride.cellDataType = col.cellDataType;
+            if (col.valueFormatter !== undefined) fieldOverride.valueFormatter = col.valueFormatter;
+            if (col.cellRenderer !== undefined) fieldOverride.cellRenderer = col.cellRenderer;
+            if (col.width !== undefined) fieldOverride.width = col.width;
+            if (col.filter !== undefined) fieldOverride.filter = col.filter;
+            if (col.sortable !== undefined) fieldOverride.sortable = col.sortable;
+            if (col.resizable !== undefined) fieldOverride.resizable = col.resizable;
+            if (col.hide !== undefined) fieldOverride.hide = col.hide;
+            if (col.type !== undefined) fieldOverride.type = col.type;
+            
+            if (Object.keys(fieldOverride).length > 0) {
+              overrides[col.field] = fieldOverride;
+            }
+          }
+        });
+        
         setSelectedFields(selected);
+        setFieldColumnOverrides(overrides);
       }
     }
   }, [config]);
@@ -447,11 +470,24 @@ export function StompConfigurationDialog({
         cellDataType: cellDataType,
       };
       
-      // Apply date-specific settings
-      if (cellDataType === 'date' || cellDataType === 'dateString') {
-        column.filter = 'agDateColumnFilter';
+      // Apply value formatter from override
+      if (override.valueFormatter !== undefined) {
+        column.valueFormatter = override.valueFormatter;
+      } else if (cellDataType === 'date' || cellDataType === 'dateString') {
         // Default to ISO DateTime format for date columns
+        // Now this format pattern is supported as an alias in DateFormatters.ts
         column.valueFormatter = 'YYYY-MM-DD HH:mm:ss';
+      } else if (cellDataType === 'number' && !override.valueFormatter) {
+        // Default formatter for numeric columns
+        column.valueFormatter = '2DecimalWithThousandSeparator';
+      }
+      
+      // Apply cell renderer from override
+      if (override.cellRenderer !== undefined) {
+        column.cellRenderer = override.cellRenderer;
+      } else if (cellDataType === 'number' && !override.cellRenderer) {
+        // Default renderer for numeric columns
+        column.cellRenderer = 'NumericCellRenderer';
       }
       
       // Apply number-specific settings
@@ -459,6 +495,19 @@ export function StompConfigurationDialog({
         column.type = 'numericColumn';
         column.filter = 'agNumberColumnFilter';
       }
+      
+      // Apply date-specific settings
+      if (cellDataType === 'date' || cellDataType === 'dateString') {
+        column.filter = 'agDateColumnFilter';
+      }
+      
+      // Apply any other override properties
+      if (override.width !== undefined) column.width = override.width;
+      if (override.filter !== undefined) column.filter = override.filter;
+      if (override.sortable !== undefined) column.sortable = override.sortable;
+      if (override.resizable !== undefined) column.resizable = override.resizable;
+      if (override.hide !== undefined) column.hide = override.hide;
+      if (override.type !== undefined) column.type = override.type;
       
       return column;
     });
