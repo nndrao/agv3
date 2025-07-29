@@ -321,10 +321,19 @@ async function handleSubscribe(port: MessagePort, request: WorkerRequest) {
 }
 
 // Handle unsubscribe request
-function handleUnsubscribe(request: WorkerRequest) {
-  const { providerId, portId } = request;
+function handleUnsubscribe(port: MessagePort, request: WorkerRequest) {
+  const { providerId, portId, requestId } = request;
   
-  if (!portId) return;
+  if (!portId) {
+    sendToPort(port, {
+      type: 'error',
+      providerId,
+      requestId,
+      error: 'Port ID is required',
+      timestamp: Date.now()
+    });
+    return;
+  }
 
   console.log(`[SharedWorker] Unsubscribe request from ${portId} for provider ${providerId}`);
 
@@ -343,6 +352,14 @@ function handleUnsubscribe(request: WorkerRequest) {
   }
 
   ports.delete(portId);
+  
+  // Send unsubscribe confirmation
+  sendToPort(port, {
+    type: 'unsubscribed',
+    providerId,
+    requestId,
+    timestamp: Date.now()
+  });
 }
 
 // Handle get snapshot request
@@ -424,7 +441,7 @@ self.addEventListener('connect', (event: any) => {
           break;
           
         case 'unsubscribe':
-          handleUnsubscribe(request);
+          handleUnsubscribe(port, request);
           break;
           
         case 'getSnapshot':

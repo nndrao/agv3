@@ -123,44 +123,83 @@ h1 {
     outline: none;
   }
   
-  /* Dark theme scrollbar styling */
+  /* Theme-aware scrollbar styling */
   ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
   }
   
+  /* Light theme scrollbars */
   ::-webkit-scrollbar-track {
-    background: #1a1a1a;
+    background: #f0f0f0;
     border-radius: 0;
   }
   
   ::-webkit-scrollbar-thumb {
-    background: #3a3a3a;
+    background: #c0c0c0;
     border-radius: 0;
-    border: 1px solid #2a2a2a;
+    border: 1px solid #d0d0d0;
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    background: #4a4a4a;
+    background: #b0b0b0;
   }
   
   ::-webkit-scrollbar-corner {
+    background: #f0f0f0;
+  }
+  
+  /* Firefox scrollbar styling - light theme */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c0c0c0 #f0f0f0;
+  }
+  
+  /* Dark theme scrollbars */
+  .dark ::-webkit-scrollbar-track {
     background: #1a1a1a;
   }
   
-  /* Firefox scrollbar styling */
-  * {
-    scrollbar-width: thin;
+  .dark ::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border: 1px solid #2a2a2a;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+  
+  .dark ::-webkit-scrollbar-corner {
+    background: #1a1a1a;
+  }
+  
+  /* Firefox scrollbar styling - dark theme */
+  .dark * {
     scrollbar-color: #3a3a3a #1a1a1a;
   }
   
   /* AG-Grid specific scrollbar styling */
+  .ag-theme-quartz .ag-body-viewport::-webkit-scrollbar,
+  .ag-theme-quartz .ag-body-horizontal-scroll::-webkit-scrollbar,
   .ag-theme-quartz-dark .ag-body-viewport::-webkit-scrollbar,
   .ag-theme-quartz-dark .ag-body-horizontal-scroll::-webkit-scrollbar {
     height: 10px;
     width: 10px;
   }
   
+  /* Light theme AG-Grid scrollbars */
+  .ag-theme-quartz .ag-body-viewport::-webkit-scrollbar-track,
+  .ag-theme-quartz .ag-body-horizontal-scroll::-webkit-scrollbar-track {
+    background: #f0f0f0;
+  }
+  
+  .ag-theme-quartz .ag-body-viewport::-webkit-scrollbar-thumb,
+  .ag-theme-quartz .ag-body-horizontal-scroll::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border: 1px solid #d0d0d0;
+  }
+  
+  /* Dark theme AG-Grid scrollbars */
   .ag-theme-quartz-dark .ag-body-viewport::-webkit-scrollbar-track,
   .ag-theme-quartz-dark .ag-body-horizontal-scroll::-webkit-scrollbar-track {
     background: #1a1a1a;

@@ -164,6 +164,12 @@ const DataGridStompSharedComponent = () => {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [currentViewTitle, setCurrentViewTitle] = useState('');
+  const [statistics, setStatistics] = useState<any>({
+    snapshotRowsReceived: 0,
+    updateRowsReceived: 0,
+    isConnected: false,
+    mode: 'idle'
+  });
   
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
   const sharedWorkerClientRef = useRef<SharedWorkerClient | null>(null);
@@ -290,13 +296,8 @@ const DataGridStompSharedComponent = () => {
     }
     messageCountRef.current += updates.length;
     
-    // Update display counter less frequently
-    const now = Date.now();
-    const elapsed = now - lastUpdateTimeRef.current;
-    if (elapsed >= 1000) {
-      setMessageCountDisplay(messageCountRef.current);
-      lastUpdateTimeRef.current = now;
-    }
+    // Always update display counter for real-time updates
+    setMessageCountDisplay(messageCountRef.current);
   }, [handleSnapshotData]);
   
   // Set up event listeners for SharedWorker messages
@@ -317,12 +318,18 @@ const DataGridStompSharedComponent = () => {
       if (data.providerId === selectedProviderId) {
         console.log(`[DataGridStompShared] Processing update: ${data.data.length} rows`);
         handleRealtimeUpdate(data.data);
+        
+        // Update statistics if provided
+        if (data.statistics) {
+          setStatistics(data.statistics);
+        }
       }
     };
     
     const handleStatus = (data: { providerId: string; statistics: any }) => {
       if (data.providerId === selectedProviderId) {
         console.log('[DataGridStompShared] Processing status update:', data.statistics);
+        setStatistics(data.statistics);
         setIsConnected(data.statistics.isConnected);
         
         // Update snapshot mode based on statistics
@@ -650,6 +657,9 @@ const DataGridStompSharedComponent = () => {
       console.log('✅ Subscribed to provider via SharedWorker');
       setCurrentClientId(`shared-${selectedProviderId}`);
       
+      // Set connected state immediately after successful subscription
+      setIsConnected(true);
+      
       // Request snapshot explicitly
       console.log('[DataGridStompShared] Requesting snapshot from SharedWorker');
       try {
@@ -663,6 +673,7 @@ const DataGridStompSharedComponent = () => {
           setRowData(snapshot);
           isSnapshotComplete.current = true;
           setMessageCountDisplay(snapshot.length);
+          messageCountRef.current = snapshot.length;
           
           toast({
             title: "Snapshot Loaded",
@@ -673,6 +684,17 @@ const DataGridStompSharedComponent = () => {
         }
       } catch (error) {
         console.error('[DataGridStompShared] Failed to get snapshot:', error);
+      }
+      
+      // Request current status to sync UI state
+      try {
+        const status = await sharedWorkerClientRef.current.getStatus(selectedProviderId!);
+        if (status) {
+          console.log('[DataGridStompShared] Got status from SharedWorker:', status);
+          setStatistics(status);
+        }
+      } catch (error) {
+        console.error('[DataGridStompShared] Failed to get status:', error);
       }
       
     } catch (error) {
@@ -699,6 +721,18 @@ const DataGridStompSharedComponent = () => {
         setSnapshotMode('idle');
         setCurrentClientId('');
         isSnapshotComplete.current = false;
+        // Clear the grid data
+        setRowData([]);
+        snapshotDataRef.current = [];
+        // Reset message count and statistics
+        messageCountRef.current = 0;
+        setMessageCountDisplay(0);
+        setStatistics({
+          snapshotRowsReceived: 0,
+          updateRowsReceived: 0,
+          isConnected: false,
+          mode: 'idle'
+        });
         // Set flag to prevent auto-reconnect
         wasManuallyDisconnected.current = true;
         isConnecting.current = false;
