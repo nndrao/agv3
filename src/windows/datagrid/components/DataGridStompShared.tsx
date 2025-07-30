@@ -182,6 +182,7 @@ const DataGridStompSharedComponent = () => {
   const hasAutoConnected = useRef(false);
   const isConnecting = useRef(false);
   const wasManuallyDisconnected = useRef(false);
+  const hasShownDisconnectAlert = useRef(false);
   
   // Get view instance ID from query parameters
   const viewInstanceId = useMemo(() => getViewInstanceId(), []);
@@ -236,6 +237,20 @@ const DataGridStompSharedComponent = () => {
         
         client.on('error', (error: Error) => {
           console.error('[DataGridStompShared] SharedWorker error:', error);
+          
+          // Check if this is a WebSocket connection error (STOMP disconnection)
+          if (error.message && error.message.includes('WebSocket connection error')) {
+            // Only show alert once per disconnection
+            if (!hasShownDisconnectAlert.current && isConnected) {
+              hasShownDisconnectAlert.current = true;
+              // Show alert box for STOMP disconnection
+              alert('STOMP provider has been disconnected from the server!');
+            }
+            
+            // Update connection state
+            setIsConnected(false);
+          }
+          
           toast({
             title: "SharedWorker Error",
             description: error.message,
@@ -337,7 +352,22 @@ const DataGridStompSharedComponent = () => {
       if (data.providerId === selectedProviderId) {
         console.log('[DataGridStompShared] Processing status update:', data.statistics);
         // setStatistics(data.statistics);
+        const wasConnected = isConnected;
         setIsConnected(data.statistics.isConnected);
+        
+        // Check if we just disconnected from STOMP server
+        if (wasConnected && !data.statistics.isConnected) {
+          console.log('[DataGridStompShared] STOMP provider disconnected!');
+          // Show alert box
+          alert('STOMP provider has been disconnected from the server!');
+          
+          // Also show toast for better UX
+          toast({
+            title: "Connection Lost",
+            description: "STOMP provider has been disconnected from the server",
+            variant: "destructive",
+          });
+        }
         
         // Update snapshot mode based on statistics
         if (data.statistics.mode === 'snapshot') {
@@ -611,6 +641,8 @@ const DataGridStompSharedComponent = () => {
     
     // Clear manual disconnect flag when user manually connects
     wasManuallyDisconnected.current = false;
+    // Reset the disconnect alert flag for new connection
+    hasShownDisconnectAlert.current = false;
     
     // Prevent multiple simultaneous connections
     if (isConnected || isConnecting.current) {
