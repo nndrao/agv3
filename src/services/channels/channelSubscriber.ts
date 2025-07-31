@@ -3,12 +3,10 @@ import { ChannelClient } from './channelClient';
 
 export class ChannelSubscriber extends EventEmitter {
   private client: ChannelClient;
-  private channelName: string;
   private subscriptions: Map<string, () => void> = new Map();
   
   constructor(channelName: string) {
     super();
-    this.channelName = channelName;
     this.client = new ChannelClient(channelName);
   }
   

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Provider</title>
+</head>
+<body>
+  <h1>Test Provider</h1>
+  <p id="status">Loading...</p>
+  <script>
+    console.log('Test provider HTML loaded');
+    document.getElementById('status').textContent = 'Test provider is running';
+    
+    if (typeof fin !== 'undefined') {
+      console.log('OpenFin is available');
+      document.getElementById('status').textContent = 'OpenFin detected - Test successful';
+    } else {
+      console.log('OpenFin is NOT available');
+      document.getElementById('status').textContent = 'OpenFin NOT detected';
+    }
+  </script>
+</body>
+</html>

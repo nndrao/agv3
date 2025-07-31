@@ -1,5 +1,18 @@
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 3C7.58 3 4 4.79 4 7V17C4 19.21 7.58 21 12 21C16.42 21 20 19.21 20 17V7C20 4.79 16.42 3 12 3Z" stroke="#0A76D3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 7C4 9.21 7.58 11 12 11C16.42 11 20 9.21 20 7" stroke="#0A76D3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 12C4 14.21 7.58 16 12 16C16.42 16 20 14.21 20 12" stroke="#0A76D3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <filter id="outline">
+      <feMorphology operator="dilate" radius="1"/>
+      <feFlood flood-color="white" flood-opacity="0.5"/>
+      <feComposite in2="SourceAlpha" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#outline)">
+    <path d="M12 3C7.58 3 4 4.79 4 7V17C4 19.21 7.58 21 12 21C16.42 21 20 19.21 20 17V7C20 4.79 16.42 3 12 3Z" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M4 7C4 9.21 7.58 11 12 11C16.42 11 20 9.21 20 7" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M4 12C4 14.21 7.58 16 12 16C16.42 16 20 14.21 20 12" stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

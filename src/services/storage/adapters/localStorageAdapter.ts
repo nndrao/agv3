@@ -16,14 +16,32 @@ export class LocalStorageAdapter implements StorageAdapter {
     config.lastUpdated = new Date();
     
     localStorage.setItem(key, JSON.stringify(config));
+    
+    // Store the mapping for faster lookups
+    const mappingKey = `${this.prefix}mapping:${config.configId}`;
+    localStorage.setItem(mappingKey, config.componentType);
+    
     this.updateIndex(config.componentType, config.configId);
     
     return config.configId;
   }
   
   async read(configId: string): Promise<UnifiedConfig | null> {
-    // Search all component types
-    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings'];
+    // First check if we have a direct mapping stored
+    const mappingKey = `${this.prefix}mapping:${configId}`;
+    const componentType = localStorage.getItem(mappingKey);
+    
+    if (componentType) {
+      // We know the component type, so directly fetch
+      const key = this.getKey(componentType, configId);
+      const data = localStorage.getItem(key);
+      if (data) {
+        return JSON.parse(data);
+      }
+    }
+    
+    // Fallback: Search all known component types
+    const types: string[] = ['datasource', 'profile', 'grid', 'workspace', 'theme', 'settings', 'DataGridStomp', 'DataTable'];
     
     for (const type of types) {
       const key = this.getKey(type, configId);
@@ -37,11 +55,25 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
   
   async update(configId: string, updates: Partial<UnifiedConfig>): Promise<void> {
-    const existing = await this.read(configId);
-    if (!existing) {
+    // First check mapping to avoid full search
+    const mappingKey = `${this.prefix}mapping:${configId}`;
+    const componentType = localStorage.getItem(mappingKey);
+    
+    if (!componentType) {
       throw new Error(`Config ${configId} not found`);
     }
     
+    const key = this.getKey(componentType, configId);
+    const existingData = localStorage.getItem(key);
+    
+    if (!existingData) {
+      throw new Error(`Config ${configId} not found`);
+    }
+    
+    // Parse existing data
+    const existing = JSON.parse(existingData);
+    
+    // Merge updates efficiently
     const updated = {
       ...existing,
       ...updates,
@@ -49,8 +81,13 @@ export class LocalStorageAdapter implements StorageAdapter {
       lastUpdatedBy: updates.lastUpdatedBy || existing.lastUpdatedBy
     };
     
-    const key = this.getKey(existing.componentType, configId);
+    // Save back to localStorage
     localStorage.setItem(key, JSON.stringify(updated));
+    
+    // Update mapping only if componentType changed
+    if (updates.componentType && updates.componentType !== componentType) {
+      localStorage.setItem(mappingKey, updates.componentType);
+    }
   }
   
   async delete(configId: string): Promise<void> {
@@ -58,6 +95,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     if (config) {
       const key = this.getKey(config.componentType, configId);
       localStorage.removeItem(key);
+      
+      // Remove the mapping
+      const mappingKey = `${this.prefix}mapping:${configId}`;
+      localStorage.removeItem(mappingKey);
+      
       this.removeFromIndex(config.componentType, configId);
     }
   }

@@ -111,15 +111,15 @@ export abstract class BaseDataSourceClient extends EventEmitter implements IData
     // No longer needed - processing messages directly
   }
   
-  private async processMessages(): Promise<void> {
+  // private async processMessages(): Promise<void> {
+  //   // No longer needed - processing messages directly
+  // }
+  
+  protected async processBatch(_messages: DataMessage[]): Promise<void> {
     // No longer needed - processing messages directly
   }
   
-  protected async processBatch(messages: DataMessage[]): Promise<void> {
-    // No longer needed - processing messages directly
-  }
-  
-  protected handleFailedMessage(message: DataMessage, error: Error): void {
+  protected handleFailedMessage(_message: DataMessage, error: Error): void {
     this.emitError(new Error(`Message processing failed: ${error.message}`));
   }
   

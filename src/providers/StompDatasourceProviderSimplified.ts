@@ -53,7 +53,6 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   private sequenceNumber: number = 0;
   
   // Refresh handling
-  private refreshRequests: Set<string> = new Set();
   private isRefreshing: boolean = false;
   
   get id(): string {
@@ -101,7 +100,7 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   }
   
   private async connect(): Promise<void> {
-    const url = this.config?.webSocketUrl || this.config?.websocketUrl || this.stompConfig?.websocketUrl;
+    const url = this.config?.websocketUrl || this.stompConfig?.websocketUrl;
     if (!url) {
       throw new Error('WebSocket URL not configured');
     }
@@ -145,7 +144,7 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
         });
       },
       
-      onDisconnect: (frame) => {
+      onDisconnect: () => {
         console.log('🔌 STOMP disconnected');
         
         this.emit('status', { 
@@ -193,7 +192,7 @@ export class StompDatasourceProviderSimplified extends EventEmitter implements I
   private processMessage(message: IMessage): void {
     try {
       const messageBody = message.body;
-      const byteSize = new Blob([messageBody]).size;
+      // const byteSize = new Blob([messageBody]).size;
       
       // Log every message in realtime mode
       if (this._mode === 'realtime') {

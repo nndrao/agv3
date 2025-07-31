@@ -1,6 +1,6 @@
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
 export type DataSourceMode = 'idle' | 'snapshot' | 'realtime';
-export type ProviderType = 'stomp' | 'websocket' | 'rest' | 'socketio';
+export type ProviderType = 'stomp' | 'websocket' | 'rest' | 'socketio' | 'variables';
 
 export interface DataMetadata {
   isSnapshot: boolean;

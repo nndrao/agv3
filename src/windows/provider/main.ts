@@ -5,11 +5,11 @@ import { StorageClient } from '../../services/storage/storageClient';
 class HeadlessProvider {
   private provider!: StompDatasourceProviderSimplified;
   private publisher!: ChannelPublisher;
-  private config: any;
+  private config: Record<string, unknown> = {};
   private providerId!: string;
-  private snapshot: any[] = [];
-  private statistics: any = {};
-  private startTime: number = Date.now();
+  private snapshot: Record<string, unknown>[] = [];
+  private statistics: Record<string, unknown> = {};
+  // private startTime: number = Date.now();
   
   async initialize() {
     console.log('🚀 Initializing headless provider...');
@@ -52,9 +52,9 @@ class HeadlessProvider {
         const existingChannel = await Promise.race([connectPromise, timeoutPromise]);
         console.log('Found existing channel, disconnecting...');
         await existingChannel.disconnect();
-      } catch (e: any) {
+      } catch (e) {
         // Channel doesn't exist, that's fine
-        console.log('No existing channel found (this is normal):', e.message || e);
+        console.log('No existing channel found (this is normal):', (e as Error).message || e);
       }
       
       try {
@@ -105,7 +105,7 @@ class HeadlessProvider {
     if (!this.provider) return;
     
     // Handle status events (connected/disconnected)
-    this.provider.on('status', async (status: any) => {
+    this.provider.on('status', async (status: Record<string, unknown>) => {
       console.log('📊 Provider status:', status);
       
       if (status.connected !== undefined) {
@@ -119,7 +119,7 @@ class HeadlessProvider {
     });
     
     // Handle data events (both snapshot and real-time)
-    this.provider.on('data', async (event: any) => {
+    this.provider.on('data', async (event: Record<string, unknown>) => {
       const { data, isSnapshot, clearData } = event;
       
       if (clearData) {
@@ -129,9 +129,9 @@ class HeadlessProvider {
       }
       
       if (isSnapshot) {
-        console.log(`📦 Snapshot batch: ${data.length} rows`);
+        console.log(`📦 Snapshot batch: ${(data as unknown[]).length} rows`);
         // During snapshot, accumulate data
-        this.snapshot.push(...data);
+        this.snapshot.push(...(data as Record<string, unknown>[]));
         
         // Publish snapshot data
         await this.publisher.publish('data', {
@@ -140,7 +140,7 @@ class HeadlessProvider {
           timestamp: Date.now()
         });
       } else {
-        console.log(`🔄 Real-time update: ${data.length} rows`);
+        console.log(`🔄 Real-time update: ${(data as unknown[]).length} rows`);
         
         // Just publish the data directly - conflation is now handled in the provider
         try {
@@ -157,7 +157,7 @@ class HeadlessProvider {
     });
     
     // Handle snapshot complete
-    this.provider.on('snapshot-complete', async (stats: any) => {
+    this.provider.on('snapshot-complete', async (stats: Record<string, unknown>) => {
       console.log('✅ Provider emitted snapshot-complete:', stats);
       await this.publisher.publish('snapshot-complete', stats);
       
@@ -165,38 +165,38 @@ class HeadlessProvider {
     });
   }
   
-  private async startDataCollection() {
-    console.log('📊 Starting data collection...');
-    
-    // ConflatedDataStore is now initialized in the start() method
-    // This method is kept for compatibility but doesn't do much anymore
-    
-    console.log('✅ Provider ready to receive snapshot request');
-  }
+  // private async startDataCollection() {
+  //   console.log('📊 Starting data collection...');
+  //   
+  //   // ConflatedDataStore is now initialized in the start() method
+  //   // This method is kept for compatibility but doesn't do much anymore
+  //   
+  //   console.log('✅ Provider ready to receive snapshot request');
+  // }
   
   // Removed - now using provider.subscribeToRealtimeUpdates() instead
   
-  private updateStatistics(updateCount: number) {
-    if (!this.statistics) {
-      this.statistics = {
-        messageCount: 0,
-        snapshotSize: this.snapshot.length,
-        uptime: Date.now() - this.startTime,
-        lastMessageTime: new Date()
-      };
-    }
-    
-    this.statistics.messageCount += updateCount;
-    this.statistics.lastMessageTime = new Date();
-    this.statistics.uptime = Date.now() - this.startTime;
-    
-    // Publish statistics periodically
-    this.publisher.publish('statistics', this.statistics);
-  }
+  // private updateStatistics(updateCount: number) {
+  //   if (!this.statistics) {
+  //     this.statistics = {
+  //       messageCount: 0,
+  //       snapshotSize: this.snapshot.length,
+  //       uptime: Date.now() - this.startTime,
+  //       lastMessageTime: new Date()
+  //     };
+  //   }
+  //   
+  //   this.statistics.messageCount += updateCount;
+  //   this.statistics.lastMessageTime = new Date();
+  //   this.statistics.uptime = Date.now() - this.startTime;
+  //   
+  //   // Publish statistics periodically
+  //   this.publisher.publish('statistics', this.statistics);
+  // }
   
   private async registerControlHandlers() {
     // Handle control commands
-    this.publisher.registerHandler('control', async (command: any) => {
+    this.publisher.registerHandler('control', async (command: Record<string, unknown>) => {
       console.log('📨 Control command:', command);
       
       switch (command.action) {
@@ -214,7 +214,7 @@ class HeadlessProvider {
     });
     
     // Handle snapshot requests - triggers a fresh snapshot fetch
-    this.publisher.registerHandler('getSnapshot', async (request: any) => {
+    this.publisher.registerHandler('getSnapshot', async (request: Record<string, unknown>) => {
       console.log('📸 Snapshot requested from DataTable:', request);
       
       // Check if provider is initialized
@@ -310,14 +310,14 @@ class HeadlessProvider {
         
         // Normalize configuration to handle field name variations
         const normalizedConfig = {
-          websocketUrl: this.config.websocketUrl || this.config.webSocketUrl,
-          listenerTopic: this.config.listenerTopic || this.config.topic,
-          requestMessage: this.config.requestMessage,
-          requestBody: this.config.requestBody,
-          snapshotEndToken: this.config.snapshotEndToken,
-          keyColumn: this.config.keyColumn,
-          messageRate: this.config.messageRate,
-          snapshotTimeoutMs: this.config.snapshotTimeoutMs
+          websocketUrl: (this.config.websocketUrl || this.config.webSocketUrl) as string,
+          listenerTopic: (this.config.listenerTopic || this.config.topic) as string,
+          requestMessage: this.config.requestMessage as string | undefined,
+          requestBody: this.config.requestBody as string | undefined,
+          snapshotEndToken: this.config.snapshotEndToken as string | undefined,
+          keyColumn: this.config.keyColumn as string | undefined,
+          messageRate: this.config.messageRate as string | undefined,
+          snapshotTimeoutMs: this.config.snapshotTimeoutMs as number | undefined
         };
         
         // New format - use the StompConfig constructor and methods
@@ -345,17 +345,17 @@ class HeadlessProvider {
         
         // The old format might also have field name variations
         const normalizedConfig = {
-          id: this.config.id,
-          name: this.config.name,
-          webSocketUrl: this.config.webSocketUrl || this.config.websocketUrl,
-          topic: this.config.topic || this.config.listenerTopic,
-          username: this.config.username,
-          password: this.config.password,
-          heartbeatInterval: this.config.heartbeatInterval || 30000,
-          reconnectInterval: this.config.reconnectInterval || 5000,
-          batchSize: this.config.batchSize || 1000,
-          conflationWindow: this.config.conflationWindow || 100,
-          keyColumn: this.config.keyColumn || 'id'
+          id: this.config.id as string,
+          name: this.config.name as string,
+          webSocketUrl: (this.config.webSocketUrl || this.config.websocketUrl) as string,
+          topic: (this.config.topic || this.config.listenerTopic) as string,
+          username: this.config.username as string | undefined,
+          password: this.config.password as string | undefined,
+          heartbeatInterval: (this.config.heartbeatInterval || 30000) as number,
+          reconnectInterval: (this.config.reconnectInterval || 5000) as number,
+          batchSize: (this.config.batchSize || 1000) as number,
+          conflationWindow: (this.config.conflationWindow || 100) as number,
+          keyColumn: (this.config.keyColumn || 'id') as string
         };
         
         this.provider.initialize(normalizedConfig);
@@ -407,9 +407,9 @@ class HeadlessProvider {
     try {
       const configId = this.config.configId || this.config.id;
       if (configId) {
-        const existingConfig = await StorageClient.get(configId);
+        const existingConfig = await StorageClient.get(configId as string);
         if (existingConfig) {
-          await StorageClient.update(configId, {
+          await StorageClient.update(configId as string, {
             config: {
               ...existingConfig.config,
               status: status,

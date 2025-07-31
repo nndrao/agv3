@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConnectionTab } from './tabs/ConnectionTab';
 import { FieldsTab } from './tabs/FieldsTab';
 import { ColumnsTab } from './tabs/ColumnsTab';
-import { ProviderManager } from '../../../services/providers/providerManager';
+// import { ProviderManager } from '../../../services/providers/providerManager';
 import { StompDatasourceProvider, FieldInfo } from '../../../providers/StompDatasourceProvider';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
 import { FieldNode } from './FieldSelector';
+import { templateResolver } from '../../../services/template/templateResolver';
 
 export interface ColumnDefinition {
   field: string;
@@ -22,6 +23,7 @@ export interface ColumnDefinition {
   hide?: boolean;
   type?: string;
   valueFormatter?: string;
+  cellRenderer?: string;
 }
 
 interface StompConfigurationDialogProps {
@@ -49,9 +51,9 @@ const getDefaultConfig = () => ({
 
 export function StompConfigurationDialog({ 
   config, 
-  onSave, 
-  onCancel,
-  onDelete 
+  onSave
+  // onCancel,
+  // onDelete 
 }: StompConfigurationDialogProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState(config || getDefaultConfig());
@@ -99,14 +101,36 @@ export function StompConfigurationDialog({
         );
         setManualColumns(manual);
         
-        // Build selected fields set
-        const selected = new Set<string>(config.columnDefinitions
-          .filter((col: ColumnDefinition) => 
-            config.inferredFields?.some((field: any) => field.path === col.field)
-          )
-          .map((col: ColumnDefinition) => col.field)
-        );
+        // Build selected fields set and field column overrides
+        const selected = new Set<string>();
+        const overrides: Record<string, Partial<ColumnDefinition>> = {};
+        
+        config.columnDefinitions.forEach((col: ColumnDefinition) => {
+          if (config.inferredFields?.some((field: any) => field.path === col.field)) {
+            // This is a field-based column
+            selected.add(col.field);
+            
+            // Extract overrides (properties that differ from defaults)
+            const fieldOverride: Partial<ColumnDefinition> = {};
+            if (col.headerName) fieldOverride.headerName = col.headerName;
+            if (col.cellDataType) fieldOverride.cellDataType = col.cellDataType;
+            if (col.valueFormatter !== undefined) fieldOverride.valueFormatter = col.valueFormatter;
+            if (col.cellRenderer !== undefined) fieldOverride.cellRenderer = col.cellRenderer;
+            if (col.width !== undefined) fieldOverride.width = col.width;
+            if (col.filter !== undefined) fieldOverride.filter = col.filter;
+            if (col.sortable !== undefined) fieldOverride.sortable = col.sortable;
+            if (col.resizable !== undefined) fieldOverride.resizable = col.resizable;
+            if (col.hide !== undefined) fieldOverride.hide = col.hide;
+            if (col.type !== undefined) fieldOverride.type = col.type;
+            
+            if (Object.keys(fieldOverride).length > 0) {
+              overrides[col.field] = fieldOverride;
+            }
+          }
+        });
+        
         setSelectedFields(selected);
+        setFieldColumnOverrides(overrides);
       }
     }
   }, [config]);
@@ -174,14 +198,32 @@ export function StompConfigurationDialog({
   };
   
   const convertToFieldNodes = (fields: Record<string, FieldInfo>): FieldNode[] => {
-    return Object.entries(fields).map(([key, field]) => ({
+    // Filter to only root-level fields (no dots in the key)
+    const rootFields = Object.entries(fields).filter(([key]) => !key.includes('.'));
+    
+    return rootFields.map(([key, field]) => ({
       path: field.path,
-      name: key.split('.').pop() || key,
+      name: key,
       type: field.type,
       nullable: field.nullable,
       sample: field.sample,
-      children: field.children ? convertToFieldNodes(field.children) : undefined,
+      children: field.children ? Object.entries(field.children).map(([childKey, childField]) => 
+        convertFieldNodeRecursive(childField, childKey)
+      ) : undefined,
     }));
+  };
+  
+  const convertFieldNodeRecursive = (field: FieldInfo, name: string): FieldNode => {
+    return {
+      path: field.path,
+      name: name,
+      type: field.type,
+      nullable: field.nullable,
+      sample: field.sample,
+      children: field.children ? Object.entries(field.children).map(([childKey, childField]) => 
+        convertFieldNodeRecursive(childField, childKey)
+      ) : undefined,
+    };
   };
   
   const convertFieldNodeToInfo = (node: FieldNode): FieldInfo => {
@@ -247,15 +289,16 @@ export function StompConfigurationDialog({
       return;
     }
     
+    // For test connection, we don't need topics - just test WebSocket connection
     const provider = new StompDatasourceProvider({
       websocketUrl: formData.websocketUrl,
-      listenerTopic: formData.listenerTopic,
-      requestMessage: formData.requestMessage,
-      requestBody: formData.requestBody,
-      snapshotEndToken: formData.snapshotEndToken,
+      listenerTopic: '/test/connection', // Dummy topic for connection test
+      requestMessage: '',
+      requestBody: '',
+      snapshotEndToken: formData.snapshotEndToken || 'Success',
       keyColumn: formData.keyColumn,
       messageRate: formData.messageRate,
-      snapshotTimeoutMs: formData.snapshotTimeoutMs,
+      snapshotTimeoutMs: formData.snapshotTimeoutMs || 60000,
     });
 
     try {
@@ -282,21 +325,58 @@ export function StompConfigurationDialog({
     setInferring(true);
     setTestError('');
     
-    if (!formData.websocketUrl || !formData.listenerTopic) {
-      setTestError('WebSocket URL and Listener Topic are required');
+    if (!formData.websocketUrl) {
+      setTestError('WebSocket URL is required');
       setInferring(false);
       return;
     }
     
+    // Create a session ID for consistent UUIDs during this operation
+    const sessionId = uuidv4();
+    
+    let listenerTopic: string;
+    let requestMessage: string;
+    
+    if (formData.manualTopics && formData.listenerTopic && formData.requestMessage) {
+      // Use manual topics with template resolution
+      listenerTopic = templateResolver.resolveTemplate(formData.listenerTopic, sessionId);
+      requestMessage = templateResolver.resolveTemplate(formData.requestMessage, sessionId);
+      
+      console.log('[InferFields] Using manual topics with template resolution:', {
+        originalListener: formData.listenerTopic,
+        originalTrigger: formData.requestMessage,
+        resolvedListener: listenerTopic,
+        resolvedTrigger: requestMessage,
+        sessionId
+      });
+    } else {
+      // Generate auto topics
+      const clientId = uuidv4();
+      const dataType = formData.dataType || 'positions';
+      const messageRate = formData.messageRate || 1000;
+      const batchSize = formData.batchSize || '';
+      
+      listenerTopic = `/snapshot/${dataType}/${clientId}`;
+      requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+      
+      console.log('[InferFields] Using auto-generated topics:', {
+        listenerTopic,
+        requestMessage,
+        clientId
+      });
+    }
+    
     const provider = new StompDatasourceProvider({
       websocketUrl: formData.websocketUrl,
-      listenerTopic: formData.listenerTopic,
-      requestMessage: formData.requestMessage,
-      requestBody: formData.requestBody,
-      snapshotEndToken: formData.snapshotEndToken,
+      listenerTopic: listenerTopic,
+      requestMessage: requestMessage,
+      requestBody: 'START', // Fixed trigger body
+      snapshotEndToken: formData.snapshotEndToken || 'Success',
       keyColumn: formData.keyColumn,
       messageRate: formData.messageRate,
-      snapshotTimeoutMs: formData.snapshotTimeoutMs,
+      snapshotTimeoutMs: formData.snapshotTimeoutMs || 60000,
+      dataType: formData.dataType,
+      batchSize: formData.batchSize,
     });
 
     try {
@@ -323,7 +403,9 @@ export function StompConfigurationDialog({
       if (result.success && result.data && result.data.length > 0) {
         // Infer fields
         const fields = StompDatasourceProvider.inferFields(result.data);
+        console.log('[Field Inference] Raw fields:', fields);
         const fieldNodes = convertToFieldNodes(fields);
+        console.log('[Field Inference] Converted field nodes:', fieldNodes);
         setInferredFields(fieldNodes);
         
         toast({
@@ -343,13 +425,37 @@ export function StompConfigurationDialog({
   
   const handleSave = () => {
     // Validate required fields
-    if (!formData.name || !formData.websocketUrl || !formData.listenerTopic) {
+    if (!formData.name || !formData.websocketUrl) {
       toast({
         title: 'Missing required fields',
-        description: 'Please fill in Name, WebSocket URL, and Listener Topic',
+        description: 'Please fill in Name and WebSocket URL',
         variant: 'destructive',
       });
       return;
+    }
+    
+    // Handle topic configuration
+    if (formData.manualTopics) {
+      // Manual topics are already set, just ensure request body is set
+      if (!formData.requestBody) {
+        formData.requestBody = 'START';
+      }
+    } else {
+      // Generate auto topics if not using manual configuration
+      const clientId = uuidv4();
+      const dataType = formData.dataType || 'positions';
+      const messageRate = formData.messageRate || 1000;
+      const batchSize = formData.batchSize || '';
+      
+      formData.listenerTopic = `/snapshot/${dataType}/${clientId}`;
+      formData.requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+      formData.requestBody = 'START';
+      
+      console.log('[Save] Generated auto topics:', {
+        listenerTopic: formData.listenerTopic,
+        requestMessage: formData.requestMessage,
+        clientId
+      });
     }
     
     // Build columns from selected fields + manual columns
@@ -364,11 +470,24 @@ export function StompConfigurationDialog({
         cellDataType: cellDataType,
       };
       
-      // Apply date-specific settings
-      if (cellDataType === 'date' || cellDataType === 'dateString') {
-        column.filter = 'agDateColumnFilter';
+      // Apply value formatter from override
+      if (override.valueFormatter !== undefined) {
+        column.valueFormatter = override.valueFormatter;
+      } else if (cellDataType === 'date' || cellDataType === 'dateString') {
         // Default to ISO DateTime format for date columns
+        // Now this format pattern is supported as an alias in DateFormatters.ts
         column.valueFormatter = 'YYYY-MM-DD HH:mm:ss';
+      } else if (cellDataType === 'number' && !override.valueFormatter) {
+        // Default formatter for numeric columns
+        column.valueFormatter = '2DecimalWithThousandSeparator';
+      }
+      
+      // Apply cell renderer from override
+      if (override.cellRenderer !== undefined) {
+        column.cellRenderer = override.cellRenderer;
+      } else if (cellDataType === 'number' && !override.cellRenderer) {
+        // Default renderer for numeric columns
+        column.cellRenderer = 'NumericCellRenderer';
       }
       
       // Apply number-specific settings
@@ -376,6 +495,19 @@ export function StompConfigurationDialog({
         column.type = 'numericColumn';
         column.filter = 'agNumberColumnFilter';
       }
+      
+      // Apply date-specific settings
+      if (cellDataType === 'date' || cellDataType === 'dateString') {
+        column.filter = 'agDateColumnFilter';
+      }
+      
+      // Apply any other override properties
+      if (override.width !== undefined) column.width = override.width;
+      if (override.filter !== undefined) column.filter = override.filter;
+      if (override.sortable !== undefined) column.sortable = override.sortable;
+      if (override.resizable !== undefined) column.resizable = override.resizable;
+      if (override.hide !== undefined) column.hide = override.hide;
+      if (override.type !== undefined) column.type = override.type;
       
       return column;
     });
@@ -410,57 +542,65 @@ export function StompConfigurationDialog({
     }
   };
   
-  const handleStartProvider = async () => {
-    // Save first
-    handleSave();
-    
-    // Then start provider
-    try {
-      await ProviderManager.startProvider({
-        providerId: formData.id,
-        configId: formData.id,
-        config: formData,
-        type: 'stomp'
-      });
-      
-      alert('Provider started successfully!');
-    } catch (error) {
-      alert('Failed to start provider: ' + (error instanceof Error ? error.message : String(error)));
-    }
-  };
+  // const handleStartProvider = async () => {
+  //   // Save first
+  //   handleSave();
+  //   
+  //   // Then start provider
+  //   try {
+  //     await ProviderManager.startProvider({
+  //       providerId: formData.id,
+  //       configId: formData.id,
+  //       config: formData,
+  //       type: 'stomp'
+  //     });
+  //     
+  //     alert('Provider started successfully!');
+  //   } catch (error) {
+  //     alert('Failed to start provider: ' + (error instanceof Error ? error.message : String(error)));
+  //   }
+  // };
   
   const updateFormData = (updates: Partial<typeof formData>) => {
     setFormData((prev: typeof formData) => ({ ...prev, ...updates }));
   };
   
   return (
-    <div className="stomp-configuration-dialog h-full">
-      
+    <div className="stomp-configuration-dialog h-full w-full bg-[#1a1a1a] text-white flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 rounded-none h-12 border-b">
-          <TabsTrigger value="connection" className="rounded-none">
+        <TabsList className="grid w-full grid-cols-3 rounded-none h-14 bg-[#2a2a2a] border-b border-[#3a3a3a]">
+          <TabsTrigger 
+            value="connection" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium"
+          >
             Connection
           </TabsTrigger>
-          <TabsTrigger value="fields" className="rounded-none">
+          <TabsTrigger 
+            value="fields" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium flex items-center justify-center gap-2"
+          >
             Fields
             {inferredFields.length > 0 && (
-              <span className="ml-2">
+              <Badge variant="secondary" className="ml-2 h-5 px-2 text-xs">
                 {inferredFields.length}
-              </span>
+              </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="columns" className="rounded-none">
+          <TabsTrigger 
+            value="columns" 
+            className="rounded-none data-[state=active]:bg-[#1a1a1a] data-[state=active]:border-b-2 data-[state=active]:border-primary h-full text-sm font-medium flex items-center justify-center gap-2"
+          >
             Columns
             {(selectedFields.size + manualColumns.length) > 0 && (
-              <span className="ml-2">
+              <Badge variant="secondary" className="ml-2 h-5 px-2 text-xs">
                 {selectedFields.size + manualColumns.length}
-              </span>
+              </Badge>
             )}
           </TabsTrigger>
         </TabsList>
         
         <div className="flex-1 overflow-hidden">
-          <TabsContent value="connection" className="h-full overflow-hidden">
+          <TabsContent value="connection" className="h-full overflow-hidden m-0">
             <ConnectionTab
               config={formData}
               onChange={updateFormData}
@@ -473,7 +613,7 @@ export function StompConfigurationDialog({
             />
           </TabsContent>
           
-          <TabsContent value="fields" className="h-full overflow-hidden">
+          <TabsContent value="fields" className="h-full overflow-hidden m-0">
             <FieldsTab
               inferredFields={inferredFields}
               selectedFields={selectedFields}
@@ -552,7 +692,7 @@ export function StompConfigurationDialog({
             />
           </TabsContent>
           
-          <TabsContent value="columns" className="h-full overflow-hidden">
+          <TabsContent value="columns" className="h-full overflow-hidden m-0">
             <ColumnsTab
               selectedFields={selectedFields}
               inferredFields={inferredFields}

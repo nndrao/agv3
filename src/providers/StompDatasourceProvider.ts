@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 import { Client, StompConfig as StompClientConfig, IMessage } from '@stomp/stompjs';
+import { templateResolver } from '../services/template/templateResolver';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface StompConnectionResult {
   success: boolean;
@@ -27,7 +29,7 @@ export interface StompStatistics {
 
 export interface FieldInfo {
   path: string;
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null' | 'date';
   nullable: boolean;
   sample?: any;
   children?: Record<string, FieldInfo>;
@@ -36,12 +38,20 @@ export interface FieldInfo {
 export interface StompConfig {
   websocketUrl: string;
   listenerTopic: string;
-  requestMessage?: string;
-  requestBody?: string;
+  requestMessage?: string;  // Topic to send snapshot request
+  requestBody?: string;     // Body of snapshot request
+  
+  // New fields for structured format
+  dataType?: 'positions' | 'trades';
+  messageRate?: number;
+  batchSize?: number;
+  
   snapshotEndToken?: string;
   keyColumn?: string;
-  messageRate?: string;
   snapshotTimeoutMs?: number;
+  
+  // Template resolution
+  manualTopics?: boolean;   // Whether topics are manually configured with templates
 }
 
 interface StompProviderConfig {
@@ -72,6 +82,9 @@ export class StompDatasourceProvider extends EventEmitter {
   private client: Client | null = null;
   private config: StompProviderConfig | null = null;
   private stompConfig: StompConfig | null = null;
+  private sessionId: string | null = null;
+  private resolvedListenerTopic: string | null = null;
+  private resolvedRequestMessage: string | null = null;
   private status: StompProviderStatus = {
     connected: false,
     connecting: false,
@@ -86,8 +99,6 @@ export class StompDatasourceProvider extends EventEmitter {
   private connectionPromise: Promise<void> | null = null;
   private isConnected = false;
   private activeSubscriptions: any[] = [];
-  private snapshotSubscription: any = null;
-  private realtimeSubscription: any = null;
   private statistics: StompStatistics = {
     snapshotRowsReceived: 0,
     updateRowsReceived: 0,
@@ -203,12 +214,12 @@ export class StompDatasourceProvider extends EventEmitter {
   async checkConnection(config?: StompProviderConfig | StompConfig): Promise<boolean> {
     try {
       // Handle both config types
-      if (config && 'websocketUrl' in config) {
+      if (config && 'listenerTopic' in config) {
         // StompConfig type - use new connection logic
-        return this.checkConnectionWithStompConfig(config);
+        return this.checkConnectionWithStompConfig(config as StompConfig);
       } else if (config) {
         // StompProviderConfig type - use existing logic
-        return this.checkConnectionWithProviderConfig(config);
+        return this.checkConnectionWithProviderConfig(config as StompProviderConfig);
       } else if (this.stompConfig) {
         // Use constructor config
         return this.checkConnectionWithStompConfig(this.stompConfig);
@@ -299,8 +310,8 @@ export class StompDatasourceProvider extends EventEmitter {
   }
   
   private async getWebSocketUrl(config: StompProviderConfig): Promise<string> {
-    if (config.webSocketUrl) {
-      return config.webSocketUrl;
+    if (config.websocketUrl) {
+      return config.websocketUrl;
     }
     
     if (config.httpUrl) {
@@ -420,6 +431,9 @@ export class StompDatasourceProvider extends EventEmitter {
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
+    
+    // Create session ID for consistent template resolution
+    this.sessionId = uuidv4();
 
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
@@ -588,8 +602,26 @@ export class StompDatasourceProvider extends EventEmitter {
       // Emit REQUESTING_SNAPSHOT_DATA event
       this.emit('REQUESTING_SNAPSHOT_DATA');
       
-      // Subscribe to the listener topic
-      this.snapshotSubscription = this.client!.subscribe(this.stompConfig!.listenerTopic, (message: IMessage) => {
+      // Resolve templates in topics
+      if (this.stompConfig!.manualTopics) {
+        this.resolvedListenerTopic = templateResolver.resolveTemplate(this.stompConfig!.listenerTopic, this.sessionId!);
+        if (this.stompConfig!.requestMessage) {
+          this.resolvedRequestMessage = templateResolver.resolveTemplate(this.stompConfig!.requestMessage, this.sessionId!);
+        }
+        console.log('[STOMP] Resolved topics from templates:', {
+          originalListener: this.stompConfig!.listenerTopic,
+          resolvedListener: this.resolvedListenerTopic,
+          originalRequest: this.stompConfig!.requestMessage,
+          resolvedRequest: this.resolvedRequestMessage,
+          sessionId: this.sessionId
+        });
+      } else {
+        this.resolvedListenerTopic = this.stompConfig!.listenerTopic;
+        this.resolvedRequestMessage = this.stompConfig!.requestMessage || null;
+      }
+      
+      // Subscribe to the resolved listener topic
+      const snapshotSubscription = this.client!.subscribe(this.resolvedListenerTopic, (message: IMessage) => {
         try {
           const messageSize = new TextEncoder().encode(message.body).length;
           this.statistics.bytesReceived += messageSize;
@@ -688,18 +720,19 @@ export class StompDatasourceProvider extends EventEmitter {
         }
       });
 
-      // No need to track in activeSubscriptions as we have dedicated snapshotSubscription
+      // Track subscription
+      this.activeSubscriptions.push(snapshotSubscription);
 
       // Send request message if configured
-      if (this.stompConfig!.requestMessage && this.stompConfig!.requestBody) {
+      if (this.resolvedRequestMessage && this.stompConfig!.requestBody) {
         try {
           console.log('🚀 Sending snapshot request to STOMP server:', {
-            destination: this.stompConfig!.requestMessage,
+            destination: this.resolvedRequestMessage,
             body: this.stompConfig!.requestBody
           });
           
           this.client!.publish({
-            destination: this.stompConfig!.requestMessage,
+            destination: this.resolvedRequestMessage,
             body: this.stompConfig!.requestBody,
           });
           
@@ -709,7 +742,7 @@ export class StompDatasourceProvider extends EventEmitter {
           completeSnapshot(false, 'Failed to send request message');
         }
       } else {
-        console.warn('⚠️ No request message configured - will only listen for existing data on topic:', this.stompConfig!.listenerTopic);
+        console.warn('⚠️ No request message configured - will only listen for existing data on topic:', this.resolvedListenerTopic);
       }
     });
   }
@@ -721,12 +754,78 @@ export class StompDatasourceProvider extends EventEmitter {
     const getType = (value: any): FieldInfo['type'] => {
       if (value === null) return 'null';
       if (Array.isArray(value)) return 'array';
+      
       const type = typeof value;
-      if (type === 'object') return 'object';
-      if (type === 'string') return 'string';
-      if (type === 'number') return 'number';
+      
+      if (type === 'object') {
+        // Check if it's a Date object
+        if (value instanceof Date) return 'date';
+        return 'object';
+      }
+      
+      if (type === 'string') {
+        // Check for date/datetime patterns
+        if (isDateString(value)) return 'date';
+        return 'string';
+      }
+      
+      if (type === 'number') {
+        // Check if it might be a timestamp
+        // Timestamps between year 2000 and 2100 in milliseconds
+        if (value > 946684800000 && value < 4102444800000) {
+          // Additional check: if it's a round number (no decimals), likely a timestamp
+          if (Number.isInteger(value)) {
+            return 'date';
+          }
+        }
+        return 'number';
+      }
+      
       if (type === 'boolean') return 'boolean';
       return 'string';
+    };
+    
+    // Helper function to detect date strings
+    const isDateString = (str: string): boolean => {
+      // Empty or very short strings are not dates
+      if (!str || str.length < 6) return false;
+      
+      // Common date/datetime patterns
+      const datePatterns = [
+        // ISO 8601 formats
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/,  // 2024-01-15T10:30:45.123Z
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/,  // 2024-01-15T10:30:45+05:30
+        /^\d{4}-\d{2}-\d{2}$/,                                      // 2024-01-15
+        
+        // Common date formats
+        /^\d{2}\/\d{2}\/\d{4}$/,                                    // 01/15/2024
+        /^\d{4}\/\d{2}\/\d{2}$/,                                    // 2024/01/15
+        /^\d{2}-\d{2}-\d{4}$/,                                      // 01-15-2024
+        
+        // Date with time
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,                   // 2024-01-15 10:30:45
+        /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,                 // 01/15/2024 10:30:45
+        
+        // RFC 2822
+        /^[A-Za-z]{3},\s\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2}\s[A-Z]{3}$/,  // Mon, 15 Jan 2024 10:30:45 GMT
+      ];
+      
+      // Check if string matches any date pattern
+      if (datePatterns.some(pattern => pattern.test(str))) {
+        return true;
+      }
+      
+      // Try parsing as date to catch other valid formats
+      const parsed = Date.parse(str);
+      if (!isNaN(parsed)) {
+        // Additional validation: check if the parsed date is reasonable
+        const date = new Date(parsed);
+        const year = date.getFullYear();
+        // Accept dates between 1900 and 2100
+        return year >= 1900 && year <= 2100;
+      }
+      
+      return false;
     };
 
     const processObject = (obj: any, path: string = '') => {
