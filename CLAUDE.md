@@ -275,3 +275,197 @@ const debouncedUpdate = useMemo(
 - Added try-catch blocks around transaction application
 - Better error logging for debugging
 - Fallback mechanisms if transactions fail
+
+---
+
+## DataGridStompShared Refactoring Plan (2025-07-30)
+
+### Overview
+Plan to refactor the 1464-line DataGridStompShared component into smaller, focused modules while preventing re-renders and infinite loops.
+
+### Goals
+- Modularize into smaller, focused modules
+- **PREVENT re-renders and infinite loops**
+- Preserve ALL existing features, behaviors, styling, and functions
+- Make the component simpler and more performant
+- Improve maintainability
+
+### Key Performance Principles
+1. **Stable References**: Use `useCallback`, `useMemo`, and `useRef` appropriately
+2. **Proper Dependencies**: Ensure all hook dependencies are correctly specified
+3. **Avoid State Cascades**: Prevent state updates that trigger other state updates
+4. **Ref-based Values**: Use refs for values that don't need to trigger re-renders
+
+### Proposed Module Structure with Performance Focus
+
+#### 1. Custom Hooks (with re-render prevention)
+
+```typescript
+// hooks/useSharedWorkerConnection.ts
+- Uses refs for connection state that doesn't need UI updates
+- Stable callback references with useCallback
+- Returns only necessary reactive state
+
+// hooks/useSnapshotData.ts
+- Uses ref for accumulating data (snapshotDataRef)
+- Only updates state when snapshot is complete
+- Memoized handlers to prevent re-creation
+
+// hooks/useProviderConfig.ts
+- Caches loaded configs
+- Stable loading function with useCallback
+- Minimal state updates
+
+// hooks/useGridState.ts
+- Debounced state persistence
+- Memoized grid configuration
+- Refs for grid API to avoid re-renders
+
+// hooks/useViewTitle.ts
+- LocalStorage-based with minimal re-renders
+- Effect runs only on mount
+
+// hooks/useThemeSync.ts
+- Memoized theme calculations
+- Single effect for theme updates
+```
+
+#### 2. Constants & Configuration
+
+```typescript
+// config/gridConfig.ts
+export const GRID_THEME = themeQuartz.withParams(...);
+export const DEFAULT_COL_DEF = { flex: 1, minWidth: 100, ... };
+export const STATUS_BAR_CONFIG = { statusPanels: [...] };
+
+// config/profileDefaults.ts
+export const DEFAULT_PROFILE: DataGridStompSharedProfile = { ... };
+
+// config/constants.ts
+export const SNAPSHOT_MODES = { IDLE: 'idle', ... } as const;
+```
+
+#### 3. Memoized Components
+
+```typescript
+// components/Toolbar/index.tsx
+export const Toolbar = React.memo(({ ... }) => { ... });
+
+// components/BusyIndicator.tsx
+export const BusyIndicator = React.memo(({ mode, messageCount }) => { ... });
+
+// components/DataGrid.tsx
+export const DataGrid = React.memo(({ ... }) => { ... });
+```
+
+#### 4. Event Handlers as Stable Functions
+
+```typescript
+// handlers/connectionHandlers.ts
+export const createConnectionHandlers = (deps) => {
+  const connect = useCallback(async () => { ... }, [deps]);
+  const disconnect = useCallback(async () => { ... }, [deps]);
+  return { connect, disconnect };
+};
+```
+
+### Refactoring Strategy to Prevent Issues
+
+#### 1. State Management
+- Group related state to reduce update cycles
+- Use refs for non-UI state (messageCountRef, isConnecting, etc.)
+- Implement state reducers for complex state logic
+
+#### 2. Effect Optimization
+- Combine related effects where possible
+- Use cleanup functions properly
+- Avoid effects that depend on frequently changing values
+
+#### 3. Callback Stability
+- Wrap all event handlers in useCallback
+- Use refs to access latest values without adding dependencies
+- Create handler factories that return stable functions
+
+#### 4. Component Structure
+
+```typescript
+// Main component becomes much simpler:
+const DataGridStompShared = () => {
+  // Custom hooks with stable APIs
+  const connection = useSharedWorkerConnection(selectedProviderId);
+  const snapshot = useSnapshotData(connection);
+  const providerConfig = useProviderConfig(selectedProviderId);
+  const gridState = useGridState(gridApiRef, activeProfileData);
+  const theme = useThemeSync(appTheme);
+  
+  // Memoized handlers
+  const handlers = useMemo(() => ({
+    onConnect: () => connection.connect(providerConfig),
+    onDisconnect: () => connection.disconnect(),
+    onProfileSave: () => profileManagement.save(getCurrentState()),
+  }), [connection, providerConfig, profileManagement]);
+  
+  return (
+    <div className={theme.className}>
+      <Toolbar {...handlers} />
+      <BusyIndicator {...snapshot} />
+      <DataGrid 
+        config={gridConfig}
+        data={snapshot.data}
+        onReady={gridState.onReady}
+      />
+    </div>
+  );
+};
+```
+
+### Performance Guarantees
+
+1. **No Infinite Loops**: 
+   - All effects have proper dependency arrays
+   - State updates don't trigger cascading updates
+   - Refs used for values that don't affect UI
+
+2. **Minimal Re-renders**:
+   - Components wrapped in React.memo
+   - Callbacks memoized with useCallback
+   - Complex computations memoized with useMemo
+
+3. **Stable Hook APIs**:
+   - Hooks return stable references
+   - Internal state changes don't propagate unnecessarily
+   - Clear separation between UI state and operational state
+
+### Module File Structure
+
+```
+src/windows/datagrid/components/DataGridStompShared/
+├── index.tsx                    // Main component (simplified)
+├── types.ts                     // All interfaces and types
+├── config/
+│   ├── gridConfig.ts           // AG-Grid configuration
+│   ├── profileDefaults.ts      // Default profile settings
+│   └── constants.ts            // Component constants
+├── hooks/
+│   ├── useSharedWorkerConnection.ts
+│   ├── useSnapshotData.ts
+│   ├── useProviderConfig.ts
+│   ├── useGridState.ts
+│   ├── useViewTitle.ts
+│   └── useThemeSync.ts
+├── handlers/
+│   ├── connectionHandlers.ts
+│   ├── profileHandlers.ts
+│   └── gridHandlers.ts
+└── components/
+    ├── Toolbar/
+    │   ├── index.tsx
+    │   ├── ProfileSection.tsx
+    │   ├── ConnectionSection.tsx
+    │   ├── StatusSection.tsx
+    │   └── SettingsSection.tsx
+    ├── BusyIndicator.tsx
+    └── DataGrid.tsx
+```
+
+This refactoring will make the component much simpler, more maintainable, and MORE performant than the current implementation.

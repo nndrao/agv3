@@ -1,0 +1,114 @@
+/* Grid Options - Microsoft Property Grid styles */
+
+/* Override dialog content for property grid layout */
+.grid-options-dialog [role="dialog"] {
+  max-height: 90vh;
+}
+
+/* Ensure accordion chevrons rotate properly */
+[data-state="open"] > .grid-options-accordion-trigger svg:first-child {
+  transform: rotate(90deg);
+}
+
+/* Property grid specific styles */
+.grid-options-property-grid {
+  font-size: 12px;
+  max-width: 450px;
+  margin: 0 auto;
+}
+
+/* Compact styles for property grid inputs */
+.grid-options-property-grid input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.grid-options-property-grid input[type="number"]::-webkit-outer-spin-button,
+.grid-options-property-grid input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Property row hover effect */
+.grid-options-property-grid > div > div:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Modified property indicator */
+.grid-options-property-grid .font-medium {
+  color: hsl(var(--primary));
+}
+
+/* Ensure proper scrollbar styling with dark mode support */
+.grid-options-scroll-area {
+  background-color: hsl(var(--background));
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport] {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--background));
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: hsl(var(--background));
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+  border-radius: 5px;
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 5px;
+  border: 2px solid hsl(var(--background));
+  background-clip: padding-box;
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-corner {
+  background: hsl(var(--background));
+}
+
+/* Dark mode specific overrides */
+.dark .grid-options-scroll-area [data-radix-scroll-area-viewport] {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--background));
+}
+
+.dark .grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  background: hsl(var(--background));
+}
+
+.dark .grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+.dark .grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  border: 2px solid hsl(var(--background));
+}
+
+.dark .grid-options-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-corner {
+  background: hsl(var(--background));
+}
+
+/* Accordion styles */
+.grid-options-accordion-trigger {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Property label styles */
+.grid-options-property-grid label {
+  font-size: 12px;
+}
+
+/* Footer styles */
+.grid-options-footer {
+  border-top: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted) / 0.3);
+}

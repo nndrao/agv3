@@ -48,6 +48,7 @@ export interface UseProfileManagementResult<T extends BaseProfile> {
   deleteProfile: (versionId: string) => Promise<void>;
   createProfile: (name: string, data: T) => Promise<void>;
   setActiveProfile: (versionId: string) => Promise<void>;
+  updateProfilePartial: (updates: Partial<T>) => Promise<void>;
   
   // Utilities
   exportProfile: (versionId: string) => Promise<string>;
@@ -265,8 +266,11 @@ export function useProfileManagement<T extends BaseProfile>({
 
         setActiveProfile(newVersion);
         setActiveProfileData(data);
+        
+        // For new profiles, we need to save the full config
+        await StorageClient.save(updatedConfig);
       } else {
-        // Update existing profile
+        // Update existing profile - use partial update for better performance
         const updatedSettings = profiles.map(p => 
           p.versionId === activeProfile.versionId
             ? {
@@ -278,6 +282,14 @@ export function useProfileManagement<T extends BaseProfile>({
             : p
         );
 
+        // Use update method for partial updates instead of full save
+        await StorageClient.update(config.configId, {
+          settings: updatedSettings,
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'user'
+        });
+        
+        // Update local state to reflect changes
         updatedConfig = {
           ...config,
           settings: updatedSettings,
@@ -285,8 +297,6 @@ export function useProfileManagement<T extends BaseProfile>({
           lastUpdatedBy: 'user'
         };
       }
-
-      await StorageClient.save(updatedConfig);
       
       // Batch state updates to reduce re-renders
       const updatedProfiles = updatedConfig.settings || [];
@@ -473,6 +483,55 @@ export function useProfileManagement<T extends BaseProfile>({
   const resetToDefault = async (): Promise<void> => {
     await saveProfile(defaultProfile, true, 'Default (Reset)');
   };
+  
+  // New method for partial updates - much faster for small changes
+  const updateProfilePartial = async (updates: Partial<T>): Promise<void> => {
+    if (!config || !activeProfile || !activeProfileData) return;
+    
+    log('Updating profile partially:', updates);
+    
+    try {
+      // Merge updates with current profile data
+      const updatedData = {
+        ...activeProfileData,
+        ...updates
+      } as T;
+      
+      // Update only the active profile in settings
+      const updatedSettings = profiles.map(p => 
+        p.versionId === activeProfile.versionId
+          ? {
+              ...p,
+              config: updatedData,
+              lastUpdated: new Date(),
+              lastUpdatedBy: 'user'
+            }
+          : p
+      );
+      
+      // Use StorageClient.update for partial update - much faster
+      await StorageClient.update(config.configId, {
+        settings: updatedSettings,
+        lastUpdated: new Date(),
+        lastUpdatedBy: 'user'
+      });
+      
+      // Update local state
+      setProfiles(updatedSettings);
+      setActiveProfileData(updatedData);
+      
+      // Update active profile reference
+      const updatedActiveProfile = updatedSettings.find(p => p.versionId === activeProfile.versionId);
+      if (updatedActiveProfile) {
+        setActiveProfile(updatedActiveProfile);
+      }
+      
+      log('Profile partially updated');
+    } catch (err) {
+      log('Error updating profile partially:', err);
+      throw err;
+    }
+  };
 
   return {
     profiles,
@@ -486,6 +545,7 @@ export function useProfileManagement<T extends BaseProfile>({
     deleteProfile,
     createProfile,
     setActiveProfile: setActiveProfileHandler,
+    updateProfilePartial,
     exportProfile,
     importProfile,
     resetToDefault

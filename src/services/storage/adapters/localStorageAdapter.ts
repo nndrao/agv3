@@ -55,11 +55,25 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
   
   async update(configId: string, updates: Partial<UnifiedConfig>): Promise<void> {
-    const existing = await this.read(configId);
-    if (!existing) {
+    // First check mapping to avoid full search
+    const mappingKey = `${this.prefix}mapping:${configId}`;
+    const componentType = localStorage.getItem(mappingKey);
+    
+    if (!componentType) {
       throw new Error(`Config ${configId} not found`);
     }
     
+    const key = this.getKey(componentType, configId);
+    const existingData = localStorage.getItem(key);
+    
+    if (!existingData) {
+      throw new Error(`Config ${configId} not found`);
+    }
+    
+    // Parse existing data
+    const existing = JSON.parse(existingData);
+    
+    // Merge updates efficiently
     const updated = {
       ...existing,
       ...updates,
@@ -67,12 +81,13 @@ export class LocalStorageAdapter implements StorageAdapter {
       lastUpdatedBy: updates.lastUpdatedBy || existing.lastUpdatedBy
     };
     
-    const key = this.getKey(existing.componentType, configId);
+    // Save back to localStorage
     localStorage.setItem(key, JSON.stringify(updated));
     
-    // Update mapping in case componentType changed
-    const mappingKey = `${this.prefix}mapping:${configId}`;
-    localStorage.setItem(mappingKey, updated.componentType);
+    // Update mapping only if componentType changed
+    if (updates.componentType && updates.componentType !== componentType) {
+      localStorage.setItem(mappingKey, updates.componentType);
+    }
   }
   
   async delete(configId: string): Promise<void> {
