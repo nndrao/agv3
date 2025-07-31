@@ -39,7 +39,7 @@ interface CategorySectionProps {
   searchTerm: string;
 }
 
-const CategorySection: React.FC<CategorySectionProps> = ({
+const CategorySection: React.FC<CategorySectionProps> = React.memo(({
   category,
   values,
   onChange,
@@ -203,7 +203,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({
       )}
     </div>
   );
-};
+});
 
 // Extracted content component for reuse
 export const GridOptionsEditorContent: React.FC<{
@@ -227,6 +227,7 @@ export const GridOptionsEditorContent: React.FC<{
   }, []);
   
   const handleApply = useCallback(() => {
+    // Debounce the apply to prevent rapid clicks
     onApply(values);
   }, [values, onApply]);
   

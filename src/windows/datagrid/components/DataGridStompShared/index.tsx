@@ -578,16 +578,45 @@ const DataGridStompSharedComponent = () => {
   
   // Handle grid options apply - only apply to grid, don't save to storage
   const handleApplyGridOptions = useCallback((newOptions: Record<string, any>) => {
-    // Apply options to grid immediately (font is handled by theme)
+    // Performance optimization: batch update grid options
     if (gridApi) {
+      // First, identify which options have actually changed
+      const currentOptions = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
+      const changedOptions: Record<string, any> = {};
+      let hasChanges = false;
+      
       Object.entries(newOptions).forEach(([key, value]) => {
-        if (key !== 'font') {
-          gridApi.setGridOption(key, value);
+        if (key !== 'font' && currentOptions[key] !== value) {
+          changedOptions[key] = value;
+          hasChanges = true;
         }
       });
       
-      // Refresh grid to apply changes
-      gridApi.refreshCells({ force: true });
+      // Only update if there are actual changes
+      if (hasChanges) {
+        // Batch apply all changed options
+        const startTime = performance.now();
+        
+        // Use requestAnimationFrame to batch DOM updates
+        requestAnimationFrame(() => {
+          // Apply all changed options
+          Object.entries(changedOptions).forEach(([key, value]) => {
+            gridApi.setGridOption(key, value);
+          });
+          
+          // Only refresh if visual options changed
+          const visualOptions = ['rowHeight', 'headerHeight', 'animateRows', 'enableCellChangeFlash', 
+                                'floatingFiltersHeight', 'groupHeaderHeight', 'pivotHeaderHeight'];
+          const needsRefresh = Object.keys(changedOptions).some(key => visualOptions.includes(key));
+          
+          if (needsRefresh) {
+            gridApi.refreshCells({ force: true });
+          }
+          
+          const endTime = performance.now();
+          console.log(`Grid options applied in ${(endTime - startTime).toFixed(2)}ms (${Object.keys(changedOptions).length} options changed)`);
+        });
+      }
     }
     
     // Store the new options in memory only
@@ -600,7 +629,7 @@ const DataGridStompSharedComponent = () => {
     
     // Close the grid options dialog after successfully applying changes
     handleGridOptionsDialogChange(false);
-  }, [gridApi, toast, handleGridOptionsDialogChange]);
+  }, [gridApi, toast, handleGridOptionsDialogChange, unsavedGridOptions, activeProfileData?.gridOptions]);
   
   // Apply theme changes to grid
   useEffect(() => {
