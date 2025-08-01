@@ -680,6 +680,33 @@ const DataGridStompSharedComponent = () => {
       // Force a grid refresh to ensure the changes are visible
       setTimeout(() => {
         gridApi.refreshCells({ force: true });
+        
+        // Test expanding/collapsing groups to verify columnGroupShow behavior
+        console.log('[handleApplyColumnGroups] Testing column group expand/collapse behavior...');
+        
+        // Try to expand all groups first
+        // In newer AG-Grid versions, column group methods might be on gridApi
+        const setGroupOpened = columnApi?.setColumnGroupOpened || gridApi?.setColumnGroupOpened;
+        
+        if (setGroupOpened) {
+          groups.forEach(group => {
+            console.log(`[handleApplyColumnGroups] Expanding group: ${group.headerName}`);
+            setGroupOpened.call(columnApi || gridApi, group.groupId, true);
+          });
+          
+          // Then collapse them after a delay to see the effect
+          setTimeout(() => {
+            groups.forEach(group => {
+              console.log(`[handleApplyColumnGroups] Collapsing group: ${group.headerName}`);
+              setGroupOpened.call(columnApi || gridApi, group.groupId, false);
+            });
+          }, 2000);
+        } else {
+          console.log('[handleApplyColumnGroups] setColumnGroupOpened not available on columnApi or gridApi');
+          
+          // Try another approach - look for the method in different places
+          console.log('[handleApplyColumnGroups] Available gridApi methods:', Object.keys(gridApi).filter(k => k.includes('Column')));
+        }
       }, 100);
       
       toast({

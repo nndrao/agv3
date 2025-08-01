@@ -17,6 +17,14 @@ export class ColumnGroupService {
     console.log('- groups:', groups);
     console.log('- originalColumnDefs provided:', !!originalColumnDefs, originalColumnDefs?.length);
     
+    // Log detailed group information
+    groups.forEach((group, index) => {
+      console.log(`[Group ${index}] ${group.headerName}:`);
+      console.log('  - openByDefault:', group.openByDefault);
+      console.log('  - columnStates:', group.columnStates);
+      console.log('  - children:', group.children);
+    });
+    
     if (!gridApi) {
       console.error('Grid API not available');
       return;
@@ -76,12 +84,28 @@ export class ColumnGroupService {
       console.log('[ColumnGroupService] Verifying applied column defs:');
       appliedDefs?.forEach((def: any, index: number) => {
         if (def.children) {
-          console.log(`[${index}] Group: ${def.headerName}`);
+          console.log(`[${index}] Group: ${def.headerName}, openByDefault: ${def.openByDefault}`);
           def.children.forEach((child: any) => {
-            console.log(`  - Child: ${child.field}, columnGroupShow: ${child.columnGroupShow}`);
+            console.log(`  - Child: ${child.field || child.colId}, columnGroupShow: ${child.columnGroupShow}`);
           });
+        } else {
+          console.log(`[${index}] Column: ${def.field || def.colId}`);
         }
       });
+      
+      // Test column group expansion behavior
+      if (columnApi) {
+        console.log('[ColumnGroupService] Testing column group states:');
+        try {
+          // Try to get column group states
+          const columnGroupStates = columnApi.getColumnGroupState?.();
+          if (columnGroupStates) {
+            console.log('Column group states:', columnGroupStates);
+          }
+        } catch (e) {
+          console.log('Could not get column group states:', e);
+        }
+      }
     }, 100);
     
     console.log('[ColumnGroupService] Column groups applied successfully');

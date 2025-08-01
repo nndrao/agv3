@@ -278,6 +278,13 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
       columnStates
     };
     
+    console.log('[ColumnGroupEditor] Creating new group:', {
+      headerName: newGroup.headerName,
+      openByDefault: newGroup.openByDefault,
+      columnStates: newGroup.columnStates,
+      children: newGroup.children
+    });
+    
     setGroups(prev => [...prev, newGroup]);
     setGroupName('');
     setSelectedColumns(new Set());
@@ -319,13 +326,22 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     
     setGroups(prev => prev.map(group => {
       if (group.groupId === selectedGroupId) {
-        return {
+        const updatedGroup = {
           ...group,
           headerName: groupName,
           children: Array.from(selectedColumns),
           openByDefault: false, // Default to collapsed to see columnGroupShow effect
           columnStates
         };
+        
+        console.log('[ColumnGroupEditor] Updating group:', {
+          headerName: updatedGroup.headerName,
+          openByDefault: updatedGroup.openByDefault,
+          columnStates: updatedGroup.columnStates,
+          children: updatedGroup.children
+        });
+        
+        return updatedGroup;
       }
       return group;
     }));
@@ -357,6 +373,24 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     onApply(groups);
     onClose();
   }, [groups, onApply, onClose]);
+  
+  // Test column group show behavior
+  const handleTestColumnGroupShow = useCallback(() => {
+    const testGroup: ColumnGroupDefinition = {
+      groupId: 'test_group_show',
+      headerName: 'Test Column Show',
+      children: ['keyColumn', 'field1', 'field2'], // Use actual column IDs from your grid
+      openByDefault: false,
+      columnStates: {
+        'keyColumn': undefined, // Always visible
+        'field1': 'open',       // Only when expanded
+        'field2': 'closed'      // Only when collapsed
+      }
+    };
+    
+    console.log('[TEST] Applying test column group:', testGroup);
+    setGroups([testGroup]);
+  }, []);
   
   // Reset all
   const handleResetAll = useCallback(() => {
