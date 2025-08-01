@@ -25,6 +25,7 @@ export const Toolbar = React.memo<ToolbarProps>(({
   onThemeToggle,
   onOpenRenameDialog,
   onOpenGridOptions,
+  onOpenColumnGroups,
   viewInstanceId
 }) => {
   return (
@@ -63,6 +64,7 @@ export const Toolbar = React.memo<ToolbarProps>(({
         onThemeToggle={onThemeToggle}
         onOpenRenameDialog={onOpenRenameDialog}
         onOpenGridOptions={onOpenGridOptions}
+        onOpenColumnGroups={onOpenColumnGroups}
         profiles={profiles}
         activeProfile={activeProfile}
         viewInstanceId={viewInstanceId}

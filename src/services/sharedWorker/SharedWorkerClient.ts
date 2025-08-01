@@ -185,7 +185,7 @@ export class SharedWorkerClient extends SharedWorkerClientBase {
     // Handle broadcast messages
     switch (response.type) {
       case 'snapshot':
-        console.log(`[SharedWorkerClient] Received snapshot for ${response.providerId}: ${response.data?.length} rows`);
+        //console.log(`[SharedWorkerClient] Received snapshot for ${response.providerId}: ${response.data?.length} rows`);
         this.emit('snapshot', {
           providerId: response.providerId,
           data: response.data || [],
@@ -194,7 +194,7 @@ export class SharedWorkerClient extends SharedWorkerClientBase {
         break;
 
       case 'update':
-        console.log(`[SharedWorkerClient] Received update for ${response.providerId}: ${response.data?.length} rows`);
+        //console.log(`[SharedWorkerClient] Received update for ${response.providerId}: ${response.data?.length} rows`);
         this.emit('update', {
           providerId: response.providerId,
           data: response.data || [],
