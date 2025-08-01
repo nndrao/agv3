@@ -23,6 +23,8 @@ import { Toolbar } from './components/Toolbar';
 import { BusyIndicator } from './components/BusyIndicator';
 import { DataGrid } from './components/DataGrid';
 import { GridOptionsEditorContent } from './gridOptions/GridOptionsEditor';
+import { ColumnGroupEditorContent } from './columnGroups/ColumnGroupEditor';
+import { ColumnGroupService } from './columnGroups/columnGroupService';
 import { OpenFinPortalDialog } from '@/components/ui/openfin-portal-dialog';
 
 // Import types and config
@@ -110,8 +112,10 @@ const DataGridStompSharedComponent = () => {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showGridOptionsDialog, setShowGridOptionsDialog] = useState(false);
   const [gridOptionsForEditor, setGridOptionsForEditor] = useState<Record<string, any> | null>(null);
+  const [showColumnGroupDialog, setShowColumnGroupDialog] = useState(false);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   const [unsavedGridOptions, setUnsavedGridOptions] = useState<Record<string, any> | null>(null);
+  const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
   
   // Stable refs for dialog state
   const gridOptionsDialogRef = useRef(false);
@@ -125,7 +129,7 @@ const DataGridStompSharedComponent = () => {
   
   // Custom hooks - order matters for dependencies
   const { providerConfig, columnDefs } = useProviderConfig(selectedProviderId);
-  const { gridApi, onGridReady, getRowId, applyProfileGridState, extractGridState, gridApiRef } = useGridState(providerConfig, null);
+  const { gridApi, columnApi, onGridReady, getRowId, applyProfileGridState, extractGridState, gridApiRef } = useGridState(providerConfig, null);
   const { connectionState, workerClient, subscribe, unsubscribe } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
   const { snapshotData, handleSnapshotData, handleRealtimeUpdate, resetSnapshot, requestSnapshot } = useSnapshotData(gridApiRef);
   const { currentViewTitle, saveViewTitle } = useViewTitle(viewInstanceId);
@@ -165,16 +169,16 @@ const DataGridStompSharedComponent = () => {
     if (!workerClient) return;
     
     const handleSnapshot = (data: { providerId: string; data: any[]; statistics?: any }) => {
-      console.log(`[DataGridStompShared] Received snapshot for provider ${data.providerId}, current provider: ${selectedProviderId}`);
+      //console.log(`[DataGridStompShared] Received snapshot for provider ${data.providerId}, current provider: ${selectedProviderId}`);
       if (data.providerId === selectedProviderId) {
-        console.log(`[DataGridStompShared] Processing snapshot: ${data.data.length} rows`);
+        //console.log(`[DataGridStompShared] Processing snapshot: ${data.data.length} rows`);
         handleSnapshotData(data.data);
       }
     };
     
     const handleUpdate = (data: { providerId: string; data: any[]; statistics?: any }) => {
       if (data.providerId === selectedProviderId) {
-        console.log(`[DataGridStompShared] Processing update: ${data.data.length} rows`);
+        //console.log(`[DataGridStompShared] Processing update: ${data.data.length} rows`);
         handleRealtimeUpdate(data.data);
       }
     };
@@ -216,8 +220,9 @@ const DataGridStompSharedComponent = () => {
     // Apply profile settings
     console.log('[DataGridStompShared] Applying profile:', profile);
     
-    // Clear any unsaved grid options when loading a profile
+    // Clear any unsaved grid options and column groups when loading a profile
     setUnsavedGridOptions(null);
+    setUnsavedColumnGroups(null);
     
     // On initial mount, apply all settings including selectedProviderId
     if (isInitialMount.current) {
@@ -263,6 +268,8 @@ const DataGridStompSharedComponent = () => {
   // Monitor columnDefs changes and update grid if ready
   useEffect(() => {
     if (columnDefs.length > 0 && gridApi) {
+      console.log('[DataGridStompShared] Column defs changed, updating grid');
+      
       // Update grid column definitions
       gridApi.setGridOption('columnDefs', columnDefs);
       
@@ -423,6 +430,9 @@ const DataGridStompSharedComponent = () => {
     // Use unsaved grid options if available, otherwise use current profile options
     const gridOptionsToSave = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
     
+    // Use unsaved column groups if available, otherwise use current profile column groups
+    const columnGroupsToSave = unsavedColumnGroups || activeProfileData?.columnGroups || [];
+    
     const currentState: DataGridStompSharedProfile = {
       name: name || activeProfileData?.name || 'Profile',
       autoLoad: true,
@@ -436,13 +446,15 @@ const DataGridStompSharedComponent = () => {
       columnState,
       filterModel,
       sortModel,
-      gridOptions: gridOptionsToSave
+      gridOptions: gridOptionsToSave,
+      columnGroups: columnGroupsToSave
     };
     
     await saveProfile(currentState, saveAsNew, name);
     
     // Clear unsaved options after successful save
     setUnsavedGridOptions(null);
+    setUnsavedColumnGroups(null);
     
     console.log('[DataGridStompShared] Profile saved successfully');
     
@@ -550,6 +562,12 @@ const DataGridStompSharedComponent = () => {
     gridOptionsDialogRef.current = true;
     setShowGridOptionsDialog(true);
   }, [unsavedGridOptions, activeProfileData?.gridOptions]);
+  
+  const handleOpenColumnGroups = useCallback(() => {
+    console.log('[DataGridStompShared] handleOpenColumnGroups called');
+    setShowColumnGroupDialog(true);
+    console.log('[DataGridStompShared] showColumnGroupDialog set to true');
+  }, []);
   const handleSaveNewProfile = useCallback(async (name: string) => {
     await saveCurrentState(true, name);
     setShowSaveDialog(false);
@@ -631,6 +649,55 @@ const DataGridStompSharedComponent = () => {
     handleGridOptionsDialogChange(false);
   }, [gridApi, toast, handleGridOptionsDialogChange, unsavedGridOptions, activeProfileData?.gridOptions]);
   
+  // Handle column groups apply
+  const handleApplyColumnGroups = useCallback((groups: any[]) => {
+    console.log('[handleApplyColumnGroups] Starting column group application');
+    console.log('- gridApi available:', !!gridApi);
+    console.log('- columnApi available:', !!columnApi);
+    console.log('- columnDefs length:', columnDefs.length);
+    console.log('- groups to apply:', groups);
+    
+    if (!gridApi) {
+      console.error('[handleApplyColumnGroups] GridAPI not available');
+      toast({
+        title: "Error",
+        description: "Grid API not available. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Pass the original column definitions to preserve all column properties
+      // Note: columnApi can be null in newer AG-Grid versions, but ColumnGroupService handles this
+      ColumnGroupService.applyColumnGroups(gridApi, columnApi, groups, columnDefs);
+      
+      // Store unsaved column groups
+      setUnsavedColumnGroups(groups);
+      
+      console.log('[handleApplyColumnGroups] Column groups applied successfully');
+      
+      // Force a grid refresh to ensure the changes are visible
+      setTimeout(() => {
+        gridApi.refreshCells({ force: true });
+      }, 100);
+      
+      toast({
+        title: "Column Groups Applied",
+        description: `${groups.length} column groups applied successfully (not saved to profile)`
+      });
+    } catch (error) {
+      console.error('[handleApplyColumnGroups] Error applying column groups:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply column groups. Please check the console for details.",
+        variant: "destructive"
+      });
+    }
+    
+    setShowColumnGroupDialog(false);
+  }, [gridApi, columnApi, columnDefs, toast]);
+  
   // Apply theme changes to grid
   useEffect(() => {
     if (gridApi) {
@@ -653,17 +720,45 @@ const DataGridStompSharedComponent = () => {
     }
   }, [activeProfileData?.gridOptions, gridApi]);
   
+  // Apply column groups after grid is ready and we have both columnDefs and groups
+  useEffect(() => {
+    console.log('[DataGridStompShared] Column groups effect check:');
+    console.log('- gridApi:', !!gridApi);
+    console.log('- columnApi:', !!columnApi);
+    console.log('- columnDefs.length:', columnDefs.length);
+    console.log('- activeProfileData?.columnGroups:', activeProfileData?.columnGroups);
+    console.log('- unsavedColumnGroups:', unsavedColumnGroups);
+    
+    // In newer AG-Grid versions, columnApi might not be available, but gridApi is sufficient
+    if (gridApi && columnDefs.length > 0) {
+      const groups = unsavedColumnGroups || activeProfileData?.columnGroups;
+      if (groups && groups.length > 0) {
+        console.log('[DataGridStompShared] Grid ready with column groups, applying...', groups);
+        // Small delay to ensure grid is fully initialized
+        const timer = setTimeout(() => {
+          console.log('[DataGridStompShared] Applying column groups now');
+          // Pass null for columnApi if not available - the service will handle it
+          ColumnGroupService.applyColumnGroups(gridApi, columnApi || null, groups, columnDefs);
+        }, 500); // Increased delay to ensure grid is ready
+        return () => clearTimeout(timer);
+      } else {
+        console.log('[DataGridStompShared] No column groups to apply');
+      }
+    }
+  }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups]);
+  
   // Memoize window options (must be before early return)
   const windowOptions = useMemo(() => ({
-    defaultWidth: 500,
-    defaultHeight: 750,
+    defaultWidth: 800,
+    defaultHeight: 700,
     defaultCentered: true,
     frame: true,
     resizable: true,
     maximizable: false,
     minimizable: true,
     alwaysOnTop: false,
-    saveWindowState: true
+    saveWindowState: false,
+    autoShow: true
   }), []);
   
   // Create theme with dynamic font - use unsaved options if available
@@ -689,7 +784,7 @@ const DataGridStompSharedComponent = () => {
         activeProfile={activeProfile}
         profilesLoading={profilesLoading}
         isSaving={isSaving}
-        hasUnsavedChanges={!!unsavedGridOptions}
+        hasUnsavedChanges={!!unsavedGridOptions || !!unsavedColumnGroups}
         onProfileLoad={loadProfile}
         onProfileSave={() => saveCurrentState()}
         onOpenSaveDialog={handleOpenSaveDialog}
@@ -700,6 +795,7 @@ const DataGridStompSharedComponent = () => {
         onThemeToggle={handleThemeToggle}
         onOpenRenameDialog={handleOpenRenameDialog}
         onOpenGridOptions={handleOpenGridOptions}
+        onOpenColumnGroups={handleOpenColumnGroups}
         viewInstanceId={viewInstanceId}
       />
       
@@ -781,6 +877,33 @@ const DataGridStompSharedComponent = () => {
           onApply={handleApplyGridOptions}
           onClose={() => handleGridOptionsDialogChange(false)}
           profileName={activeProfile?.name}
+        />
+      </OpenFinPortalDialog>
+      
+      {/* Column Groups Editor in OpenFin Window */}
+      {console.log('[DataGridStompShared] Rendering with showColumnGroupDialog:', showColumnGroupDialog)}
+      <OpenFinPortalDialog
+        open={showColumnGroupDialog}
+        onOpenChange={(open) => {
+          console.log('[DataGridStompShared] OpenFinPortalDialog onOpenChange called with:', open);
+          setShowColumnGroupDialog(open);
+        }}
+        windowName={`column-groups-${viewInstanceId}`}
+        windowOptions={windowOptions}
+        onWindowCreated={(window) => {
+          console.log('[DataGridStompShared] Column groups window created:', window);
+        }}
+      >
+        <ColumnGroupEditorContent
+          gridApi={gridApi}
+          columnApi={columnApi}
+          columnDefs={columnDefs}
+          currentGroups={unsavedColumnGroups || activeProfileData?.columnGroups}
+          onApply={handleApplyColumnGroups}
+          onClose={() => {
+            console.log('[DataGridStompShared] ColumnGroupEditorContent onClose called');
+            setShowColumnGroupDialog(false);
+          }}
         />
       </OpenFinPortalDialog>
     </div>

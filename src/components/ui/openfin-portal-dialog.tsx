@@ -9,6 +9,7 @@ interface OpenFinPortalDialogProps {
   windowOptions?: Partial<OpenFin.WindowOption>;
   children: React.ReactNode;
   onWindowCreated?: (window: OpenFin.Window) => void;
+  url?: string; // Optional URL parameter, defaults to grid-options-window.html
 }
 
 const defaultWindowOptions: Partial<OpenFin.WindowOption> = {
@@ -31,7 +32,8 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
   windowName,
   windowOptions = {},
   children,
-  onWindowCreated
+  onWindowCreated,
+  url = '/grid-options-window.html'
 }) => {
   const [portalWindow, setPortalWindow] = useState<OpenFin.Window | null>(null);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
@@ -43,8 +45,11 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
   const previousOpenRef = useRef<boolean | null>(null);
 
   useEffect(() => {
+    console.log(`[OpenFinPortalDialog ${windowName}] Effect triggered - open:`, open);
+    
     // Only run if open state actually changed
     if (previousOpenRef.current !== null && open === previousOpenRef.current) {
+      console.log(`[OpenFinPortalDialog ${windowName}] Skipping - open state unchanged`);
       return;
     }
     previousOpenRef.current = open;
@@ -52,6 +57,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
     let cleanup: (() => void) | undefined;
 
     const createWindow = async () => {
+      console.log(`[OpenFinPortalDialog ${windowName}] createWindow called - open:`, open, 'isCreating:', isCreatingRef.current);
       if (!open || isCreatingRef.current) return;
       
       // Check if we already have a window reference
@@ -70,50 +76,96 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
       isCreatingRef.current = true;
 
       try {
+        // Check if fin is available
+        if (typeof fin === 'undefined') {
+          console.error(`[OpenFinPortalDialog ${windowName}] fin is not defined!`);
+          throw new Error('OpenFin API not available');
+        }
+        
+        console.log(`[OpenFinPortalDialog ${windowName}] fin available, creating/finding window...`);
+        
         // Check if window already exists by name
         let ofWindow: OpenFin.Window;
         try {
-          ofWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name: windowName });
-          // Window exists, bring it to front
-          await ofWindow.focus();
-          await ofWindow.bringToFront();
-          windowRef.current = ofWindow;
-        } catch {
+          console.log(`[OpenFinPortalDialog ${windowName}] Trying to wrap existing window...`);
+          const existingWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name: windowName });
+          
+          // Close the existing window and create a new one
+          console.log(`[OpenFinPortalDialog ${windowName}] Found existing window, closing it...`);
+          try {
+            await existingWindow.close(true); // Force close
+          } catch (closeErr) {
+            console.log(`[OpenFinPortalDialog ${windowName}] Error closing existing window:`, closeErr);
+          }
+          
+          // Wait a bit for the window to close
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Now create a new window
+          throw new Error('Window closed, create new one');
+        } catch (wrapError) {
+          console.log(`[OpenFinPortalDialog ${windowName}] Window doesn't exist, creating new...`, wrapError);
           // Window doesn't exist, create it
+          const windowUrl = getViewUrl(url);
           const finalOptions: OpenFin.WindowOption = {
             ...defaultWindowOptions,
             ...windowOptions,
             name: windowName,
-            url: getViewUrl('/grid-options-window.html'),
+            url: windowUrl,
           };
-
+          
+          console.log(`[OpenFinPortalDialog ${windowName}] Window URL:`, windowUrl);
+          console.log(`[OpenFinPortalDialog ${windowName}] Creating window with options:`, finalOptions);
           ofWindow = await fin.Window.create(finalOptions);
           windowRef.current = ofWindow;
+          console.log(`[OpenFinPortalDialog ${windowName}] Window created successfully`);
         }
 
         // Wait for the window to be ready
-        await new Promise<void>((resolve) => {
+        console.log(`[OpenFinPortalDialog ${windowName}] Waiting for window to be ready...`);
+        await new Promise<void>((resolve, reject) => {
+          let attempts = 0;
+          const maxAttempts = 100; // 5 seconds max
+          
           const checkReady = async () => {
+            attempts++;
             try {
               const win = await ofWindow.getWebWindow();
-              if (win && win.document && win.document.readyState === 'complete') {
+              const readyState = win?.document?.readyState;
+              console.log(`[OpenFinPortalDialog ${windowName}] Attempt ${attempts}: readyState = ${readyState}`);
+              
+              if (win && win.document && readyState === 'complete') {
+                console.log(`[OpenFinPortalDialog ${windowName}] Window is ready!`);
                 resolve();
+              } else if (attempts >= maxAttempts) {
+                console.error(`[OpenFinPortalDialog ${windowName}] Window failed to become ready after ${maxAttempts} attempts`);
+                reject(new Error('Window failed to become ready'));
               } else {
                 setTimeout(checkReady, 50);
               }
-            } catch {
-              setTimeout(checkReady, 50);
+            } catch (err) {
+              console.log(`[OpenFinPortalDialog ${windowName}] Error checking window state:`, err);
+              if (attempts >= maxAttempts) {
+                reject(err);
+              } else {
+                setTimeout(checkReady, 50);
+              }
             }
           };
           checkReady();
         });
 
         const win = await ofWindow.getWebWindow();
+        console.log(`[OpenFinPortalDialog ${windowName}] Got window, looking for root element...`);
         const rootElement = win.document.getElementById('grid-options-root');
         
         if (!rootElement) {
+          console.error(`[OpenFinPortalDialog ${windowName}] Root element 'grid-options-root' not found!`);
+          console.log(`[OpenFinPortalDialog ${windowName}] Window document body:`, win.document.body.innerHTML);
           throw new Error('Portal root element not found');
         }
+        
+        console.log(`[OpenFinPortalDialog ${windowName}] Found root element!`);
 
         // Clear loading message
         rootElement.innerHTML = '';
@@ -246,7 +298,11 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
           }
         };
       } catch (error) {
-        console.error('Failed to create OpenFin portal window:', error);
+        console.error(`[OpenFinPortalDialog ${windowName}] Failed to create window:`, error);
+        console.error(`[OpenFinPortalDialog ${windowName}] Error details:`, {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
         onOpenChange(false);
       } finally {
         isCreatingRef.current = false;
@@ -275,7 +331,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
     return () => {
       if (cleanup) cleanup();
     };
-  }, [open, windowName, onOpenChange, onWindowCreated]); // Removed dependencies that cause re-runs
+  }, [open, windowName, onOpenChange, onWindowCreated, url]); // Removed dependencies that cause re-runs
 
   // Update theme in portal window when parent theme changes
   useEffect(() => {
@@ -305,9 +361,11 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
   }, [portalWindow, portalRoot]);
 
   if (!open || !portalRoot || !isReady) {
+    console.log(`[OpenFinPortalDialog ${windowName}] Not rendering portal - open:`, open, 'portalRoot:', !!portalRoot, 'isReady:', isReady);
     return null;
   }
 
+  console.log(`[OpenFinPortalDialog ${windowName}] Rendering portal to window`);
   return ReactDOM.createPortal(children, portalRoot);
 };
 

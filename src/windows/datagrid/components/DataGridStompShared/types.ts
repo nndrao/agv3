@@ -17,6 +17,7 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   filterModel?: any;
   sortModel?: any;
   groupModel?: any;
+  columnGroups?: any[]; // Column group definitions
   
   // UI preferences
   sidebarVisible: boolean;
@@ -103,6 +104,7 @@ export interface ToolbarProps {
   onThemeToggle: () => void;
   onOpenRenameDialog: () => void;
   onOpenGridOptions: () => void;
+  onOpenColumnGroups: () => void;
   viewInstanceId: string;
 }
 

@@ -1,10 +1,12 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { GridApi, GridReadyEvent } from 'ag-grid-community';
+import { GridApi, GridReadyEvent, ColumnApi } from 'ag-grid-community';
 import { DataGridStompSharedProfile, RowData } from '../types';
 
 interface UseGridStateResult {
   gridApi: GridApi<RowData> | null;
+  columnApi: ColumnApi | null;
   gridApiRef: React.MutableRefObject<GridApi<RowData> | null>;
+  columnApiRef: React.MutableRefObject<ColumnApi | null>;
   onGridReady: (params: GridReadyEvent<RowData>) => void;
   getRowId: (params: any) => string;
   applyProfileGridState: (profile: DataGridStompSharedProfile | null) => void;
@@ -31,6 +33,7 @@ export function useGridState(
   activeProfileData: DataGridStompSharedProfile | null
 ): UseGridStateResult {
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
+  const columnApiRef = useRef<ColumnApi | null>(null);
   
   // Memoized getRowId function
   const getRowId = useCallback((params: any) => {
@@ -95,6 +98,7 @@ export function useGridState(
   // Grid ready handler
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
     gridApiRef.current = params.api;
+    columnApiRef.current = params.columnApi || null;
     
     // Apply saved state if available and valid
     applyProfileGridState(activeProfileData);
@@ -121,7 +125,9 @@ export function useGridState(
   
   return {
     gridApi: gridApiRef.current,
+    columnApi: columnApiRef.current,
     gridApiRef,
+    columnApiRef,
     onGridReady,
     getRowId,
     applyProfileGridState,
