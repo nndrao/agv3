@@ -174,6 +174,127 @@ See: `/mnt/c/Users/developer/Documents/provider-pool-implementation-plan.md`
 
 ---
 
+## Session Updates (2025-08-01)
+
+### 1. Grid Options Performance Optimization
+**Problem**: Apply Changes button taking over 3 seconds to save 200 options
+**Solution**: 
+- Implemented batch updates using `requestAnimationFrame`
+- Only update options that actually changed
+- Added performance timing logs
+- Reduced update time from 3+ seconds to milliseconds
+
+```typescript
+// Performance optimization in handleApplyGridOptions
+const changedOptions: Record<string, any> = {};
+Object.entries(newOptions).forEach(([key, value]) => {
+  if (key !== 'font' && currentOptions[key] !== value) {
+    changedOptions[key] = value;
+  }
+});
+
+requestAnimationFrame(() => {
+  Object.entries(changedOptions).forEach(([key, value]) => {
+    gridApi.setGridOption(key, value);
+  });
+});
+```
+
+### 2. Column Group Editor Implementation
+**Feature**: Complete column group editor based on specification
+**Components Created**:
+- `ColumnGroupEditor.tsx` - Main editor component
+- `ColumnGroupService.ts` - Service for applying groups to AG-Grid
+- `types.ts` - TypeScript interfaces
+
+**Key Features**:
+- Two-panel layout (groups list and column selection)
+- Create/update/delete column groups
+- Column visibility control (open/closed/default states)
+- Proper state management
+- Integration with AG-Grid API
+
+### 3. Column Group Persistence
+**Feature**: Save column groups with profile
+**Implementation**:
+- Added `columnGroups` to `DataGridStompSharedProfile` interface
+- Added `unsavedColumnGroups` state for temporary changes
+- Column groups saved when profile is saved
+- Column groups loaded and applied when profile loads
+
+### 4. Column Group Show Implementation
+**Feature**: Control column visibility based on group expand/collapse state
+**Implementation**:
+- Added `columnStates` to `ColumnGroupDefinition`:
+  ```typescript
+  columnStates?: Record<string, 'open' | 'closed' | undefined>;
+  ```
+- Applied `columnGroupShow` attribute to columns:
+  - `'open'` - Column only visible when group is expanded
+  - `'closed'` - Column only visible when group is collapsed  
+  - `undefined` - Column always visible
+
+### 5. Bug Fixes
+
+#### a. Column Groups Not Applying on Load
+**Problem**: Groups saved but not applied when component loads
+**Solution**: 
+- Added effect to apply column groups after grid is ready
+- Handle null `columnApi` for newer AG-Grid versions
+- Added 500ms delay to ensure grid initialization
+
+#### b. Dropdown Portal Issue
+**Problem**: Select dropdowns opening in parent window
+**Solution**: Created and used `NoPortalSelect` component that renders dropdowns locally
+
+#### c. Column Groups Dialog Not Opening
+**Problem**: Menu click didn't open dialog
+**Solution**: 
+- Fixed OpenFinPortalDialog to handle existing windows in bad state
+- Added force close for stuck windows
+- Added timeout for window ready check
+
+#### d. Layout Issues
+**Problem**: Poor layout in column group editor (from screenshot)
+**Solution**:
+- Fixed flexbox layout structure
+- Added proper scrollable areas
+- Made sidebar wider
+- Positioned buttons correctly
+
+### 6. Enhanced Debugging
+**Added Extensive Logging**:
+- Column group creation and updates
+- Column definitions before and after applying
+- Group expand/collapse behavior testing
+- API method availability checks
+- Detailed verification of applied configurations
+
+### 7. Testing Utilities
+**Created Test Helpers**:
+- `testColumnGroupShow.ts` - Test configuration demonstrator
+- Automatic expand/collapse testing after applying groups
+- Console verification of column visibility states
+
+### 8. UI/UX Improvements
+- Changed from checkboxes to proper Select components for column options
+- Added visual feedback for selected columns
+- Improved button placement and spacing
+- Added "Clear All" functionality
+- Better error messages and toasts
+
+### 9. State Management Improvements
+- Separated saved vs unsaved changes for both grid options and column groups
+- Proper cleanup when switching profiles
+- Consistent state updates across all operations
+
+### 10. API Compatibility
+- Added checks for both `columnApi` and `gridApi` methods
+- Handle AG-Grid version differences gracefully
+- Fallback approaches for missing methods
+
+---
+
 ## Recent Updates (2025-07-15)
 
 ### End Token Detection Enhancement
