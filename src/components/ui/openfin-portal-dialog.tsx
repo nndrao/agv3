@@ -10,6 +10,7 @@ interface OpenFinPortalDialogProps {
   children: React.ReactNode;
   onWindowCreated?: (window: OpenFin.Window) => void;
   url?: string; // Optional URL parameter, defaults to grid-options-window.html
+  rootElementId?: string; // Optional root element ID, defaults to 'grid-options-root'
 }
 
 const defaultWindowOptions: Partial<OpenFin.WindowOption> = {
@@ -33,7 +34,8 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
   windowOptions = {},
   children,
   onWindowCreated,
-  url = '/grid-options-window.html'
+  url = '/grid-options-window.html',
+  rootElementId = 'grid-options-root'
 }) => {
   const [portalWindow, setPortalWindow] = useState<OpenFin.Window | null>(null);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
@@ -156,13 +158,13 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
         });
 
         const win = await ofWindow.getWebWindow();
-        console.log(`[OpenFinPortalDialog ${windowName}] Got window, looking for root element...`);
-        const rootElement = win.document.getElementById('grid-options-root');
+        console.log(`[OpenFinPortalDialog ${windowName}] Got window, looking for root element with ID: ${rootElementId}`);
+        const rootElement = win.document.getElementById(rootElementId);
         
         if (!rootElement) {
-          console.error(`[OpenFinPortalDialog ${windowName}] Root element 'grid-options-root' not found!`);
+          console.error(`[OpenFinPortalDialog ${windowName}] Root element '${rootElementId}' not found!`);
           console.log(`[OpenFinPortalDialog ${windowName}] Window document body:`, win.document.body.innerHTML);
-          throw new Error('Portal root element not found');
+          throw new Error(`Portal root element '${rootElementId}' not found`);
         }
         
         console.log(`[OpenFinPortalDialog ${windowName}] Found root element!`);
@@ -204,7 +206,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
             margin: 0;
             padding: 0;
           }
-          #grid-options-root {
+          #${rootElementId} {
             height: 100%;
             overflow: hidden;
           }
@@ -331,7 +333,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
     return () => {
       if (cleanup) cleanup();
     };
-  }, [open, windowName, onOpenChange, onWindowCreated, url]); // Removed dependencies that cause re-runs
+  }, [open, windowName, onOpenChange, onWindowCreated, url, rootElementId]); // Removed dependencies that cause re-runs
 
   // Update theme in portal window when parent theme changes
   useEffect(() => {

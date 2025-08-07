@@ -25,7 +25,11 @@ import { DataGrid } from './components/DataGrid';
 import { GridOptionsEditorContent } from './gridOptions/GridOptionsEditor';
 import { ColumnGroupEditorContent } from './columnGroups/ColumnGroupEditor';
 import { ColumnGroupService } from './columnGroups/columnGroupService';
+import { ConditionalFormattingEditorContent } from './conditionalFormatting/ConditionalFormattingEditorContent';
 import { OpenFinPortalDialog } from '@/components/ui/openfin-portal-dialog';
+import { ExpressionEditorDialogControlled } from '@/components/expression-editor/ExpressionEditorDialogControlled';
+import { GridConfigurationBus } from '@/services/iab/GridConfigurationBus';
+import { ConditionalRule } from '@/components/conditional-formatting/types';
 
 // Import types and config
 import { DataGridStompSharedProfile, ProviderConfig } from './types';
@@ -100,6 +104,38 @@ const createThemeWithFont = (fontFamily?: string) => {
     );
 };
 
+// Simple expression evaluator for conditional formatting
+function evaluateExpression(expression: string, context: any): boolean {
+  try {
+    // Replace variable references with actual values
+    let evaluableExpression = expression;
+    
+    // Replace value references
+    evaluableExpression = evaluableExpression.replace(/\bvalue\b/g, JSON.stringify(context.value));
+    
+    // Replace column references (e.g., data.columnName)
+    evaluableExpression = evaluableExpression.replace(/data\.(\w+)/g, (match, columnName) => {
+      return JSON.stringify(context.data[columnName]);
+    });
+    
+    // Replace rowIndex
+    evaluableExpression = evaluableExpression.replace(/\browIndex\b/g, context.rowIndex);
+    
+    // Basic safety check - only allow certain characters and operators
+    if (!/^[0-9a-zA-Z\s\.\-+*/<>=!&|()'"]+$/.test(evaluableExpression)) {
+      console.warn('Expression contains unsafe characters:', evaluableExpression);
+      return false;
+    }
+    
+    // Evaluate the expression
+    // Note: In production, use a proper expression parser/evaluator
+    return Function('"use strict"; return (' + evaluableExpression + ')')();
+  } catch (error) {
+    console.error('Error evaluating expression:', expression, error);
+    return false;
+  }
+}
+
 const DataGridStompSharedComponent = () => {
   const { toast } = useToast();
   
@@ -113,9 +149,11 @@ const DataGridStompSharedComponent = () => {
   const [showGridOptionsDialog, setShowGridOptionsDialog] = useState(false);
   const [gridOptionsForEditor, setGridOptionsForEditor] = useState<Record<string, any> | null>(null);
   const [showColumnGroupDialog, setShowColumnGroupDialog] = useState(false);
+  const [showExpressionEditor, setShowExpressionEditor] = useState(false);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   const [unsavedGridOptions, setUnsavedGridOptions] = useState<Record<string, any> | null>(null);
   const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
+  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalRule[]>([]);
   
   // Stable refs for dialog state
   const gridOptionsDialogRef = useRef(false);
@@ -163,6 +201,128 @@ const DataGridStompSharedComponent = () => {
       document.title = instanceName;
     }
   }, [viewInstanceId]);
+  
+  // Handle conditional formatting rules apply
+  const handleApplyConditionalFormatting = useCallback((rules: ConditionalRule[]) => {
+    console.log('[handleApplyConditionalFormatting] Applying rules:', rules);
+    
+    if (!gridApi) {
+      console.error('[handleApplyConditionalFormatting] GridAPI not available');
+      toast({
+        title: "Error",
+        description: "Grid API not available. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Store the rules
+      setConditionalFormattingRules(rules);
+      
+      // Get current column definitions
+      const currentColDefs = gridApi.getColumnDefs() || [];
+      
+      // Sort rules by priority (lower number = higher priority)
+      const sortedRules = [...rules].sort((a, b) => a.priority - b.priority);
+      
+      // Update column definitions with conditional formatting
+      const updatedColDefs = currentColDefs.map(colDef => {
+        const newColDef = { ...colDef };
+        
+        // Find rules that apply to this column
+        const applicableRules = sortedRules.filter(rule => {
+          if (!rule.enabled) return false;
+          // Check if rule applies to this specific column
+          if (rule.scope.target === 'cell' && rule.scope.applyToColumns) {
+            return rule.scope.applyToColumns.includes(colDef.field);
+          }
+          // If no specific columns specified, apply to all
+          return !rule.scope.applyToColumns || rule.scope.applyToColumns.length === 0;
+        });
+        
+        if (applicableRules.length > 0) {
+          // Create cellClass function that evaluates rules
+          newColDef.cellClass = (params: any) => {
+            const classes: string[] = [];
+            
+            for (const rule of applicableRules) {
+              try {
+                // Create context for expression evaluation
+                const context = {
+                  value: params.value,
+                  data: params.data,
+                  rowIndex: params.rowIndex,
+                  column: params.column.getColId()
+                };
+                
+                // Evaluate expression
+                const result = evaluateExpression(rule.expression, context);
+                
+                if (result && rule.formatting.cellClass) {
+                  if (Array.isArray(rule.formatting.cellClass)) {
+                    classes.push(...rule.formatting.cellClass);
+                  } else {
+                    classes.push(rule.formatting.cellClass);
+                  }
+                }
+              } catch (error) {
+                console.error(`Error evaluating rule ${rule.name}:`, error);
+              }
+            }
+            
+            return classes.join(' ');
+          };
+          
+          // Create cellStyle function that evaluates rules
+          newColDef.cellStyle = (params: any) => {
+            let combinedStyle = {};
+            
+            for (const rule of applicableRules) {
+              try {
+                // Create context for expression evaluation
+                const context = {
+                  value: params.value,
+                  data: params.data,
+                  rowIndex: params.rowIndex,
+                  column: params.column.getColId()
+                };
+                
+                // Evaluate expression
+                const result = evaluateExpression(rule.expression, context);
+                
+                if (result && rule.formatting.style) {
+                  combinedStyle = { ...combinedStyle, ...rule.formatting.style };
+                }
+              } catch (error) {
+                console.error(`Error evaluating rule ${rule.name}:`, error);
+              }
+            }
+            
+            return combinedStyle;
+          };
+        }
+        
+        return newColDef;
+      });
+      
+      // Apply updated column definitions
+      gridApi.setGridOption('columnDefs', updatedColDefs);
+      
+      toast({
+        title: "Conditional Formatting Applied",
+        description: `${rules.length} formatting rules applied successfully`
+      });
+    } catch (error) {
+      console.error('[handleApplyConditionalFormatting] Error applying rules:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply conditional formatting rules.",
+        variant: "destructive"
+      });
+    }
+    
+  }, [gridApi, toast]);
   
   // Set up event listeners for SharedWorker messages
   useEffect(() => {
@@ -264,6 +424,56 @@ const DataGridStompSharedComponent = () => {
     onProfileChange: handleProfileChange,
     debug: false
   });
+  
+  // Initialize IAB configuration bus
+  useEffect(() => {
+    const initIAB = async () => {
+      try {
+        const bus = GridConfigurationBus.getInstance();
+        await bus.initializeAsProvider(viewInstanceId);
+        
+        // Register initial configuration
+        bus.registerGridConfiguration(viewInstanceId, {
+          gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
+          columnDefs: columnDefs || [],
+          profile: activeProfileData,
+          conditionalFormatting: conditionalFormattingRules
+        });
+        
+        // Listen for conditional formatting updates
+        const handleConfigUpdate = () => {
+          const config = bus.getConfiguration(viewInstanceId);
+          if (config?.conditionalFormatting) {
+            setConditionalFormattingRules(config.conditionalFormatting);
+            // Apply rules to the grid
+            handleApplyConditionalFormatting(config.conditionalFormatting);
+          }
+        };
+        
+        // Note: In a real implementation, we'd set up a listener for config changes
+        // For now, the conditional formatting app will close after applying rules
+      } catch (error) {
+        console.error('[DataGridStompShared] Failed to initialize IAB:', error);
+      }
+    };
+    
+    initIAB();
+    
+    return () => {
+      GridConfigurationBus.getInstance().destroy();
+    };
+  }, [viewInstanceId, handleApplyConditionalFormatting]);
+  
+  // Update IAB configuration when relevant state changes
+  useEffect(() => {
+    const bus = GridConfigurationBus.getInstance();
+    bus.updateGridConfiguration(viewInstanceId, {
+      gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
+      columnDefs: columnDefs || [],
+      profile: activeProfileData,
+      conditionalFormatting: conditionalFormattingRules
+    });
+  }, [viewInstanceId, gridOptionsForEditor, columnDefs, activeProfileData, conditionalFormattingRules]);
   
   // Monitor columnDefs changes and update grid if ready
   useEffect(() => {
@@ -568,6 +778,26 @@ const DataGridStompSharedComponent = () => {
     setShowColumnGroupDialog(true);
     console.log('[DataGridStompShared] showColumnGroupDialog set to true');
   }, []);
+  
+  const handleOpenExpressionEditor = useCallback(() => {
+    console.log('[DataGridStompShared] handleOpenExpressionEditor called');
+    setShowExpressionEditor(true);
+  }, []);
+  
+  const handleOpenConditionalFormatting = useCallback(async () => {
+    console.log('[DataGridStompShared] handleOpenConditionalFormatting called');
+    try {
+      await WindowManager.openConditionalFormatting(viewInstanceId);
+    } catch (error) {
+      console.error('[DataGridStompShared] Failed to open conditional formatting:', error);
+      toast({
+        title: "Error",
+        description: "Failed to open conditional formatting dialog",
+        variant: "destructive"
+      });
+    }
+  }, [viewInstanceId, toast]);
+  
   const handleSaveNewProfile = useCallback(async (name: string) => {
     await saveCurrentState(true, name);
     setShowSaveDialog(false);
@@ -725,6 +955,7 @@ const DataGridStompSharedComponent = () => {
     setShowColumnGroupDialog(false);
   }, [gridApi, columnApi, columnDefs, toast]);
   
+  
   // Apply theme changes to grid
   useEffect(() => {
     if (gridApi) {
@@ -787,6 +1018,20 @@ const DataGridStompSharedComponent = () => {
     saveWindowState: false,
     autoShow: true
   }), []);
+
+  // Window options for conditional formatting dialog - needs more space
+  const conditionalFormattingWindowOptions = useMemo(() => ({
+    defaultWidth: 1400,
+    defaultHeight: 900,
+    defaultCentered: true,
+    frame: true,
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
+    alwaysOnTop: false,
+    saveWindowState: false,
+    autoShow: true
+  }), []);
   
   // Create theme with dynamic font - use unsaved options if available
   const gridTheme = useMemo(() => {
@@ -823,6 +1068,8 @@ const DataGridStompSharedComponent = () => {
         onOpenRenameDialog={handleOpenRenameDialog}
         onOpenGridOptions={handleOpenGridOptions}
         onOpenColumnGroups={handleOpenColumnGroups}
+        onOpenExpressionEditor={handleOpenExpressionEditor}
+        onOpenConditionalFormatting={handleOpenConditionalFormatting}
         viewInstanceId={viewInstanceId}
       />
       
@@ -933,6 +1180,24 @@ const DataGridStompSharedComponent = () => {
           }}
         />
       </OpenFinPortalDialog>
+      
+      {/* Expression Editor Dialog */}
+      <ExpressionEditorDialogControlled 
+        open={showExpressionEditor}
+        onOpenChange={setShowExpressionEditor}
+        mode="conditional"
+        availableColumns={columnDefs}
+        onSave={(expression, mode) => {
+          // Handle expression save - apply to selected columns
+          console.log('Expression saved:', expression, 'Mode:', mode);
+          toast({
+            title: "Expression Saved",
+            description: `Expression saved in ${mode} mode`
+          });
+        }}
+      />
+      
+      {/* Conditional Formatting is now opened via IAB in a separate window */}
     </div>
   );
 };

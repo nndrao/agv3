@@ -33,8 +33,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:openfin.zendesk.com)",
       "Bash(true)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
-  }
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

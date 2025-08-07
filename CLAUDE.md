@@ -590,3 +590,132 @@ src/windows/datagrid/components/DataGridStompShared/
 ```
 
 This refactoring will make the component much simpler, more maintainable, and MORE performant than the current implementation.
+
+---
+
+## AG-Grid Column Customization Dialog (2025-08-01)
+
+### Overview
+Comprehensive plan for implementing an advanced AG-Grid column customization dialog system with extensive customization capabilities.
+
+### Key Features
+- Multi-dialog architecture with main dialog and specialized sub-dialogs
+- Comprehensive customization options for columns including:
+  - Cell renderers and value formatters
+  - Cell editors with validation
+  - Filters and filter parameters
+  - Cell and header styling (colors, fonts, borders, alignment)
+  - Conditional formatting rules
+  - Calculated columns with formulas
+  - Column-level permissions
+  - Named filter queries
+- Minimal storage principle - only saves customizations that differ from defaults
+- Performance optimizations including lazy loading and virtualization
+
+### Documentation Reference
+See: `/mnt/c/Users/developer/Documents/projects/agv3/documents/AG-GRID_COLUMN_CUSTOMIZATION_DIALOG_PLAN.md`
+
+This comprehensive document includes:
+- Detailed tab specifications (General, Display, Styling, Editing, Filtering)
+- Advanced sub-dialog specifications
+- Data storage strategy
+- Implementation recommendations
+- Performance considerations
+
+---
+
+## Conditional Formatting Dialog Improvements (2025-08-04)
+
+### Overview
+Major redesign and enhancement of the conditional formatting dialog to create a professional, sophisticated interface with improved UX.
+
+### Key Improvements
+
+#### 1. Complete UI Redesign
+- **Layout**: Implemented resizable panels using react-resizable-panels
+- **Visual Hierarchy**: Professional spacing and consistent design patterns
+- **Responsive Design**: Adapts to different screen sizes
+- **Theme Compatibility**: Works seamlessly with light/dark themes
+
+#### 2. Expression Editor Enhancements
+- **Keyboard Shortcuts**: 
+  - Ctrl+Shift+C - Show only columns in IntelliSense
+  - Ctrl+Shift+F - Show only functions
+  - Ctrl+Shift+V - Show only variables
+  - Ctrl+Shift+O - Show only operators
+- **Responsive Width**: Adapts layout based on container width
+- **Removed Sidebar**: Replaced with popover buttons for examples
+- **Full Container Support**: Now fills parent container properly
+
+#### 3. Rule List Improvements
+- **Minimalist Design**: Simple rule items showing only title
+- **Tooltip Information**: All details shown on hover
+- **Modern Icons**: Replaced with subtle monochromatic indicators
+- **Clean Interactions**: Smooth hover and selection states
+
+#### 4. Multi-Select Column Selector
+- **Searchable**: Filter columns by name
+- **Cell-Only Rules**: Select specific columns for rule application
+- **Visual Feedback**: Clear indication of selected columns
+
+#### 5. Professional Styling
+- **Custom CSS**: Comprehensive styles in conditionalFormatting.css
+- **Consistent Spacing**: Professional layout throughout
+- **Modern Icons**: Updated all icons to be sophisticated
+- **Smooth Animations**: Subtle transitions and effects
+
+### Implementation Details
+
+#### Files Modified
+1. `ConditionalFormattingApp.tsx` - Fixed imports, set window title
+2. `ConditionalFormattingEditorContent.tsx` - Added resizable panels
+3. `RuleListItem.tsx` - Complete redesign with minimalist approach
+4. `ExpressionEditor.tsx` - Made fully responsive
+5. `GridConfigurationBus.ts` - Fixed channel cleanup
+6. `RuleEditorSimplified.tsx` - Added column selector
+7. `conditionalFormatting.css` - Professional styling
+
+#### New Components
+- `MultiSelect` - Searchable multi-select component
+- `FilteredCompletionProvider` - IntelliSense filtering
+
+### Technical Improvements
+1. **Fixed Temporal Dead Zone Errors**: Reordered code execution
+2. **Fixed JSX Structure**: Corrected missing closing tags
+3. **Fixed Runtime Errors**: Handled undefined callbacks
+4. **Fixed Channel Cleanup**: Proper destroy/disconnect handling
+5. **Fixed Portal Issues**: Created NoPortalSelect components
+
+### UI/UX Enhancements
+1. **Rule Item Design**:
+   - Minimal display with just title and status
+   - Comprehensive tooltip with all information
+   - Theme-aware colors and styling
+   - Subtle monochromatic icons (Minus icon)
+
+2. **Expression Editor**:
+   - Responsive breakpoints (400px, 600px, 900px)
+   - Dynamic Monaco Editor options
+   - Adaptive UI elements
+   - Smart feature toggling
+
+3. **Dialog Layout**:
+   - Resizable panels for flexible workspace
+   - Minimum 220px width for sidebar
+   - Professional button spacing
+   - Clean visual hierarchy
+
+### Performance Optimizations
+1. **ResizeObserver**: Real-time container size detection
+2. **Automatic Layout**: Monaco Editor auto-adjusts
+3. **Smart Features**: Resource-intensive features disabled on small screens
+4. **Memoized Components**: Reduced unnecessary re-renders
+
+### Current State
+The conditional formatting dialog is now:
+- ✅ Professional and sophisticated
+- ✅ Fully responsive
+- ✅ Theme-compatible
+- ✅ Minimalist and elegant
+- ✅ Feature-complete with keyboard shortcuts
+- ✅ Optimized for performance

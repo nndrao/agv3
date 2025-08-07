@@ -8,6 +8,8 @@ import { DataGridStomp, DataGridStompShared } from "./windows/datagrid/component
 import { App as DatasourceConfigApp } from './windows/datasource-config/App';
 import { App as ProviderStatusApp } from './windows/provider-status/App';
 import { RenameDialogApp } from './windows/rename-dialog/RenameDialogApp';
+import { DialogDemo } from '@/components/expression-editor/DialogDemo';
+import { ConditionalFormattingApp } from './windows/conditional-formatting/ConditionalFormattingApp';
 
 // Register AG-Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -38,6 +40,12 @@ function App() {
         <Route path="/datasource-config" element={<DatasourceConfigApp />} />
         <Route path="/provider-status" element={<ProviderStatusApp />} />
         <Route path="/rename-dialog" element={<RenameDialogApp />} />
+        
+        {/* Expression Editor Demo */}
+        <Route path="/expression-editor" element={<DialogDemo />} />
+        
+        {/* Conditional Formatting */}
+        <Route path="/conditional-formatting" element={<ConditionalFormattingApp />} />
       </Routes>
     </BrowserRouter>
   );

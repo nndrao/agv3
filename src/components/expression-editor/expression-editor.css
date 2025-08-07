@@ -1,0 +1,129 @@
+/* Expression Editor Specific Styles */
+
+/* Main container - ensure full height and width usage */
+.expression-editor-container {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Ensure tabs content takes full height */
+.expression-editor-tabs [role="tabpanel"][data-state="active"] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Fix resizable panel handle visibility */
+.expression-editor-resizable [data-panel-group-direction="horizontal"] > [data-panel-resize-handle-enabled="true"] {
+  background-color: hsl(var(--border));
+  width: 1px;
+  position: relative;
+}
+
+.expression-editor-resizable [data-panel-resize-handle-enabled="true"]:hover {
+  background-color: hsl(var(--primary));
+}
+
+.expression-editor-resizable [data-panel-resize-handle-enabled="true"][data-resize-handle-active="true"] {
+  background-color: hsl(var(--primary));
+}
+
+/* Monaco Editor Container - Enhanced for responsiveness */
+.monaco-editor-container {
+  height: 100%;
+  width: 100%;
+  min-height: 100px;
+}
+
+/* Responsive Monaco Editor Adjustments */
+@media (max-width: 600px) {
+  .monaco-editor .margin {
+    width: 20px !important;
+  }
+  
+  .monaco-editor .line-numbers {
+    font-size: 11px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .monaco-editor .margin {
+    width: 10px !important;
+  }
+  
+  .monaco-editor .line-numbers {
+    display: none !important;
+  }
+}
+
+/* Ensure scroll areas fill their containers */
+.expression-editor-scroll-area {
+  height: 100%;
+  width: 100%;
+}
+
+.expression-editor-scroll-area > [data-radix-scroll-area-viewport] {
+  height: 100%;
+  width: 100%;
+}
+
+/* Fix tab content overflow */
+.expression-editor-tab-content {
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure dialog content fills available space properly */
+.expression-editor-dialog-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+/* Fix bottom panel tabs */
+.expression-editor-bottom-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.expression-editor-bottom-tabs [role="tabpanel"] {
+  flex: 1;
+  overflow: auto;
+  width: 100%;
+}
+
+/* Responsive adjustments for compact mode */
+@media (max-width: 600px) {
+  .expression-editor-container .expression-editor-bottom-tabs [role="tabpanel"] {
+    font-size: 12px;
+    padding: 8px;
+  }
+  
+  .expression-editor-container .expression-editor-bottom-tabs [role="tablist"] {
+    gap: 0;
+  }
+  
+  .expression-editor-container .expression-editor-bottom-tabs [role="tab"] {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
+
+/* Popover responsive adjustments */
+@media (max-width: 600px) {
+  .expression-editor-container [data-radix-popover-content] {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 100px);
+  }
+}

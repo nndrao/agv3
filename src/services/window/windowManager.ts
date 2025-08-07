@@ -360,6 +360,58 @@ export class WindowManager {
       .filter(instance => instance.type === 'DataGridStomp');
   }
   
+  static async openConditionalFormatting(viewId: string): Promise<any> {
+    const windowName = `conditional-formatting-${viewId}`;
+    
+    // Check if window already exists
+    try {
+      const existingWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name: windowName });
+      if (existingWindow) {
+        await existingWindow.focus();
+        await existingWindow.bringToFront();
+        return existingWindow;
+      }
+    } catch (error) {
+      // Window doesn't exist, create it
+    }
+    
+    // Create a window for conditional formatting
+    const window = await fin.Window.create({
+      name: windowName,
+      url: getViewUrl(`/conditional-formatting?viewId=${viewId}`),
+      title: 'Conditional Formatting Rules',
+      defaultWidth: 1000,
+      defaultHeight: 700,
+      defaultCentered: true,
+      autoShow: true,
+      frame: true,
+      contextMenu: true,
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      alwaysOnTop: false,
+      saveWindowState: false,
+      customData: {
+        windowType: 'dialog',
+        viewId
+      }
+    });
+    
+    // Store window reference
+    this.windows.set(windowName, window);
+    
+    // Track window closure
+    window.on('closed', () => {
+      this.windows.delete(windowName);
+    });
+    
+    // Focus the window
+    await window.focus();
+    await window.bringToFront();
+    
+    return window;
+  }
+  
   static registerViewInstance(id: string, name: string, type: string): void {
     this.loadViewInstances();
     

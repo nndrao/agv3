@@ -105,6 +105,8 @@ export interface ToolbarProps {
   onOpenRenameDialog: () => void;
   onOpenGridOptions: () => void;
   onOpenColumnGroups: () => void;
+  onOpenExpressionEditor?: () => void;
+  onOpenConditionalFormatting?: () => void;
   viewInstanceId: string;
 }
 
