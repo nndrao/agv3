@@ -182,7 +182,14 @@ export function registerExpressionLanguage(monaco: Monaco) {
       { token: 'string', foreground: 'a31515' },
       { token: 'comment', foreground: '008000', fontStyle: 'italic' },
     ],
-    colors: {}
+    colors: {
+      'editorSuggestWidget.background': '#ffffff',
+      'editorSuggestWidget.border': '#c8c8c8', 
+      'editorSuggestWidget.foreground': '#1e1e1e',
+      'editorSuggestWidget.selectedBackground': '#e4e6f1',
+      'editorSuggestWidget.selectedForeground': '#000000',
+      'editorSuggestWidget.highlightForeground': '#0066cc'
+    }
   });
 
   monaco.editor.defineTheme('expression-theme-dark', {
@@ -198,6 +205,13 @@ export function registerExpressionLanguage(monaco: Monaco) {
       { token: 'string', foreground: 'CE9178' },
       { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
     ],
-    colors: {}
+    colors: {
+      'editorSuggestWidget.background': '#252526',
+      'editorSuggestWidget.border': '#454545',
+      'editorSuggestWidget.foreground': '#d4d4d4',
+      'editorSuggestWidget.selectedBackground': '#094771',
+      'editorSuggestWidget.selectedForeground': '#ffffff',
+      'editorSuggestWidget.highlightForeground': '#18a3ff'
+    }
   });
 }

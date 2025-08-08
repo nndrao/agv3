@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Editor, Monaco } from '@monaco-editor/react';
+import 'monaco-editor/min/vs/editor/editor.main.css';
 import { editor } from 'monaco-editor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,17 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   readOnly = false,
   disableResize = false
 }) => {
-  const { theme } = useTheme();
+  // Try to use theme from context, fallback to detecting from document
+  let theme: 'dark' | 'light' = 'light';
+  try {
+    const themeContext = useTheme();
+    theme = themeContext.theme === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    // If no ThemeProvider, detect from document class
+    const isDark = document.documentElement.classList.contains('dark');
+    theme = isDark ? 'dark' : 'light';
+  }
+  
   const [expression, setExpression] = useState(initialExpression);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -82,10 +93,8 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
         // Update editor options based on container size
         if (editorRef.current) {
           editorRef.current.updateOptions({
-            minimap: { 
-              enabled: !isSmall && height > 300,
-              side: width < 1200 ? 'left' : 'right'
-            },
+            // Disable minimap to avoid left-side reserved space
+            minimap: { enabled: false },
             lineNumbers: isVerySmall ? 'off' : 'on',
             lineNumbersMinChars: isSmall ? 2 : 3,
             folding: !isVerySmall,
@@ -101,7 +110,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
             fontSize: isVerySmall ? 12 : (isSmall ? 13 : 14),
             wordWrap: isSmall ? 'on' : 'off',
             renderWhitespace: isVerySmall ? 'none' : 'boundary',
-            glyphMargin: !isVerySmall
+            glyphMargin: false
           });
           
           // Trigger layout update
@@ -192,10 +201,8 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     const isMediumInitial = containerWidth < 900;
     
     editor.updateOptions({
-      minimap: { 
-        enabled: !isSmallInitial && containerHeight > 300,
-        side: containerWidth < 1200 ? 'left' : 'right'
-      },
+      // Disable minimap to prevent left gutter width
+      minimap: { enabled: false },
       lineNumbers: isVerySmallInitial ? 'off' : 'on',
       lineNumbersMinChars: isSmallInitial ? 2 : 3,
       roundedSelection: false,
@@ -224,7 +231,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
       },
       wordWrap: isSmallInitial ? 'on' : 'off',
       renderWhitespace: isVerySmallInitial ? 'none' : 'boundary',
-      glyphMargin: !isVerySmallInitial
+      glyphMargin: false
     });
 
     // Add keyboard shortcuts

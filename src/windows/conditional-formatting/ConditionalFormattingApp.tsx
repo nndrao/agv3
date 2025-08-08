@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeProvider } from '@/components/theme-provider';
 import '@/index.css';
 
 export const ConditionalFormattingApp: React.FC = () => {
@@ -13,6 +14,7 @@ export const ConditionalFormattingApp: React.FC = () => {
   const [availableColumns, setAvailableColumns] = useState<ColumnInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewId, setViewId] = useState<string>('');
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
   const { toast } = useToast();
 
   const bus = GridConfigurationBus.getInstance();
@@ -33,6 +35,10 @@ export const ConditionalFormattingApp: React.FC = () => {
         }
         
         setViewId(id);
+
+        // Get theme from customData or localStorage
+        const inheritedTheme = customData.customData?.theme || localStorage.getItem('ui-theme') || 'dark';
+        setTheme(inheritedTheme as 'light' | 'dark' | 'system');
 
         // Initialize bus as client
         await bus.initializeAsClient();
@@ -109,29 +115,33 @@ export const ConditionalFormattingApp: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full w-full">
         <div className="text-lg">Loading...</div>
       </div>
     );
   }
 
   return (
-    <>
-      <ConditionalFormattingEditorContent
-        columnDefs={availableColumns.map(col => ({
-          field: col.field,
-          headerName: col.headerName || col.field,
-          type: col.type
-        }))}
-        currentRules={rules}
-        onApply={(updatedRules) => {
-          setRules(updatedRules);
-          handleApply(updatedRules);
-        }}
-        onClose={handleCancel}
-        profileName={viewId}
-      />
-      <Toaster />
-    </>
+    <div className="h-full w-full flex flex-col">
+      <ThemeProvider defaultTheme={theme} storageKey="conditional-formatting-theme">
+        <div className="flex-1 min-h-0">
+          <ConditionalFormattingEditorContent
+            columnDefs={availableColumns.map(col => ({
+              field: col.field,
+              headerName: col.headerName || col.field,
+              type: col.type
+            }))}
+            currentRules={rules}
+            onApply={(updatedRules) => {
+              setRules(updatedRules);
+              handleApply(updatedRules);
+            }}
+            onClose={handleCancel}
+            profileName={viewId}
+          />
+        </div>
+        <Toaster />
+      </ThemeProvider>
+    </div>
   );
 };

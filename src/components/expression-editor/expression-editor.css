@@ -8,6 +8,36 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Ensure Monaco uses monospace and consistent sizing */
+.monaco-editor, .monaco-editor .margin, .monaco-editor .view-lines {
+  font-family: JetBrains Mono, Consolas, 'Courier New', monospace !important;
+  font-size: 13px;
+}
+
+/* Theme-aware Monaco Editor backgrounds */
+.dark .monaco-editor,
+.dark .monaco-editor-background,
+.dark .monaco-editor .margin {
+  background-color: #1e1e1e;
+}
+
+.light .monaco-editor,
+.light .monaco-editor-background,
+.light .monaco-editor .margin {
+  background-color: #ffffff;
+}
+
+/* Theme-aware editor container */
+.dark .expression-editor-container {
+  background-color: hsl(var(--background));
+}
+
+.light .expression-editor-container {
+  background-color: hsl(var(--background));
 }
 
 /* Ensure tabs content takes full height */
@@ -32,11 +62,28 @@
   background-color: hsl(var(--primary));
 }
 
-/* Monaco Editor Container - Enhanced for responsiveness */
+/* Monaco Editor Container - Simple and clean */
 .monaco-editor-container {
   height: 100%;
   width: 100%;
   min-height: 100px;
+}
+
+/* Eliminate any unexpected left padding from the editor wrapper */
+.monaco-editor .margin { padding-left: 0 !important; }
+.monaco-editor .lines-content { left: 0 !important; }
+
+/* Suggest: z-index and height so it isn't clipped */
+.monaco-editor .suggest-widget { z-index: 9999 !important; max-height: 260px !important; }
+.monaco-editor .parameter-hints-widget { z-index: 9999 !important; }
+
+/* Ensure Monaco wrapper has proper background */
+.dark .monaco-editor-container {
+  background-color: #1e1e1e;
+}
+
+.light .monaco-editor-container {
+  background-color: #ffffff;
 }
 
 /* Responsive Monaco Editor Adjustments */
@@ -126,4 +173,56 @@
     max-width: calc(100vw - 32px);
     max-height: calc(100vh - 100px);
   }
+}
+
+/* Theme-aware validation and preview panels */
+.dark .expression-editor-container .validation-panel,
+.dark .expression-editor-container .preview-panel {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.light .expression-editor-container .validation-panel,
+.light .expression-editor-container .preview-panel {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Monaco Editor Suggestion Widget - Simple fixes */
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+  min-height: 28px;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row .contents {
+  line-height: 28px;
+}
+
+/* Dark theme suggestion colors */
+.dark .monaco-editor .suggest-widget {
+  background-color: #252526;
+  border: 1px solid #454545;
+}
+
+.dark .monaco-editor .suggest-widget .monaco-list-row {
+  color: #d4d4d4;
+}
+
+.dark .monaco-editor .suggest-widget .monaco-list-row.focused {
+  background-color: #094771;
+  color: #ffffff;
+}
+
+/* Light theme suggestion colors */
+.light .monaco-editor .suggest-widget {
+  background-color: #ffffff;
+  border: 1px solid #c8c8c8;
+}
+
+.light .monaco-editor .suggest-widget .monaco-list-row {
+  color: #1e1e1e;
+}
+
+.light .monaco-editor .suggest-widget .monaco-list-row.focused {
+  background-color: #e4e6f1;
+  color: #000000;
 }

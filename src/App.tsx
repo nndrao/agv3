@@ -45,7 +45,14 @@ function App() {
         <Route path="/expression-editor" element={<DialogDemo />} />
         
         {/* Conditional Formatting */}
-        <Route path="/conditional-formatting" element={<ConditionalFormattingApp />} />
+        <Route
+          path="/conditional-formatting"
+          element={
+            <div className="h-screen w-screen">
+              <ConditionalFormattingApp />
+            </div>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
