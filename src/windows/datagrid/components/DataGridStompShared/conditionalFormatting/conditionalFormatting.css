@@ -3,6 +3,9 @@
 /* Root container */
 .conditional-formatting-dialog {
   @apply h-full flex flex-col bg-background;
+  /* tighten overall density */
+  --cf-panel-padding: 12px;
+  --cf-gap: 8px;
 }
 
 /* Header Section */
@@ -24,17 +27,13 @@
   min-width: 220px;
 }
 
-.cf-rules-header {
-  @apply p-4 border-b bg-card/50;
-}
+.cf-rules-header { padding: var(--cf-panel-padding); border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
 
 .cf-rules-actions {
   @apply flex gap-3;
 }
 
-.cf-rules-list {
-  @apply flex-1 overflow-auto p-2;
-}
+.cf-rules-list { @apply flex-1 overflow-auto; padding: calc(var(--cf-panel-padding) - 6px); }
 
 .cf-rule-item {
   @apply flex items-center gap-2 px-3 py-2 mb-1 rounded-md cursor-pointer transition-all;
@@ -70,9 +69,7 @@
 }
 
 /* Rule Editor Section */
-.cf-editor-panel {
-  @apply h-full flex flex-col bg-background;
-}
+.cf-editor-panel { @apply h-full flex flex-col bg-background; }
 
 .cf-editor-header {
   @apply px-6 py-4 border-b bg-card/50;
@@ -150,9 +147,7 @@
 }
 
 /* Footer Section */
-.cf-footer {
-  @apply flex items-center justify-between px-6 py-4 border-t bg-card;
-}
+.cf-footer { @apply flex items-center justify-between border-t bg-card; padding: var(--cf-panel-padding); }
 
 .cf-footer-info {
   @apply text-sm text-muted-foreground;

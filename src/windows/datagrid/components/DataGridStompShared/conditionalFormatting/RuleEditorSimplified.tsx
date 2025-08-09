@@ -231,8 +231,8 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
         <ResizableHandle withHandle />
 
         {/* Right Panel - Shadcn Format Options (320x600px) */}
-        <ResizablePanel defaultSize={35} minSize={25} maxSize={40}>
-          <div className="flex justify-center items-center h-full p-2">
+        <ResizablePanel defaultSize={35} minSize={30} maxSize={45}>
+          <div className="h-full p-2 overflow-auto">
             <ShadcnFormatOptions
               rule={localRule}
               onUpdateRule={(updatedRule) => {

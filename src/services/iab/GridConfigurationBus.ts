@@ -42,6 +42,7 @@ export class GridConfigurationBus {
   private channel: fin.InterApplicationBus.Channel | null = null;
   private pendingRequests = new Map<string, { resolve: Function; reject: Function }>();
   private viewConfigurations = new Map<string, GridConfiguration>();
+  private isProvider = false;
 
   private constructor() {}
 
@@ -57,7 +58,27 @@ export class GridConfigurationBus {
     try {
       console.log(`[GridConfigurationBus] Initializing as provider for view ${viewId}`);
       
+      // Check if channel already exists
+      if (this.channel) {
+        console.log('[GridConfigurationBus] Channel already exists, reusing it');
+        return;
+      }
+      
+      // Try to connect first to see if another provider exists
+      try {
+        const testChannel = await fin.InterApplicationBus.Channel.connect(this.channelName);
+        await testChannel.disconnect();
+        console.log('[GridConfigurationBus] Channel already exists with another provider, skipping creation');
+        // Another provider exists, we'll act as a client instead
+        this.isProvider = false;
+        return;
+      } catch (e) {
+        // Channel doesn't exist, we can create it
+        console.log('[GridConfigurationBus] No existing channel found, creating new one');
+      }
+      
       this.channel = await fin.InterApplicationBus.Channel.create(this.channelName);
+      this.isProvider = true;
       
       this.channel.onConnection((identity) => {
         console.log(`[GridConfigurationBus] Client connected:`, identity);
@@ -86,7 +107,8 @@ export class GridConfigurationBus {
       console.log(`[GridConfigurationBus] Provider initialized for view ${viewId}`);
     } catch (error) {
       console.error('[GridConfigurationBus] Failed to initialize as provider:', error);
-      throw error;
+      // Don't throw, just log the error
+      this.isProvider = false;
     }
   }
 
@@ -262,16 +284,19 @@ export class GridConfigurationBus {
   async destroy(): Promise<void> {
     if (this.channel) {
       try {
-        // Check if it's a provider channel (has destroy method) or client channel (has disconnect method)
-        if ('destroy' in this.channel && typeof this.channel.destroy === 'function') {
+        // Only destroy if we're the provider
+        if (this.isProvider && 'destroy' in this.channel && typeof this.channel.destroy === 'function') {
+          console.log('[GridConfigurationBus] Destroying provider channel');
           await this.channel.destroy();
-        } else if ('disconnect' in this.channel && typeof this.channel.disconnect === 'function') {
+        } else if (!this.isProvider && 'disconnect' in this.channel && typeof this.channel.disconnect === 'function') {
+          console.log('[GridConfigurationBus] Disconnecting client channel');
           await this.channel.disconnect();
         }
       } catch (error) {
         console.warn('[GridConfigurationBus] Error during cleanup:', error);
       }
       this.channel = null;
+      this.isProvider = false;
     }
     this.pendingRequests.clear();
     this.viewConfigurations.clear();

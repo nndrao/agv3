@@ -161,13 +161,17 @@ const DataGridStompSharedComponent = () => {
   // Refs for lifecycle management
   const isInitialMount = useRef(true);
   const hasAutoConnected = useRef(false);
+  // Removed isApplyingProfileRef - no longer needed with proper sequencing
   
   // Get view instance ID from query parameters
   const viewInstanceId = useMemo(() => getViewInstanceId(), []);
   
+  // State for active profile data - needed before hooks
+  const [activeProfileData, setActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
+  
   // Custom hooks - order matters for dependencies
   const { providerConfig, columnDefs } = useProviderConfig(selectedProviderId);
-  const { gridApi, columnApi, onGridReady, getRowId, applyProfileGridState, extractGridState, gridApiRef } = useGridState(providerConfig, null);
+  const { gridApi, columnApi, onGridReady, getRowId, applyProfileGridState, extractGridState, extractFullGridState, resetGridState, gridApiRef, setColumnGroups, getColumnGroups, getPendingColumnState, clearPendingColumnState, getPendingColumnGroupState, clearPendingColumnGroupState } = useGridState(providerConfig, activeProfileData);
   const { connectionState, workerClient, subscribe, unsubscribe } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
   const { snapshotData, handleSnapshotData, handleRealtimeUpdate, resetSnapshot, requestSnapshot } = useSnapshotData(gridApiRef);
   const { currentViewTitle, saveViewTitle } = useViewTitle(viewInstanceId);
@@ -378,7 +382,10 @@ const DataGridStompSharedComponent = () => {
   // Memoize the profile change handler to prevent re-renders
   const handleProfileChange = useCallback((profile: DataGridStompSharedProfile) => {
     // Apply profile settings
-    console.log('[DataGridStompShared] Applying profile:', profile);
+    console.log('[🔍][PROFILE_HANDLER] handleProfileChange called with profile:', profile?.name);
+    console.log('[🔍][PROFILE_HANDLER] Profile has columnGroups:', profile?.columnGroups);
+    console.log('[🔍][PROFILE_HANDLER] Profile has gridState:', !!profile?.gridState);
+    console.log('[🔍][PROFILE_HANDLER] Is initial mount:', isInitialMount.current);
     
     // Clear any unsaved grid options and column groups when loading a profile
     setUnsavedGridOptions(null);
@@ -387,20 +394,22 @@ const DataGridStompSharedComponent = () => {
     // On initial mount, apply all settings including selectedProviderId
     if (isInitialMount.current) {
       isInitialMount.current = false;
-      console.log('[DataGridStompShared] Initial mount - applying full profile');
+      console.log('[🔍][PROFILE_HANDLER] Initial mount - applying full profile');
       if (profile.selectedProviderId) {
+        console.log('[🔍][PROFILE_HANDLER] Setting provider ID:', profile.selectedProviderId);
         setSelectedProviderId(profile.selectedProviderId);
       }
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
     } else {
       // After initial mount, NEVER update selectedProviderId from profile
-      console.log('[DataGridStompShared] Subsequent profile application - skipping selectedProviderId');
+      console.log('[🔍][PROFILE_HANDLER] Subsequent profile application - skipping selectedProviderId');
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
     }
     
     // Apply grid state if available
+    console.log('[🔍][PROFILE_HANDLER] Calling applyProfileGridState');
     applyProfileGridState(profile);
   }, [applyProfileGridState]);
   
@@ -408,7 +417,7 @@ const DataGridStompSharedComponent = () => {
   const {
     profiles,
     activeProfile,
-    activeProfileData,
+    activeProfileData: profileData, // Rename to avoid conflict with state
     isLoading: profilesLoading,
     isSaving,
     saveProfile,
@@ -425,20 +434,33 @@ const DataGridStompSharedComponent = () => {
     debug: false
   });
   
+  // Sync profile data from hook to local state
+  useEffect(() => {
+    if (profileData) {
+      setActiveProfileData(profileData);
+    }
+  }, [profileData]);
+  
   // Initialize IAB configuration bus
   useEffect(() => {
+    let isCleanedUp = false;
+    
     const initIAB = async () => {
+      if (isCleanedUp) return;
+      
       try {
         const bus = GridConfigurationBus.getInstance();
         await bus.initializeAsProvider(viewInstanceId);
         
-        // Register initial configuration
-        bus.registerGridConfiguration(viewInstanceId, {
-          gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
-          columnDefs: columnDefs || [],
-          profile: activeProfileData,
-          conditionalFormatting: conditionalFormattingRules
-        });
+        // Register initial configuration only if we didn't clean up
+        if (!isCleanedUp) {
+          bus.registerGridConfiguration(viewInstanceId, {
+            gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
+            columnDefs: columnDefs || [],
+            profile: activeProfileData,
+            conditionalFormatting: conditionalFormattingRules
+          });
+        }
         
         // Listen for conditional formatting updates
         const handleConfigUpdate = () => {
@@ -453,16 +475,21 @@ const DataGridStompSharedComponent = () => {
         // Note: In a real implementation, we'd set up a listener for config changes
         // For now, the conditional formatting app will close after applying rules
       } catch (error) {
-        console.error('[DataGridStompShared] Failed to initialize IAB:', error);
+        // Log warning but don't throw - the grid should still work without IAB
+        console.warn('[DataGridStompShared] IAB initialization skipped:', error);
       }
     };
     
     initIAB();
     
     return () => {
-      GridConfigurationBus.getInstance().destroy();
+      isCleanedUp = true;
+      // Only destroy on unmount, not on every effect re-run
+      GridConfigurationBus.getInstance().destroy().catch(err => 
+        console.warn('[DataGridStompShared] Error cleaning up IAB:', err)
+      );
     };
-  }, [viewInstanceId, handleApplyConditionalFormatting]);
+  }, [viewInstanceId]); // Remove handleApplyConditionalFormatting from deps to avoid re-init
   
   // Update IAB configuration when relevant state changes
   useEffect(() => {
@@ -632,16 +659,23 @@ const DataGridStompSharedComponent = () => {
   
   // Save current state to profile
   const saveCurrentState = useCallback(async (saveAsNew = false, name?: string) => {
-    console.log('[DataGridStompShared] Saving profile:', { saveAsNew, name, selectedProviderId });
+    console.log('[DataGridStompShared] Saving profile with full grid state:', { saveAsNew, name, selectedProviderId });
     
-    // Extract grid state
+    // Extract full grid state for comprehensive persistence
+    const fullGridState = extractFullGridState();
+    
+    // Extract legacy grid state for backward compatibility
     const { columnState, filterModel, sortModel } = extractGridState();
     
     // Use unsaved grid options if available, otherwise use current profile options
     const gridOptionsToSave = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
     
     // Use unsaved column groups if available, otherwise use current profile column groups
+    // Also update the state manager before extracting full state
     const columnGroupsToSave = unsavedColumnGroups || activeProfileData?.columnGroups || [];
+    console.log('[🔍][PROFILE_SAVE] Column groups to save:', columnGroupsToSave);
+    console.log('[🔍][PROFILE_SAVE] Setting column groups in state manager');
+    setColumnGroups(columnGroupsToSave);
     
     const currentState: DataGridStompSharedProfile = {
       name: name || activeProfileData?.name || 'Profile',
@@ -653,12 +687,18 @@ const DataGridStompSharedComponent = () => {
       showColumnSettings,
       asyncTransactionWaitMillis: 50,
       rowBuffer: 10,
+      // Legacy fields for backward compatibility
       columnState,
       filterModel,
       sortModel,
+      // Full grid state for comprehensive persistence
+      gridState: fullGridState || undefined,
       gridOptions: gridOptionsToSave,
       columnGroups: columnGroupsToSave
     };
+    
+    console.log('[🔍][PROFILE_SAVE] Full profile state to save:', currentState);
+    console.log('[🔍][PROFILE_SAVE] GridState includes columnGroups:', fullGridState?.columnGroups);
     
     await saveProfile(currentState, saveAsNew, name);
     
@@ -672,7 +712,7 @@ const DataGridStompSharedComponent = () => {
       title: "Profile Saved",
       description: saveAsNew ? "New profile created successfully" : "Profile updated successfully"
     });
-  }, [activeProfileData, selectedProviderId, connectionState.isConnected, sidebarVisible, showColumnSettings, saveProfile, extractGridState, unsavedGridOptions, toast]);
+  }, [activeProfileData, selectedProviderId, connectionState.isConnected, sidebarVisible, showColumnSettings, saveProfile, extractGridState, extractFullGridState, unsavedGridOptions, toast]);
   
   // Profile management handlers
   const handleProfileExport = useCallback(async () => {
@@ -900,7 +940,11 @@ const DataGridStompSharedComponent = () => {
     try {
       // Pass the original column definitions to preserve all column properties
       // Note: columnApi can be null in newer AG-Grid versions, but ColumnGroupService handles this
-      ColumnGroupService.applyColumnGroups(gridApi, columnApi, groups, columnDefs);
+      const gridStateManager = {
+        getPendingColumnState,
+        clearPendingColumnState
+      };
+      ColumnGroupService.applyColumnGroups(gridApi, columnApi, groups, columnDefs, gridStateManager);
       
       // Store unsaved column groups
       setUnsavedColumnGroups(groups);
@@ -979,31 +1023,66 @@ const DataGridStompSharedComponent = () => {
   }, [activeProfileData?.gridOptions, gridApi]);
   
   // Apply column groups after grid is ready and we have both columnDefs and groups
+  // This runs AFTER grid state has been applied (column state, filters, sorts)
   useEffect(() => {
-    console.log('[DataGridStompShared] Column groups effect check:');
-    console.log('- gridApi:', !!gridApi);
-    console.log('- columnApi:', !!columnApi);
-    console.log('- columnDefs.length:', columnDefs.length);
-    console.log('- activeProfileData?.columnGroups:', activeProfileData?.columnGroups);
-    console.log('- unsavedColumnGroups:', unsavedColumnGroups);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] Column groups effect triggered');
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - gridApi:', !!gridApi);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnApi:', !!columnApi);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnDefs.length:', columnDefs.length);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - activeProfileData?.columnGroups:', activeProfileData?.columnGroups);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - unsavedColumnGroups:', unsavedColumnGroups);
     
-    // In newer AG-Grid versions, columnApi might not be available, but gridApi is sufficient
+    // Only apply column groups when grid is ready and we have column definitions
     if (gridApi && columnDefs.length > 0) {
-      const groups = unsavedColumnGroups || activeProfileData?.columnGroups;
+      // First check if there are column groups stored in the GridStateManager
+      const storedGroups = getColumnGroups();
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] Stored groups from GridStateManager:', storedGroups);
+      
+      // Use stored groups first, then unsaved, then profile
+      const groups = storedGroups?.length > 0 ? storedGroups : (unsavedColumnGroups || activeProfileData?.columnGroups);
+      
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] Groups to apply:', JSON.stringify(groups, null, 2));
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] Groups source:', storedGroups?.length > 0 ? 'stored' : (unsavedColumnGroups ? 'unsaved' : 'profile'));
+      
+      // Update the state manager with current column groups
+      setColumnGroups(groups || []);
+      
       if (groups && groups.length > 0) {
-        console.log('[DataGridStompShared] Grid ready with column groups, applying...', groups);
-        // Small delay to ensure grid is fully initialized
-        const timer = setTimeout(() => {
-          console.log('[DataGridStompShared] Applying column groups now');
-          // Pass null for columnApi if not available - the service will handle it
-          ColumnGroupService.applyColumnGroups(gridApi, columnApi || null, groups, columnDefs);
-        }, 500); // Increased delay to ensure grid is ready
-        return () => clearTimeout(timer);
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] Applying column groups immediately');
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] Column defs available:', columnDefs.length);
+        
+        // Apply column groups immediately since grid is ready
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] Calling ColumnGroupService.applyColumnGroups with:');
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] - groups:', groups);
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnDefs count:', columnDefs.length);
+        
+        // Create gridStateManager-like object with methods for column state and group state
+        const gridStateManager = {
+          getPendingColumnState,
+          clearPendingColumnState,
+          getPendingColumnGroupState,
+          clearPendingColumnGroupState
+        };
+        
+        // Pass null for columnApi if not available - the service will handle it
+        ColumnGroupService.applyColumnGroups(gridApi, columnApi || null, groups, columnDefs, gridStateManager);
+        
+        // Verify application after a short delay
+        setTimeout(() => {
+          const appliedDefs = gridApi.getColumnDefs();
+          console.log('[🔍][COLUMN_GROUPS_EFFECT] Verification - Grid has column defs:', appliedDefs?.length);
+          const hasGroups = appliedDefs?.some((def: any) => def.children);
+          console.log('[🔍][COLUMN_GROUPS_EFFECT] Verification - Grid has column groups:', hasGroups);
+        }, 100);
       } else {
-        console.log('[DataGridStompShared] No column groups to apply');
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] No column groups to apply');
       }
+    } else {
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] Grid not ready or no columnDefs');
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] - gridApi available:', !!gridApi);
+      console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnDefs count:', columnDefs?.length);
     }
-  }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups]);
+  }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups, setColumnGroups, getColumnGroups]);
   
   // Memoize window options (must be before early return)
   const windowOptions = useMemo(() => ({

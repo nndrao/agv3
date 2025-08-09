@@ -9,20 +9,21 @@ export class ColumnGroupService {
     gridApi: any,
     columnApi: any,
     groups: ColumnGroupDefinition[],
-    originalColumnDefs?: ColDef[]
+    originalColumnDefs?: ColDef[],
+    gridStateManager?: any
   ): void {
-    console.log('[ColumnGroupService.applyColumnGroups] Starting...');
-    console.log('- gridApi:', !!gridApi);
-    console.log('- columnApi:', !!columnApi); 
-    console.log('- groups:', groups);
-    console.log('- originalColumnDefs provided:', !!originalColumnDefs, originalColumnDefs?.length);
+    console.log('[🔍][COLUMN_GROUP_SERVICE] applyColumnGroups called');
+    console.log('[🔍][COLUMN_GROUP_SERVICE] - gridApi:', !!gridApi);
+    console.log('[🔍][COLUMN_GROUP_SERVICE] - columnApi:', !!columnApi); 
+    console.log('[🔍][COLUMN_GROUP_SERVICE] - groups:', JSON.stringify(groups, null, 2));
+    console.log('[🔍][COLUMN_GROUP_SERVICE] - originalColumnDefs provided:', !!originalColumnDefs, originalColumnDefs?.length);
     
     // Log detailed group information
     groups.forEach((group, index) => {
-      console.log(`[Group ${index}] ${group.headerName}:`);
-      console.log('  - openByDefault:', group.openByDefault);
-      console.log('  - columnStates:', group.columnStates);
-      console.log('  - children:', group.children);
+      console.log(`[🔍][COLUMN_GROUP_SERVICE] Group ${index} - ${group.headerName}:`);
+      console.log('[🔍][COLUMN_GROUP_SERVICE]   - openByDefault:', group.openByDefault);
+      console.log('[🔍][COLUMN_GROUP_SERVICE]   - columnStates:', group.columnStates);
+      console.log('[🔍][COLUMN_GROUP_SERVICE]   - children:', group.children);
     });
     
     if (!gridApi) {
@@ -50,8 +51,8 @@ export class ColumnGroupService {
     console.log('[ColumnGroupService] Base column defs:', baseColumnDefs.length);
     console.log('- Base columns:', baseColumnDefs.map(col => ({ colId: col.colId, field: col.field, headerName: col.headerName })));
 
-    // Build new column definitions with groups
-    const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, groups);
+    // Build new column definitions with groups (pass gridApi to preserve column state)
+    const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, groups, gridApi);
     console.log('[ColumnGroupService] Built new column defs:', newColumnDefs.length);
     console.log('- New column defs structure:', newColumnDefs.map(col => {
       if ('children' in col) {
@@ -61,10 +62,78 @@ export class ColumnGroupService {
       }
     }));
     
+    // Store the current column group state before applying new definitions
+    let currentGroupState: any[] = [];
+    try {
+      // Try to get column group state before changes
+      if (typeof (gridApi as any).getColumnGroupState === 'function') {
+        currentGroupState = (gridApi as any).getColumnGroupState() || [];
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Current group state before applying:', currentGroupState);
+      }
+    } catch (e) {
+      console.log('[🔍][COLUMN_GROUP_SERVICE] Could not get column group state');
+    }
+    
+    // Get the column state to restore after applying groups
+    // Use pending state from GridStateManager if available, otherwise use current state
+    let savedColumnState = null;
+    if (gridStateManager && typeof gridStateManager.getPendingColumnState === 'function') {
+      savedColumnState = gridStateManager.getPendingColumnState();
+      console.log('[🔍][COLUMN_GROUP_SERVICE] Using pending column state from GridStateManager:', savedColumnState?.length, 'columns');
+      // Clear the pending state after using it
+      gridStateManager.clearPendingColumnState();
+    }
+    if (!savedColumnState) {
+      savedColumnState = gridApi.getColumnState();
+      console.log('[🔍][COLUMN_GROUP_SERVICE] Using current column state:', savedColumnState?.length, 'columns');
+    }
+    
     // Apply the new column definitions to the grid
-    console.log('[ColumnGroupService] Applying to grid...');
-    console.log('[ColumnGroupService] Final columnDefs being applied:', JSON.stringify(newColumnDefs, null, 2));
+    console.log('[🔍][COLUMN_GROUP_SERVICE] Applying to grid...');
+    console.log('[🔍][COLUMN_GROUP_SERVICE] Final columnDefs being applied:', JSON.stringify(newColumnDefs, null, 2));
     gridApi.setGridOption('columnDefs', newColumnDefs);
+    
+    // Restore column state (widths, order, visibility) after applying column groups
+    setTimeout(() => {
+      if (savedColumnState && savedColumnState.length > 0) {
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Restoring column state (widths, order, visibility)...');
+        gridApi.applyColumnState({
+          state: savedColumnState,
+          applyOrder: true,
+          defaultState: { width: null }
+        });
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Column state restored');
+      }
+      
+      // Restore column group expanded/collapsed state
+      // First check if we have pending group state from GridStateManager
+      let groupStateToApply = currentGroupState;
+      if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
+        const pendingGroupState = gridStateManager.getPendingColumnGroupState();
+        if (pendingGroupState && pendingGroupState.length > 0) {
+          console.log('[🔍][COLUMN_GROUP_SERVICE] Using pending column group state from GridStateManager:', pendingGroupState);
+          groupStateToApply = pendingGroupState;
+          // Clear the pending state after using it
+          gridStateManager.clearPendingColumnGroupState();
+        }
+      }
+      
+      if (groupStateToApply && groupStateToApply.length > 0) {
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Restoring group state:', groupStateToApply);
+        groupStateToApply.forEach((groupState: any) => {
+          if (groupState.groupId && typeof (gridApi as any).setColumnGroupOpened === 'function') {
+            try {
+              (gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
+              console.log(`[🔍][COLUMN_GROUP_SERVICE] Set group ${groupState.groupId} to ${groupState.open ? 'open' : 'closed'}`);
+            } catch (e) {
+              console.warn(`[🔍][COLUMN_GROUP_SERVICE] Could not restore state for group ${groupState.groupId}`);
+            }
+          }
+        });
+      } else {
+        console.log('[🔍][COLUMN_GROUP_SERVICE] No column group state to restore');
+      }
+    }, 100); // Small delay to let grid apply new column defs first
     
     // Force grid to redraw columns
     if (columnApi) {
@@ -81,15 +150,15 @@ export class ColumnGroupService {
     // Verify what AG-Grid actually has
     setTimeout(() => {
       const appliedDefs = gridApi.getColumnDefs();
-      console.log('[ColumnGroupService] Verifying applied column defs:');
+      console.log('[🔍][COLUMN_GROUP_SERVICE] Verification - Applied column defs:');
       appliedDefs?.forEach((def: any, index: number) => {
         if (def.children) {
-          console.log(`[${index}] Group: ${def.headerName}, openByDefault: ${def.openByDefault}`);
+          console.log(`[🔍][COLUMN_GROUP_SERVICE] [${index}] Group: ${def.headerName}, openByDefault: ${def.openByDefault}`);
           def.children.forEach((child: any) => {
-            console.log(`  - Child: ${child.field || child.colId}, columnGroupShow: ${child.columnGroupShow}`);
+            console.log(`[🔍][COLUMN_GROUP_SERVICE]   - Child: ${child.field || child.colId}, columnGroupShow: ${child.columnGroupShow}`);
           });
         } else {
-          console.log(`[${index}] Column: ${def.field || def.colId}`);
+          console.log(`[🔍][COLUMN_GROUP_SERVICE] [${index}] Column: ${def.field || def.colId}`);
         }
       });
       
@@ -141,17 +210,50 @@ export class ColumnGroupService {
    */
   private static buildColumnDefsWithGroups(
     baseColumns: ColDef[],
-    groups: ColumnGroupDefinition[]
+    groups: ColumnGroupDefinition[],
+    gridApi?: any
   ): (ColDef | ColGroupDef)[] {
     console.log('[buildColumnDefsWithGroups] Starting...');
     console.log('- Base columns:', baseColumns.length);
     console.log('- Groups:', groups.length);
+    
+    // Get current column state to preserve widths and other properties
+    let currentColumnState: any[] = [];
+    if (gridApi) {
+      currentColumnState = gridApi.getColumnState() || [];
+      console.log('- Current column state:', currentColumnState.length, 'columns');
+    }
+    
+    // Create a map of column ID to current state
+    const columnStateMap = new Map<string, any>();
+    currentColumnState.forEach(state => {
+      if (state.colId) {
+        columnStateMap.set(state.colId, state);
+      }
+    });
     
     // Create a map of column ID to column definition
     const columnMap = new Map<string, ColDef>();
     baseColumns.forEach(col => {
       const colId = col.colId || col.field;
       if (colId) {
+        // Preserve width and other state from current column state
+        const currentState = columnStateMap.get(colId);
+        if (currentState) {
+          // Preserve width if it exists
+          if (currentState.width !== undefined && currentState.width !== null) {
+            col.width = currentState.width;
+          }
+          // Preserve hide state
+          if (currentState.hide !== undefined) {
+            col.hide = currentState.hide;
+          }
+          // Preserve pinned state
+          if (currentState.pinned !== undefined && currentState.pinned !== null) {
+            col.pinned = currentState.pinned;
+          }
+        }
+        
         columnMap.set(colId, col);
         // Also add by field name if different from colId
         if (col.field && col.field !== colId) {
@@ -193,7 +295,8 @@ export class ColumnGroupService {
           console.log(`  - Full column def:`, {
             field: colDefWithGroupShow.field,
             headerName: colDefWithGroupShow.headerName,
-            columnGroupShow: colDefWithGroupShow.columnGroupShow
+            columnGroupShow: colDefWithGroupShow.columnGroupShow,
+            width: colDefWithGroupShow.width
           });
           groupChildren.push(colDefWithGroupShow);
         } else {

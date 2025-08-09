@@ -407,8 +407,8 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
             {/* Applied Borders */}
             <div className="space-y-1.5">
               <Label className="text-xs">Applied Borders</Label>
-              <Card className="p-2">
-                <ScrollArea className="h-[120px]">
+              <div className="p-2 rounded bg-transparent">
+                <ScrollArea className="h-[180px]">
                   {appliedBorders.length === 0 ? (
                     <div className="text-xs text-muted-foreground text-center py-4">
                       No borders applied
@@ -416,7 +416,7 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
                   ) : (
                     <div className="space-y-1">
                       {appliedBorders.map((border) => (
-                        <div key={border.side} className="flex items-center justify-between p-1.5 rounded bg-muted/50">
+                        <div key={border.side} className="flex items-center justify-between p-1.5 rounded">
                           <span className="text-xs">
                             <span className="font-medium">{border.side}:</span> {border.width} {border.style}
                           </span>
@@ -433,7 +433,7 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
                     </div>
                   )}
                 </ScrollArea>
-              </Card>
+              </div>
             </div>
           </TabsContent>
         </ScrollArea>

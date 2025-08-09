@@ -1,5 +1,6 @@
 import { ColDef, GridApi } from "ag-grid-community";
 import { BaseProfile } from "@/hooks/useProfileManagement";
+import { GridState } from "./utils/gridStateManager";
 
 // Row data interface
 export interface RowData {
@@ -12,12 +13,15 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   selectedProviderId: string | null;
   autoConnect: boolean;
   
-  // Grid configuration
+  // Grid configuration - legacy fields for backward compatibility
   columnState?: any;
   filterModel?: any;
   sortModel?: any;
   groupModel?: any;
   columnGroups?: any[]; // Column group definitions
+  
+  // Full grid state - comprehensive state management
+  gridState?: GridState;
   
   // UI preferences
   sidebarVisible: boolean;
