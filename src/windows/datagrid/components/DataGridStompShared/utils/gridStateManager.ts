@@ -20,7 +20,7 @@ import type {
 export interface GridState {
   // Column configuration
   columnState: ColumnState[];
-  columnGroupState: Array<{ groupId: string; open: boolean }>;
+  columnGroupState?: Array<{ groupId: string; open: boolean }>; // Track group expansion
   columnDefs?: ColDef[];
   columnGroups?: any[]; // Full column group definitions
   
@@ -192,11 +192,6 @@ export class GridStateManager {
     this.pendingColumnState = null;
   }
   
-  setPendingColumnGroupState(groupState: Array<{ groupId: string; open: boolean }>): void {
-    console.log('[🔍][GRID_STATE_APPLY] Storing pending column group state:', groupState);
-    this.pendingColumnGroupState = groupState;
-  }
-  
   getPendingColumnGroupState(): Array<{ groupId: string; open: boolean }> | null {
     return this.pendingColumnGroupState;
   }
@@ -229,7 +224,7 @@ export class GridStateManager {
     
     try {
       const state: GridState = {
-        // Column state
+        // Column state (includes visibility that reflects group expansion)
         columnState: this.extractColumnState(),
         columnGroupState: this.extractColumnGroupState(),
         
@@ -348,10 +343,10 @@ export class GridStateManager {
         }
       }
       
-      // Store column group state to be applied after column groups are created
+      // Store column group state for later application
       if (state.columnGroupState && state.columnGroupState.length > 0) {
-        console.log('[🔍][GRID_STATE_APPLY] Storing column group state to apply later:', state.columnGroupState);
-        this.setPendingColumnGroupState(state.columnGroupState);
+        console.log('[🔍][GRID_STATE_APPLY] Storing pending column group state:', state.columnGroupState);
+        this.pendingColumnGroupState = state.columnGroupState;
       }
       
       // Store column groups for later use (they need to be applied via ColumnGroupService)
@@ -482,7 +477,37 @@ export class GridStateManager {
   
   private extractColumnState(): ColumnState[] {
     if (!this.gridApi) return [];
-    return this.gridApi.getColumnState() || [];
+    const columnState = this.gridApi.getColumnState() || [];
+    
+    // Debug: Log column state being extracted
+    console.log('[🔍][COLUMN_STATE_EXTRACT] Extracting column state:', columnState.length, 'columns');
+    const hiddenColumns = columnState.filter((col: any) => col.hide === true);
+    console.log('[🔍][COLUMN_STATE_EXTRACT] Hidden columns:', hiddenColumns.map((c: any) => c.colId));
+    
+    // Check if we have columns with columnGroupShow
+    const columnDefs = this.gridApi.getColumnDefs();
+    if (columnDefs) {
+      const columnsWithGroupShow: any[] = [];
+      const checkForGroupShow = (defs: any[]) => {
+        defs.forEach((def: any) => {
+          if (def.children) {
+            checkForGroupShow(def.children);
+          } else if (def.columnGroupShow) {
+            columnsWithGroupShow.push({ 
+              colId: def.colId || def.field, 
+              columnGroupShow: def.columnGroupShow,
+              currentlyHidden: columnState.find((s: any) => s.colId === (def.colId || def.field))?.hide
+            });
+          }
+        });
+      };
+      checkForGroupShow(columnDefs);
+      if (columnsWithGroupShow.length > 0) {
+        console.log('[🔍][COLUMN_STATE_EXTRACT] Columns with columnGroupShow:', columnsWithGroupShow);
+      }
+    }
+    
+    return columnState;
   }
   
   private extractColumnGroupState(): Array<{ groupId: string; open: boolean }> {
@@ -491,75 +516,68 @@ export class GridStateManager {
     const groups: Array<{ groupId: string; open: boolean }> = [];
     
     try {
-      // Method 1: Try getColumnGroupState (newer versions)
-      if (typeof (this.gridApi as any).getColumnGroupState === 'function') {
-        const groupState = (this.gridApi as any).getColumnGroupState();
-        console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Got column group state from API:', groupState);
-        if (Array.isArray(groupState)) {
-          return groupState.map((state: any) => ({
-            groupId: state.groupId,
-            open: state.open || false
-          }));
-        }
-      }
-      
-      // Method 2: Try traversing column definitions to find groups
-      const columnDefs = this.gridApi.getColumnDefs();
-      console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Checking column defs for groups:', columnDefs?.length);
-      if (columnDefs && Array.isArray(columnDefs)) {
-        const extractGroups = (defs: any[], parentOpen = true) => {
-          defs.forEach((def: any) => {
-            if (def.children && def.groupId) {
-              // This is a column group
-              console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Found group:', def.groupId, 'with openByDefault:', def.openByDefault);
-              // Try to determine if it's open by checking if children are visible
-              let isOpen = def.openByDefault !== false;
-              
-              // Try to check actual state using gridApi methods
-              if (typeof (this.gridApi as any).isColumnGroupOpened === 'function') {
-                try {
-                  isOpen = (this.gridApi as any).isColumnGroupOpened(def.groupId);
-                  console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Group', def.groupId, 'isOpen from API:', isOpen);
-                } catch (e) {
-                  console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Could not get state for group', def.groupId, '- using default');
+      // Check for setColumnGroupOpened method to determine group states
+      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
+        const columnDefs = this.gridApi.getColumnDefs();
+        if (columnDefs) {
+          const extractGroups = (defs: any[]) => {
+            defs.forEach((def: any) => {
+              if (def.children && def.groupId) {
+                // Determine if group is open or collapsed based on column visibility
+                let isOpen = true;
+                
+                // Analyze columns to determine group state:
+                // If columns with columnGroupShow:'open' are hidden -> group is collapsed
+                // If columns with columnGroupShow:'closed' are visible -> group is collapsed
+                let hasOpenColumns = false;
+                let hasClosedColumns = false;
+                let openColumnsHidden = false;
+                let closedColumnsVisible = false;
+                
+                def.children.forEach((child: any) => {
+                  const colState = this.gridApi!.getColumnState()?.find((s: any) => 
+                    s.colId === (child.colId || child.field)
+                  );
+                  
+                  if (child.columnGroupShow === 'open') {
+                    hasOpenColumns = true;
+                    if (colState && colState.hide === true) {
+                      openColumnsHidden = true;
+                    }
+                  } else if (child.columnGroupShow === 'closed') {
+                    hasClosedColumns = true;
+                    if (colState && colState.hide === false) {
+                      closedColumnsVisible = true;
+                    }
+                  }
+                  // Columns with undefined columnGroupShow are always visible
+                });
+                
+                // Determine group state based on column visibility patterns
+                if (hasOpenColumns && openColumnsHidden) {
+                  isOpen = false; // Group is collapsed (open columns are hidden)
+                } else if (hasClosedColumns && closedColumnsVisible) {
+                  isOpen = false; // Group is collapsed (closed columns are visible)
                 }
+                
+                groups.push({
+                  groupId: def.groupId,
+                  open: isOpen
+                });
+                
+                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT] Group ${def.groupId}: ${isOpen ? 'open' : 'closed'}`);
+                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT]   - hasOpenColumns: ${hasOpenColumns}, openColumnsHidden: ${openColumnsHidden}`);
+                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT]   - hasClosedColumns: ${hasClosedColumns}, closedColumnsVisible: ${closedColumnsVisible}`);
               }
-              
-              groups.push({
-                groupId: def.groupId,
-                open: isOpen
-              });
-              
-              // Recursively check for nested groups
-              if (def.children) {
-                extractGroups(def.children, isOpen);
-              }
-            }
-          });
-        };
-        
-        extractGroups(columnDefs);
-      }
-      
-      // Method 3: Try getColumnGroups (older versions)
-      if (groups.length === 0 && typeof (this.gridApi as any).getColumnGroups === 'function') {
-        const columnGroups = (this.gridApi as any).getColumnGroups();
-        if (columnGroups && Array.isArray(columnGroups)) {
-          columnGroups.forEach((group: any) => {
-            if (group?.getGroupId) {
-              groups.push({
-                groupId: group.getGroupId(),
-                open: group.isExpanded?.() || false
-              });
-            }
-          });
+            });
+          };
+          extractGroups(columnDefs);
         }
       }
     } catch (error) {
-      console.warn('[🔍][COLUMN_GROUP_STATE_EXTRACT] Could not extract column group state:', error);
+      console.warn('[🔍][COLUMN_GROUP_STATE_EXTRACT] Error extracting column group state:', error);
     }
     
-    console.log('[🔍][COLUMN_GROUP_STATE_EXTRACT] Final extracted column group state:', groups);
     return groups;
   }
   
@@ -745,27 +763,8 @@ export class GridStateManager {
     this.gridApi.applyColumnState({ state: columnState });
   }
   
-  private applyColumnGroupState(groupState: Array<{ groupId: string; open: boolean }>) {
-    if (!this.gridApi) return;
-    
-    try {
-      // Check if setColumnGroupOpened method exists
-      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
-        groupState.forEach(({ groupId, open }) => {
-          try {
-            (this.gridApi as any).setColumnGroupOpened(groupId, open);
-          } catch (e) {
-            console.warn(`[GridStateManager] Could not set column group state for ${groupId}:`, e);
-          }
-        });
-      } else {
-        // Method doesn't exist in this AG-Grid version
-        console.debug('[GridStateManager] setColumnGroupOpened not available in this AG-Grid version');
-      }
-    } catch (error) {
-      console.warn('[GridStateManager] Error applying column group state:', error);
-    }
-  }
+  // Note: Column group state is handled through column visibility in columnState
+  // No need for separate applyColumnGroupState method
   
   private applyGroupingState(state: GridState) {
     if (!this.gridApi) return;

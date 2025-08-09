@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Column Group Show Test</title>
+    <script src="https://unpkg.com/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        #myGrid {
+            height: 400px;
+            width: 100%;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+        }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Column Group Show Test</h1>
+    
+    <div class="controls">
+        <button onclick="toggleGroup()">Toggle Group</button>
+        <button onclick="getGroupState()">Get Group State</button>
+        <button onclick="getColumnState()">Get Column State</button>
+        <button onclick="saveState()">Save State</button>
+        <button onclick="restoreState()">Restore State</button>
+    </div>
+    
+    <div id="myGrid" class="ag-theme-alpine"></div>
+    
+    <div id="log" class="log"></div>
+    
+    <script>
+        let gridApi;
+        let savedState = {};
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.textContent = message + '\n' + logDiv.textContent;
+        }
+        
+        const columnDefs = [
+            {
+                headerName: 'Test Group',
+                groupId: 'testGroup',
+                openByDefault: false,
+                children: [
+                    {
+                        headerName: 'Always Visible',
+                        field: 'always',
+                        // columnGroupShow: undefined means always visible
+                    },
+                    {
+                        headerName: 'Open Only',
+                        field: 'openOnly',
+                        columnGroupShow: 'open'
+                    },
+                    {
+                        headerName: 'Closed Only',
+                        field: 'closedOnly',
+                        columnGroupShow: 'closed'
+                    }
+                ]
+            },
+            {
+                headerName: 'Outside Group',
+                field: 'outside'
+            }
+        ];
+        
+        const rowData = [
+            { always: 'A1', openOnly: 'O1', closedOnly: 'C1', outside: 'Out1' },
+            { always: 'A2', openOnly: 'O2', closedOnly: 'C2', outside: 'Out2' },
+            { always: 'A3', openOnly: 'O3', closedOnly: 'C3', outside: 'Out3' }
+        ];
+        
+        const gridOptions = {
+            columnDefs: columnDefs,
+            rowData: rowData,
+            onGridReady: (params) => {
+                gridApi = params.api;
+                log('Grid ready - group should be collapsed (openByDefault: false)');
+                getGroupState();
+            }
+        };
+        
+        // Initialize grid
+        const gridDiv = document.querySelector('#myGrid');
+        new agGrid.Grid(gridDiv, gridOptions);
+        
+        function toggleGroup() {
+            // Check current state
+            const columnState = gridApi.getColumnState();
+            const openOnlyCol = columnState.find(col => col.colId === 'openOnly');
+            const isGroupOpen = !openOnlyCol.hide;
+            
+            // Toggle group
+            gridApi.setColumnGroupOpened('testGroup', !isGroupOpen);
+            
+            log(`Toggled group to: ${!isGroupOpen ? 'OPEN' : 'CLOSED'}`);
+            getGroupState();
+        }
+        
+        function getGroupState() {
+            const columnState = gridApi.getColumnState();
+            const openOnlyCol = columnState.find(col => col.colId === 'openOnly');
+            const closedOnlyCol = columnState.find(col => col.colId === 'closedOnly');
+            const alwaysCol = columnState.find(col => col.colId === 'always');
+            
+            const isGroupOpen = !openOnlyCol.hide;
+            
+            log(`Group State: ${isGroupOpen ? 'OPEN' : 'CLOSED'}`);
+            log(`  - Always column: ${alwaysCol.hide ? 'hidden' : 'visible'}`);
+            log(`  - Open only column: ${openOnlyCol.hide ? 'hidden' : 'visible'}`);
+            log(`  - Closed only column: ${closedOnlyCol.hide ? 'hidden' : 'visible'}`);
+        }
+        
+        function getColumnState() {
+            const columnState = gridApi.getColumnState();
+            log('Column State:');
+            columnState.forEach(col => {
+                log(`  - ${col.colId}: hide=${col.hide}, width=${col.width}`);
+            });
+        }
+        
+        function saveState() {
+            savedState.columnState = gridApi.getColumnState();
+            savedState.columnDefs = gridApi.getColumnDefs();
+            
+            // Determine group state from column visibility
+            const openOnlyCol = savedState.columnState.find(col => col.colId === 'openOnly');
+            savedState.groupOpen = !openOnlyCol.hide;
+            
+            log(`State saved - Group was ${savedState.groupOpen ? 'OPEN' : 'CLOSED'}`);
+        }
+        
+        function restoreState() {
+            if (!savedState.columnState) {
+                log('No saved state to restore');
+                return;
+            }
+            
+            // Apply column state
+            gridApi.applyColumnState({
+                state: savedState.columnState,
+                applyOrder: true
+            });
+            
+            // Apply group state
+            gridApi.setColumnGroupOpened('testGroup', savedState.groupOpen);
+            
+            log(`State restored - Group set to ${savedState.groupOpen ? 'OPEN' : 'CLOSED'}`);
+            getGroupState();
+        }
+    </script>
+</body>
+</html>

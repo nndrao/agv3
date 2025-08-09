@@ -97,42 +97,88 @@ export class ColumnGroupService {
     setTimeout(() => {
       if (savedColumnState && savedColumnState.length > 0) {
         console.log('[🔍][COLUMN_GROUP_SERVICE] Restoring column state (widths, order, visibility)...');
-        gridApi.applyColumnState({
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Column state to apply:', JSON.stringify(savedColumnState, null, 2));
+        
+        // Check what columns have hide state
+        const hiddenColumns = savedColumnState.filter((col: any) => col.hide === true);
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Hidden columns:', hiddenColumns.map((c: any) => c.colId));
+        
+        const result = gridApi.applyColumnState({
           state: savedColumnState,
           applyOrder: true,
           defaultState: { width: null }
         });
+        
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Apply column state result:', result);
         console.log('[🔍][COLUMN_GROUP_SERVICE] Column state restored');
       }
       
-      // Restore column group expanded/collapsed state
-      // First check if we have pending group state from GridStateManager
-      let groupStateToApply = currentGroupState;
-      if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
-        const pendingGroupState = gridStateManager.getPendingColumnGroupState();
-        if (pendingGroupState && pendingGroupState.length > 0) {
-          console.log('[🔍][COLUMN_GROUP_SERVICE] Using pending column group state from GridStateManager:', pendingGroupState);
-          groupStateToApply = pendingGroupState;
-          // Clear the pending state after using it
-          gridStateManager.clearPendingColumnGroupState();
-        }
-      }
-      
-      if (groupStateToApply && groupStateToApply.length > 0) {
-        console.log('[🔍][COLUMN_GROUP_SERVICE] Restoring group state:', groupStateToApply);
-        groupStateToApply.forEach((groupState: any) => {
-          if (groupState.groupId && typeof (gridApi as any).setColumnGroupOpened === 'function') {
-            try {
-              (gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
-              console.log(`[🔍][COLUMN_GROUP_SERVICE] Set group ${groupState.groupId} to ${groupState.open ? 'open' : 'closed'}`);
-            } catch (e) {
-              console.warn(`[🔍][COLUMN_GROUP_SERVICE] Could not restore state for group ${groupState.groupId}`);
+      // Apply column group state if available
+      setTimeout(() => {
+        console.log('[🔍][COLUMN_GROUP_SERVICE] Checking for pending column group state...');
+        
+        // Check if we have pending column group state from GridStateManager
+        if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
+          const pendingGroupState = gridStateManager.getPendingColumnGroupState();
+          if (pendingGroupState && pendingGroupState.length > 0) {
+            console.log('[🔍][COLUMN_GROUP_SERVICE] Applying pending column group state:', pendingGroupState);
+            
+            if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
+              pendingGroupState.forEach((groupState: any) => {
+                try {
+                  (gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
+                  console.log(`[🔍][COLUMN_GROUP_SERVICE] Set group ${groupState.groupId} to ${groupState.open ? 'expanded' : 'collapsed'}`);
+                  
+                  // After setting group state, verify column visibility is correct
+                  const columnDefs = gridApi.getColumnDefs();
+                  if (columnDefs) {
+                    columnDefs.forEach((def: any) => {
+                      if (def.groupId === groupState.groupId && def.children) {
+                        def.children.forEach((child: any) => {
+                          const colId = child.colId || child.field;
+                          const columnGroupShow = child.columnGroupShow;
+                          
+                          if (columnGroupShow) {
+                            const shouldBeVisible = 
+                              (columnGroupShow === 'open' && groupState.open) ||
+                              (columnGroupShow === 'closed' && !groupState.open);
+                            
+                            console.log(`[🔍][COLUMN_GROUP_SERVICE] Column ${colId} with columnGroupShow:'${columnGroupShow}' should be ${shouldBeVisible ? 'visible' : 'hidden'}`);
+                          }
+                        });
+                      }
+                    });
+                  }
+                } catch (e) {
+                  console.warn(`[🔍][COLUMN_GROUP_SERVICE] Could not set state for group ${groupState.groupId}:`, e);
+                }
+              });
             }
+            
+            // Clear the pending state after applying
+            gridStateManager.clearPendingColumnGroupState();
+          } else {
+            console.log('[🔍][COLUMN_GROUP_SERVICE] No pending column group state to apply');
           }
-        });
-      } else {
-        console.log('[🔍][COLUMN_GROUP_SERVICE] No column group state to restore');
-      }
+        }
+        
+        // Final verification of column visibility
+        setTimeout(() => {
+          console.log('[🔍][COLUMN_GROUP_SERVICE] Final verification of column states:');
+          const finalColumnState = gridApi.getColumnState();
+          const columnsWithGroupShow = finalColumnState?.filter((col: any) => {
+            const colDef = gridApi.getColumnDef(col.colId);
+            return colDef && colDef.columnGroupShow;
+          });
+          
+          if (columnsWithGroupShow && columnsWithGroupShow.length > 0) {
+            columnsWithGroupShow.forEach((col: any) => {
+              const colDef = gridApi.getColumnDef(col.colId);
+              console.log(`[🔍][COLUMN_GROUP_SERVICE] Column ${col.colId} - columnGroupShow: ${colDef.columnGroupShow}, hidden: ${col.hide}`);
+            });
+          }
+        }, 100);
+      }, 200); // Give time for column state to be fully applied
     }, 100); // Small delay to let grid apply new column defs first
     
     // Force grid to redraw columns

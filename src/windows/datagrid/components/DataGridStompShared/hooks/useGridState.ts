@@ -189,7 +189,7 @@ export function useGridState(
     stateManagerRef.current.clearPendingColumnState();
   }, []);
   
-  // Get pending column group state from state manager
+  // Get pending column group state
   const getPendingColumnGroupState = useCallback(() => {
     return stateManagerRef.current.getPendingColumnGroupState();
   }, []);
