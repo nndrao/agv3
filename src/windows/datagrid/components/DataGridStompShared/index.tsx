@@ -22,7 +22,6 @@ import {
 import { Toolbar } from './components/Toolbar';
 import { BusyIndicator } from './components/BusyIndicator';
 import { DataGrid } from './components/DataGrid';
-import { ProfileStatusIndicator, useProfileStatus } from './components/ProfileStatusIndicator';
 import { GridOptionsEditorContent } from './gridOptions/GridOptionsEditor';
 import { ColumnGroupEditorContent } from './columnGroups/ColumnGroupEditor';
 import { ColumnGroupService } from './columnGroups/columnGroupService';
@@ -139,10 +138,13 @@ function evaluateExpression(expression: string, context: any): boolean {
 
 const DataGridStompSharedComponent = () => {
   const { toast } = useToast();
-  const profileStatus = useProfileStatus();
   
   // State
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [profileLoadingState, setProfileLoadingState] = useState<{ isLoading: boolean; profileName: string }>({ 
+    isLoading: false, 
+    profileName: '' 
+  });
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(false);
   const [showColumnSettings, setShowColumnSettings] = useState<boolean>(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -171,28 +173,50 @@ const DataGridStompSharedComponent = () => {
   // State for active profile data - needed before hooks
   const [activeProfileData, setActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
   
-  // Track if we're in the middle of switching profiles
-  const switchingProfileRef = useRef(false);
+  // Simple ref variable to track if profile loading is in progress
+  const isProfileLoadingRef = useRef(false);
+  const gridStateAppliedRef = useRef(false);
+  const columnGroupsAppliedRef = useRef(false);
+  
+  // Helper to check if profile application is complete
+  const checkProfileApplicationComplete = useCallback(() => {
+    console.log('[checkProfileApplicationComplete] Checking:', {
+      isLoading: isProfileLoadingRef.current,
+      gridStateApplied: gridStateAppliedRef.current,
+      columnGroupsApplied: columnGroupsAppliedRef.current
+    });
+    
+    if (isProfileLoadingRef.current && 
+        gridStateAppliedRef.current && 
+        columnGroupsAppliedRef.current) {
+      console.log('[checkProfileApplicationComplete] Profile application complete!');
+      isProfileLoadingRef.current = false;
+      gridStateAppliedRef.current = false;
+      columnGroupsAppliedRef.current = false;
+      
+      // Hide the loading indicator
+      setProfileLoadingState({ isLoading: false, profileName: '' });
+    }
+  }, []);
   
   // Profile status callbacks for useGridState
   const profileStatusCallbacks = useMemo(() => ({
     onProfileApplying: (profileName: string) => {
-      console.log('[profileStatusCallbacks] onProfileApplying called, current operation:', profileStatus.operation);
-      // If we're already switching, keep that status, otherwise show applying
-      if (profileStatus.operation !== 'switching') {
-        profileStatus.startOperation('applying', profileName);
-      }
+      console.log('[profileStatusCallbacks] onProfileApplying called for:', profileName);
+      // This is called when a profile is pending application (grid not ready)
     },
     onProfileApplied: (profileName: string, success: boolean, error?: string) => {
       console.log('[profileStatusCallbacks] onProfileApplied called - success:', success);
-      console.log('[profileStatusCallbacks] switchingProfileRef.current:', switchingProfileRef.current);
-      // Don't complete immediately if we're switching - wait for column groups to be applied
-      // The column groups effect will complete the operation
-      if (!switchingProfileRef.current) {
-        profileStatus.completeOperation(success, error);
+      console.log('[profileStatusCallbacks] isProfileLoadingRef.current:', isProfileLoadingRef.current);
+      
+      if (isProfileLoadingRef.current) {
+        // Mark grid state as applied
+        gridStateAppliedRef.current = true;
+        console.log('[profileStatusCallbacks] Grid state applied, checking if complete...');
+        checkProfileApplicationComplete();
       }
     }
-  }), [profileStatus]);
+  }), [checkProfileApplicationComplete]);
   
   // Custom hooks - order matters for dependencies
   const { providerConfig, columnDefs } = useProviderConfig(selectedProviderId);
@@ -422,10 +446,12 @@ const DataGridStompSharedComponent = () => {
       console.log('[🔍][PROFILE_HANDLER] Initial mount - applying full profile');
       
       // Start the loading indicator for initial profile load
-      if (!switchingProfileRef.current) {
+      if (!isProfileLoadingRef.current) {
         console.log('[🔍][PROFILE_HANDLER] Starting initial profile load indicator');
-        profileStatus.startOperation('loading', profile.name);
-        switchingProfileRef.current = true;
+        isProfileLoadingRef.current = true;
+        setProfileLoadingState({ isLoading: true, profileName: profile.name });
+        gridStateAppliedRef.current = false;
+        columnGroupsAppliedRef.current = false;
       }
       
       if (profile.selectedProviderId) {
@@ -444,7 +470,7 @@ const DataGridStompSharedComponent = () => {
     // Apply grid state if available
     console.log('[🔍][PROFILE_HANDLER] Calling applyProfileGridState');
     applyProfileGridState(profile);
-  }, [applyProfileGridState, profileStatus]);
+  }, [applyProfileGridState]);
   
   // Profile management
   const {
@@ -696,7 +722,7 @@ const DataGridStompSharedComponent = () => {
     
     // Show saving status
     const profileDisplayName = name || activeProfileData?.name || 'Profile';
-    profileStatus.startOperation('saving', profileDisplayName);
+    // Note: Saving status is handled by the profile management hook's toast
     
     // Extract full grid state for comprehensive persistence
     const fullGridState = extractFullGridState();
@@ -746,15 +772,13 @@ const DataGridStompSharedComponent = () => {
       
       console.log('[DataGridStompShared] Profile saved successfully');
       
-      // Show success status
-      profileStatus.completeOperation(true);
+      // Save completed successfully
     } catch (error) {
       console.error('[DataGridStompShared] Error saving profile:', error);
       
-      // Show error status
-      profileStatus.completeOperation(false, 'Failed to save profile');
+      // Error already handled by saveProfile function
     }
-  }, [activeProfileData, selectedProviderId, connectionState.isConnected, sidebarVisible, showColumnSettings, saveProfile, extractGridState, extractFullGridState, unsavedGridOptions, unsavedColumnGroups, setColumnGroups, profileStatus]);
+  }, [activeProfileData, selectedProviderId, connectionState.isConnected, sidebarVisible, showColumnSettings, saveProfile, extractGridState, extractFullGridState, unsavedGridOptions, unsavedColumnGroups, setColumnGroups]);
   
   // Wrapped profile load handler with status indication
   const handleProfileLoad = useCallback(async (versionId: string) => {
@@ -773,23 +797,27 @@ const DataGridStompSharedComponent = () => {
     if (profile) {
       // Show "Loading profile..." immediately
       console.log('[handleProfileLoad] Starting switching operation');
-      profileStatus.startOperation('switching', profile.name);
-      switchingProfileRef.current = true;
+      isProfileLoadingRef.current = true;
+      setProfileLoadingState({ isLoading: true, profileName: profile.name });
+      gridStateAppliedRef.current = false;
+      columnGroupsAppliedRef.current = false;
       
       try {
         await loadProfile(versionId);
         
         // Profile is loaded but not yet applied to grid
         // The actual application will happen via callbacks and column group effects
-        // Don't complete here - wait for the column groups effect to complete
+        // Don't complete here - wait for both grid state and column groups to be applied
         console.log('[handleProfileLoad] loadProfile completed - waiting for grid application');
       } catch (error) {
         console.error('[handleProfileLoad] Error loading profile:', error);
-        switchingProfileRef.current = false;
-        profileStatus.completeOperation(false, 'Failed to switch profile');
+        isProfileLoadingRef.current = false;
+        setProfileLoadingState({ isLoading: false, profileName: '' });
+        gridStateAppliedRef.current = false;
+        columnGroupsAppliedRef.current = false;
       }
     }
-  }, [profiles, activeProfile, loadProfile, profileStatus]);
+  }, [profiles, activeProfile, loadProfile]);
   
   // Profile management handlers
   const handleProfileExport = useCallback(async () => {
@@ -1108,7 +1136,7 @@ const DataGridStompSharedComponent = () => {
     console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnDefs.length:', columnDefs.length);
     console.log('[🔍][COLUMN_GROUPS_EFFECT] - activeProfileData?.columnGroups:', activeProfileData?.columnGroups);
     console.log('[🔍][COLUMN_GROUPS_EFFECT] - unsavedColumnGroups:', unsavedColumnGroups);
-    console.log('[🔍][COLUMN_GROUPS_EFFECT] - switchingProfileRef.current:', switchingProfileRef.current);
+    console.log('[🔍][COLUMN_GROUPS_EFFECT] - isProfileLoadingRef.current:', isProfileLoadingRef.current);
     
     // Only apply column groups when grid is ready and we have column definitions
     if (gridApi && columnDefs.length > 0) {
@@ -1152,21 +1180,21 @@ const DataGridStompSharedComponent = () => {
           const hasGroups = appliedDefs?.some((def: any) => def.children);
           console.log('[🔍][COLUMN_GROUPS_EFFECT] Verification - Grid has column groups:', hasGroups);
           
-          // If we were switching profiles, complete the operation now
-          if (switchingProfileRef.current) {
-            console.log('[🔍][COLUMN_GROUPS_EFFECT] Completing profile switch');
-            switchingProfileRef.current = false;
-            profileStatus.completeOperation(true);
+          // Mark column groups as applied
+          if (isProfileLoadingRef.current) {
+            columnGroupsAppliedRef.current = true;
+            console.log('[🔍][COLUMN_GROUPS_EFFECT] Column groups applied, checking if complete...');
+            checkProfileApplicationComplete();
           }
         }, 100);
       } else {
         console.log('[🔍][COLUMN_GROUPS_EFFECT] No column groups to apply');
         
-        // If we were switching profiles but have no column groups, complete now
-        if (switchingProfileRef.current) {
-          console.log('[🔍][COLUMN_GROUPS_EFFECT] No column groups - completing profile switch');
-          switchingProfileRef.current = false;
-          profileStatus.completeOperation(true);
+        // If we were switching profiles but have no column groups, mark as applied
+        if (isProfileLoadingRef.current) {
+          console.log('[🔍][COLUMN_GROUPS_EFFECT] No column groups - marking as applied');
+          columnGroupsAppliedRef.current = true;
+          checkProfileApplicationComplete();
         }
       }
     } else {
@@ -1174,10 +1202,15 @@ const DataGridStompSharedComponent = () => {
       console.log('[🔍][COLUMN_GROUPS_EFFECT] - gridApi available:', !!gridApi);
       console.log('[🔍][COLUMN_GROUPS_EFFECT] - columnDefs count:', columnDefs?.length);
       
-      // If we're waiting for the grid to be ready but we're switching profiles,
-      // we'll complete when the grid becomes ready and this effect runs again
+      // If grid is not ready but we're in the middle of switching and grid state was already applied,
+      // mark column groups as applied (since there are no column defs to apply groups to yet)
+      if (isProfileLoadingRef.current && !gridApi && gridStateAppliedRef.current) {
+        console.log('[🔍][COLUMN_GROUPS_EFFECT] Grid not ready, but marking column groups as N/A');
+        columnGroupsAppliedRef.current = true;
+        checkProfileApplicationComplete();
+      }
     }
-  }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups, setColumnGroups, getColumnGroups, profileStatus]);
+  }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups, setColumnGroups, getColumnGroups, checkProfileApplicationComplete]);
   
   // Memoize window options (must be before early return)
   const windowOptions = useMemo(() => ({
@@ -1245,9 +1278,9 @@ const DataGridStompSharedComponent = () => {
         onOpenExpressionEditor={handleOpenExpressionEditor}
         onOpenConditionalFormatting={handleOpenConditionalFormatting}
         viewInstanceId={viewInstanceId}
-        profileOperation={profileStatus.operation}
-        profileName={profileStatus.profileName}
-        profileError={profileStatus.error}
+        profileOperation={profileLoadingState.isLoading ? 'loading' : 'idle'}
+        profileName={profileLoadingState.profileName}
+        profileError={''}
       />
       
       {/* Grid */}

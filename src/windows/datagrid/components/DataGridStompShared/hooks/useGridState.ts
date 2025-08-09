@@ -157,7 +157,7 @@ export function useGridState(
       }
       console.log('[🔍][PROFILE_LOAD] Profile grid state applied successfully');
       
-      // Notify success
+      // Always notify success when grid state is applied
       if (profileStatusCallbacks?.onProfileApplied) {
         profileStatusCallbacks.onProfileApplied(profile.name, true);
       }
