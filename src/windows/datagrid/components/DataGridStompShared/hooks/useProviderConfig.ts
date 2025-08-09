@@ -105,7 +105,10 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
           if (stompConfig.columnDefinitions && stompConfig.columnDefinitions.length > 0) {
             const processedColumns = processColumnDefinitions(stompConfig.columnDefinitions);
             setColumnDefs(processedColumns);
-            console.log('[useProviderConfig] Set column definitions:', processedColumns.length, 'columns');
+            console.log('[🔍][PROVIDER_CONFIG] Set column definitions:', processedColumns.length, 'columns');
+            console.log('[🔍][PROVIDER_CONFIG] Column defs are now available - grid can be created');
+          } else {
+            console.log('[🔍][PROVIDER_CONFIG] No column definitions in config');
           }
         }
       }
@@ -126,12 +129,15 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
   
   // Load provider configuration when selected
   useEffect(() => {
+    console.log('[🔍][PROVIDER_CONFIG] Provider ID changed:', selectedProviderId);
     if (!selectedProviderId) {
+      console.log('[🔍][PROVIDER_CONFIG] No provider ID, clearing config');
       setProviderConfig(null);
       setColumnDefs([]);
       return;
     }
     
+    console.log('[🔍][PROVIDER_CONFIG] Loading config for provider:', selectedProviderId);
     loadProviderConfig(selectedProviderId);
   }, [selectedProviderId, loadProviderConfig]);
   

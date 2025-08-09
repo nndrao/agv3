@@ -112,6 +112,9 @@ export interface ToolbarProps {
   onOpenExpressionEditor?: () => void;
   onOpenConditionalFormatting?: () => void;
   viewInstanceId: string;
+  profileOperation?: string;
+  profileName?: string;
+  profileError?: string;
 }
 
 export interface BusyIndicatorProps {

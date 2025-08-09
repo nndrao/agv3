@@ -19,6 +19,7 @@ export const DataGrid = React.memo<DataGridProps>(({
   snapshotData,
   gridOptions = {}
 }) => {
+  console.log('[🔍][DATA_GRID] DataGrid rendering with columnDefs:', columnDefs?.length || 0, 'columns');
   // Merge custom components with ag-grid components
   const components = useMemo(() => ({
     ...agGridComponents,
@@ -53,7 +54,10 @@ export const DataGrid = React.memo<DataGridProps>(({
       columnDefs={columnDefs}
       defaultColDef={defaultColDef}
       sideBar={sidebarVisible}
-      onGridReady={onGridReady}
+      onGridReady={(params) => {
+        console.log('[🔍][DATA_GRID] AG-Grid onGridReady fired');
+        onGridReady(params);
+      }}
       getRowId={getRowId}
       statusBar={statusBar}
       // Apply grid options from profile (excluding font which is handled by wrapper)

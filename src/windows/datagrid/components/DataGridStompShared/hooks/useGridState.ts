@@ -37,13 +37,20 @@ function validateGridApi(gridApi: GridApi | null): boolean {
   return requiredMethods.every(method => typeof (gridApi as any)[method] === 'function');
 }
 
+interface ProfileStatusCallbacks {
+  onProfileApplying?: (profileName: string) => void;
+  onProfileApplied?: (profileName: string, success: boolean, error?: string) => void;
+}
+
 export function useGridState(
   providerConfig: any,
-  activeProfileData: DataGridStompSharedProfile | null
+  activeProfileData: DataGridStompSharedProfile | null,
+  profileStatusCallbacks?: ProfileStatusCallbacks
 ): UseGridStateResult {
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
   const columnApiRef = useRef<ColumnApi | null>(null);
   const stateManagerRef = useRef<GridStateManager>(new GridStateManager());
+  const pendingProfileRef = useRef<DataGridStompSharedProfile | null>(null);
   
   // Memoized getRowId function
   const getRowId = useCallback((params: any) => {
@@ -65,8 +72,25 @@ export function useGridState(
     console.log('[🔍][PROFILE_LOAD] GridApi available:', !!gridApiRef.current);
     console.log('[🔍][PROFILE_LOAD] GridApi valid:', validateGridApi(gridApiRef.current));
     
-    if (!profile || !gridApiRef.current || !validateGridApi(gridApiRef.current)) {
-      console.log('[🔍][PROFILE_LOAD] Early return - missing profile or invalid GridApi');
+    if (!profile) {
+      console.log('[🔍][PROFILE_LOAD] No profile to apply');
+      return;
+    }
+    
+    // Store column groups even if grid is not ready yet
+    // They will be applied when the grid becomes ready
+    if (profile.columnGroups && !gridApiRef.current) {
+      console.log('[🔍][PROFILE_LOAD] Grid not ready yet, storing column groups for later');
+      stateManagerRef.current.setColumnGroups(profile.columnGroups);
+    }
+    
+    if (!gridApiRef.current || !validateGridApi(gridApiRef.current)) {
+      console.log('[🔍][PROFILE_LOAD] Grid not ready - storing profile for later application');
+      pendingProfileRef.current = profile;
+      // Notify that profile is pending
+      if (profileStatusCallbacks?.onProfileApplying) {
+        profileStatusCallbacks.onProfileApplying(profile.name);
+      }
       return;
     }
     
@@ -132,10 +156,20 @@ export function useGridState(
         }
       }
       console.log('[🔍][PROFILE_LOAD] Profile grid state applied successfully');
+      
+      // Notify success
+      if (profileStatusCallbacks?.onProfileApplied) {
+        profileStatusCallbacks.onProfileApplied(profile.name, true);
+      }
     } catch (error) {
       console.error('[🔍][PROFILE_LOAD] Error applying grid state:', error);
+      
+      // Notify error
+      if (profileStatusCallbacks?.onProfileApplied) {
+        profileStatusCallbacks.onProfileApplied(profile.name, false, 'Failed to apply profile');
+      }
     }
-  }, [providerConfig?.keyColumn]);
+  }, [providerConfig?.keyColumn, profileStatusCallbacks]);
   
   // Extract current grid state (legacy format for backward compatibility)
   const extractGridState = useCallback(() => {
@@ -203,6 +237,7 @@ export function useGridState(
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
     console.log('[🔍][GRID_READY] Grid ready event fired');
     console.log('[🔍][GRID_READY] Active profile data:', activeProfileData);
+    console.log('[🔍][GRID_READY] Pending profile:', pendingProfileRef.current);
     console.log('[🔍][GRID_READY] Grid API initialized:', !!params.api);
     
     gridApiRef.current = params.api;
@@ -216,36 +251,56 @@ export function useGridState(
     // 2. Column groups need to be applied FIRST (by the column groups effect)
     // 3. Grid state (column state, filters, sorts) is applied AFTER column groups
     
-    if (activeProfileData) {
-      console.log('[🔍][GRID_READY] Profile data available');
-      console.log('[🔍][GRID_READY] Profile has grid options:', !!activeProfileData.gridOptions);
-      console.log('[🔍][GRID_READY] Profile has column groups:', !!activeProfileData.columnGroups);
-      console.log('[🔍][GRID_READY] Profile has grid state:', !!activeProfileData.gridState);
+    // Check for pending profile first, then fall back to active profile
+    const profileToApply = pendingProfileRef.current || activeProfileData;
+    
+    if (profileToApply) {
+      console.log('[🔍][GRID_READY] Applying profile:', profileToApply.name);
+      console.log('[🔍][GRID_READY] Profile source:', pendingProfileRef.current ? 'pending' : 'active');
+      console.log('[🔍][GRID_READY] Profile has grid options:', !!profileToApply.gridOptions);
+      console.log('[🔍][GRID_READY] Profile has column groups:', !!profileToApply.columnGroups);
+      console.log('[🔍][GRID_READY] Profile has grid state:', !!profileToApply.gridState);
       
       // Store column groups in state manager for the column groups effect
-      if (activeProfileData.columnGroups) {
+      if (profileToApply.columnGroups) {
         console.log('[🔍][GRID_READY] Storing column groups for later application');
-        stateManagerRef.current.setColumnGroups(activeProfileData.columnGroups);
+        stateManagerRef.current.setColumnGroups(profileToApply.columnGroups);
       }
       
       // We'll apply the grid state AFTER column groups are applied
       // This is handled by delaying the grid state application
       console.log('[🔍][GRID_READY] Delaying grid state application to allow column groups to be applied first');
+      
+      // Notify that we're applying the profile if this is a pending profile
+      if (pendingProfileRef.current && profileStatusCallbacks?.onProfileApplying) {
+        profileStatusCallbacks.onProfileApplying(profileToApply.name);
+      }
+      
       setTimeout(() => {
         console.log('[🔍][GRID_READY] Now applying grid state after column groups');
-        applyProfileGridState(activeProfileData);
+        applyProfileGridState(profileToApply);
+        // Clear the pending profile after applying
+        pendingProfileRef.current = null;
       }, 200); // Give column groups time to be applied
     } else {
-      console.log('[🔍][GRID_READY] No active profile data available yet');
+      console.log('[🔍][GRID_READY] No profile data available to apply');
     }
-  }, [activeProfileData, applyProfileGridState]);
+  }, [activeProfileData, applyProfileGridState, profileStatusCallbacks]);
   
   // Apply profile state when it changes
   useEffect(() => {
     console.log('[🔍][PROFILE_CHANGE_EFFECT] Active profile data changed:', activeProfileData?.name);
+    console.log('[🔍][PROFILE_CHANGE_EFFECT] Grid ready:', !!gridApiRef.current);
+    
     if (activeProfileData) {
-      console.log('[🔍][PROFILE_CHANGE_EFFECT] Applying profile grid state');
+      console.log('[🔍][PROFILE_CHANGE_EFFECT] Attempting to apply profile grid state');
       applyProfileGridState(activeProfileData);
+      
+      // If the grid isn't ready, the profile will be stored as pending
+      // and applied when the grid becomes ready
+      if (!gridApiRef.current) {
+        console.log('[🔍][PROFILE_CHANGE_EFFECT] Grid not ready, profile stored as pending');
+      }
     } else {
       console.log('[🔍][PROFILE_CHANGE_EFFECT] No active profile data');
     }

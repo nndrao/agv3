@@ -377,10 +377,7 @@ export function useProfileManagement<T extends BaseProfile>({
       setActiveProfile(profile);
       setActiveProfileData(profile.config as T);
 
-      toast({
-        title: "Profile Loaded",
-        description: `Switched to profile: ${profile.name}`
-      });
+      // Don't show toast here - the status indicator handles this
     } catch (err) {
       log('Error loading profile:', err);
       setError(err as Error);
