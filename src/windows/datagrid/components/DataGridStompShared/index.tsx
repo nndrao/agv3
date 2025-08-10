@@ -221,7 +221,7 @@ const DataGridStompSharedComponent = () => {
   // Custom hooks - order matters for dependencies
   const { providerConfig, columnDefs } = useProviderConfig(selectedProviderId);
   const { gridApi, columnApi, onGridReady, getRowId, applyProfileGridState, extractGridState, extractFullGridState, resetGridState, gridApiRef, setColumnGroups, getColumnGroups, getPendingColumnState, clearPendingColumnState, getPendingColumnGroupState, clearPendingColumnGroupState } = useGridState(providerConfig, activeProfileData, profileStatusCallbacks);
-  const { connectionState, workerClient, subscribe, unsubscribe } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
+  const { connectionState, workerClient, connect, disconnect } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
   const { snapshotData, handleSnapshotData, handleRealtimeUpdate, resetSnapshot, requestSnapshot } = useSnapshotData(gridApiRef);
   const { currentViewTitle, saveViewTitle } = useViewTitle(viewInstanceId);
   const { isDarkMode, className, setTheme } = useThemeSync();
@@ -631,10 +631,10 @@ const DataGridStompSharedComponent = () => {
       // Reset state
       resetSnapshot();
       
-      // Subscribe to provider through SharedWorker
-      await subscribe(selectedProviderId, providerConfig);
+      // Connect to provider through SharedWorker
+      await connect(providerConfig);
       
-      console.log('✅ Subscribed to provider via SharedWorker');
+      console.log('✅ Connected to provider via SharedWorker');
       
       // Request snapshot explicitly
       await requestSnapshot(workerClient, selectedProviderId);
@@ -657,23 +657,19 @@ const DataGridStompSharedComponent = () => {
         variant: "destructive"
       });
     }
-  }, [providerConfig, workerClient, selectedProviderId, toast, subscribe, resetSnapshot, requestSnapshot]);
+  }, [providerConfig, workerClient, selectedProviderId, toast, connect, resetSnapshot, requestSnapshot]);
   
   // Disconnect from SharedWorker
   const disconnectFromSharedWorker = useCallback(async () => {
     if (workerClient && selectedProviderId) {
       try {
-        await unsubscribe(selectedProviderId);
+        await disconnect();
         resetSnapshot();
-        toast({
-          title: "Disconnected",
-          description: "Disconnected from provider",
-        });
       } catch (error) {
         console.error('Disconnect error:', error);
       }
     }
-  }, [workerClient, selectedProviderId, unsubscribe, resetSnapshot, toast]);
+  }, [workerClient, selectedProviderId, disconnect, resetSnapshot]);
   
   // Check if styles are loaded
   useEffect(() => {
@@ -710,11 +706,11 @@ const DataGridStompSharedComponent = () => {
   useEffect(() => {
     return () => {
       if (workerClient && selectedProviderId) {
-        console.log('[DataGridStompShared] Component unmounting, unsubscribing from provider');
-        unsubscribe(selectedProviderId).catch(() => {});
+        console.log('[DataGridStompShared] Component unmounting, disconnecting from provider');
+        disconnect().catch(() => {});
       }
     };
-  }, [workerClient, selectedProviderId, unsubscribe]);
+  }, [workerClient, selectedProviderId, disconnect]);
   
   // Save current state to profile
   const saveCurrentState = useCallback(async (saveAsNew = false, name?: string) => {

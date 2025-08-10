@@ -19,34 +19,41 @@ export function useSharedWorkerConnection(
 ): UseSharedWorkerConnectionResult {
   const { toast } = useToast();
   
-  // All state in refs to prevent re-renders
-  const isConnectedRef = useRef(false);
-  const currentClientIdRef = useRef('');
+  // State for UI updates (triggers re-renders)
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentClientId, setCurrentClientId] = useState('');
+  
+  // Refs for internal logic (doesn't trigger re-renders)
   const sharedWorkerClientRef = useRef<SharedWorkerClient | null>(null);
   const isConnectingRef = useRef(false);
   const wasManuallyDisconnectedRef = useRef(false);
   const hasShownDisconnectAlertRef = useRef(false);
   
-  // Update connection status in AG-Grid context
-  const updateConnectionStatusInGrid = useCallback((isConnected: boolean, clientId: string = '') => {
-    isConnectedRef.current = isConnected;
-    currentClientIdRef.current = clientId;
+  // Update connection status in AG-Grid context and state
+  const updateConnectionStatusInGrid = useCallback((connected: boolean, clientId: string = '') => {
+    // Update state (triggers re-renders)
+    setIsConnected(connected);
+    setCurrentClientId(clientId);
     
-    if (gridApiRef?.current && gridApiRef.current.getContext) {
+    if (gridApiRef?.current) {
       try {
-        const context = gridApiRef.current.getContext();
-        gridApiRef.current.updateContext({
-          ...context,
-          connectionState: {
-            isConnected,
-            currentClientId: clientId,
-            isConnecting: isConnectingRef.current,
-            wasManuallyDisconnected: wasManuallyDisconnectedRef.current,
-            hasShownDisconnectAlert: hasShownDisconnectAlertRef.current
-          }
-        });
-        // Refresh status bar to update the connection panel
-        gridApiRef.current.refreshHeader();
+        // Store in custom context since AG-Grid v31+ doesn't have getContext/updateContext
+        if (!gridApiRef.current._customContext) {
+          gridApiRef.current._customContext = {};
+        }
+        
+        gridApiRef.current._customContext.connectionState = {
+          isConnected: connected,
+          currentClientId: clientId,
+          isConnecting: isConnectingRef.current,
+          wasManuallyDisconnected: wasManuallyDisconnectedRef.current,
+          hasShownDisconnectAlert: hasShownDisconnectAlertRef.current
+        };
+        
+        // Dispatch custom event to update status bar
+        if (typeof gridApiRef.current.dispatchEvent === 'function') {
+          gridApiRef.current.dispatchEvent({ type: 'statusBarUpdate' });
+        }
       } catch (error) {
         console.warn('[useSharedWorkerConnection] Grid API not ready yet:', error);
       }
@@ -80,7 +87,7 @@ export function useSharedWorkerConnection(
           // Check if this is a WebSocket connection error (STOMP disconnection)
           if (error.message && error.message.includes('WebSocket connection error')) {
             // Only show alert once per disconnection
-            if (!hasShownDisconnectAlertRef.current && isConnectedRef.current) {
+            if (!hasShownDisconnectAlertRef.current && isConnected) {
               hasShownDisconnectAlertRef.current = true;
               alert('STOMP provider has been disconnected from the server!');
             }
@@ -130,7 +137,7 @@ export function useSharedWorkerConnection(
     hasShownDisconnectAlertRef.current = false;
     
     // Prevent multiple simultaneous connections
-    if (isConnectedRef.current || isConnectingRef.current) {
+    if (isConnected || isConnectingRef.current) {
       console.log('[useSharedWorkerConnection] Already connected or is connecting, skipping');
       return;
     }
@@ -149,6 +156,8 @@ export function useSharedWorkerConnection(
     isConnectingRef.current = true;
     
     try {
+      // Actually subscribe to the provider
+      await sharedWorkerClientRef.current.subscribe(selectedProviderId, config);
       updateConnectionStatusInGrid(true, `shared-${selectedProviderId}`);
     } catch (error) {
       console.error('Connection error:', error);
@@ -162,7 +171,7 @@ export function useSharedWorkerConnection(
       // Always clear connecting flag
       isConnectingRef.current = false;
     }
-  }, [selectedProviderId, toast, updateConnectionStatusInGrid]);
+  }, [selectedProviderId, toast, updateConnectionStatusInGrid, isConnected]);
   
   // Stable disconnect function
   const disconnect = useCallback(async () => {
@@ -208,8 +217,8 @@ export function useSharedWorkerConnection(
   // Return stable connection state and functions
   return {
     connectionState: {
-      isConnected: isConnectedRef.current,
-      currentClientId: currentClientIdRef.current,
+      isConnected: isConnected,
+      currentClientId: currentClientId,
       isConnecting: isConnectingRef.current,
       wasManuallyDisconnected: wasManuallyDisconnectedRef.current,
       hasShownDisconnectAlert: hasShownDisconnectAlertRef.current

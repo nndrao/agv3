@@ -26,26 +26,8 @@ export const DataGrid = React.memo<DataGridProps>(({
     connectionStatusPanel: ConnectionStatusPanel
   }), []);
   
-  // Create status bar with connection status props
-  const statusBar = useMemo(() => {
-    if (!statusBarConfig) return undefined;
-    
-    return {
-      ...statusBarConfig,
-      statusPanels: statusBarConfig.statusPanels.map((panel: any) => {
-        if (panel.statusPanel === 'connectionStatusPanel') {
-          return {
-            ...panel,
-            statusPanelParams: {
-              connectionState,
-              snapshotData
-            }
-          };
-        }
-        return panel;
-      })
-    };
-  }, [statusBarConfig, connectionState, snapshotData]);
+  // Use status bar config directly (no need to pass props for class-based component)
+  const statusBar = statusBarConfig;
   
   return (
     <AgGridReact
