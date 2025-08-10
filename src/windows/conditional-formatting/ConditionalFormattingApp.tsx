@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { GridConfigurationBus, ColumnInfo } from '@/services/iab/GridConfigurationBus';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ConditionalFormattingEditorContent } from '@/windows/datagrid/components/DataGridStompShared/conditionalFormatting/ConditionalFormattingEditorContent';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';

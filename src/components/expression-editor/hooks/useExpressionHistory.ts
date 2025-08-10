@@ -47,7 +47,7 @@ export function useExpressionHistory(mode: ExpressionMode) {
     const newItem: ExpressionHistory = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       expression,
-      timestamp: new Date(),
+      timestamp: Date.now(),
       mode,
       isValid,
       description

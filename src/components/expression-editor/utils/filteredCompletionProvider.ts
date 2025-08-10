@@ -63,17 +63,17 @@ export function createFilteredCompletionProvider(
         // Add function suggestions from library
         Object.values(FUNCTION_LIBRARY).forEach(func => {
           const params = func.parameters
-            .map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`)
+            .map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`)
             .join(', ');
           
           suggestions.push({
             label: func.name,
             kind: monaco.languages.CompletionItemKind.Function,
-            insertText: `${func.name}(${func.parameters.map((p, i) => `\${${i + 1}:${p.name}}`).join(', ')})`,
+            insertText: `${func.name}(${func.parameters.map((p: any, i: number) => `\${${i + 1}:${p.name}}`).join(', ')})`,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             detail: `${func.name}(${params}): ${func.returnType}`,
             documentation: {
-              value: `**${func.description}**\n\n${func.examples.map(ex => 
+              value: `**${func.description}**\n\n${func.examples.map((ex: any) => 
                 `\`${ex.expression}\` → \`${ex.result}\``
               ).join('\n')}`
             },

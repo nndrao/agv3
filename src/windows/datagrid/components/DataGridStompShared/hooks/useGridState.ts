@@ -1,13 +1,13 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { GridApi, GridReadyEvent, ColumnApi } from 'ag-grid-community';
+import { GridApi, GridReadyEvent } from 'ag-grid-community';
 import { DataGridStompSharedProfile, RowData } from '../types';
 import { GridStateManager, GridState } from '../utils/gridStateManager';
 
 interface UseGridStateResult {
   gridApi: GridApi<RowData> | null;
-  columnApi: ColumnApi | null;
+  columnApi: any | null; // Deprecated in v33, kept for compatibility
   gridApiRef: React.MutableRefObject<GridApi<RowData> | null>;
-  columnApiRef: React.MutableRefObject<ColumnApi | null>;
+  columnApiRef: React.MutableRefObject<any | null>;
   onGridReady: (params: GridReadyEvent<RowData>) => void;
   getRowId: (params: any) => string;
   applyProfileGridState: (profile: DataGridStompSharedProfile | null) => void;
@@ -101,7 +101,7 @@ export function useGridState(
         }
         
         
-        const stateApplied = stateManagerRef.current.applyState(profile.gridState, {
+        stateManagerRef.current.applyState(profile.gridState, {
           applyColumnState: true,
           applyFilters: true,
           applySorting: true,
@@ -216,7 +216,7 @@ export function useGridState(
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
     
     gridApiRef.current = params.api;
-    columnApiRef.current = params.columnApi || null;
+    columnApiRef.current = (params as any).columnApi || null;
     
     // Set GridApi in state manager
     stateManagerRef.current.setGridApi(params.api);

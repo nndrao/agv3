@@ -17,11 +17,11 @@ export function useIsOpenFinWindow(): boolean {
     if (typeof fin !== 'undefined' && fin.Window) {
       // Check if this is a child window (not the main provider window)
       fin.Window.getCurrent()
-        .then((currentWindow) => {
+        .then((currentWindow: any) => {
           // Get window identity
           return currentWindow.getInfo();
         })
-        .then((windowInfo) => {
+        .then((windowInfo: any) => {
           // Determine if this is a child/dialog window
           // You can customize this logic based on your window naming conventions
           const isChildWindow = 

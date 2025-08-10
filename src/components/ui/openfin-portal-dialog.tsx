@@ -1,3 +1,4 @@
+/// <reference types="@openfin/core" />
 import React, { useEffect, useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { getViewUrl } from '@/utils/urlUtils';

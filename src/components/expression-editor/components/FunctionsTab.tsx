@@ -178,7 +178,7 @@ export const FunctionsTab: React.FC<FunctionsTabProps> = ({
           </div>
           {func.examples && func.examples.length > 0 && (
             <div className="mt-2 space-y-1">
-              {func.examples.slice(0, 1).map((ex, i) => {
+              {func.examples.slice(0, 1).map((ex: any, i: number) => {
                 const example = typeof ex === 'string' ? { expression: ex, result: '' } : ex;
                 return (
                   <div key={i} className="text-xs">

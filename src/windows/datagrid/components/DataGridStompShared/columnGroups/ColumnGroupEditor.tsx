@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, Plus, Check, XCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { X, Plus, Check, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DraggableDialog,
@@ -188,7 +188,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOpenStates, setColumnOpenStates] = useState<Map<string, 'open' | 'closed' | 'undefined'>>(new Map());
   const [groupName, setGroupName] = useState('');
-  const [groupOpenState, setGroupOpenState] = useState<'open' | 'closed' | 'undefined'>('open');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   
@@ -357,23 +356,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     onApply(groups);
     onClose();
   }, [groups, onApply, onClose]);
-  
-  // Test column group show behavior
-  const handleTestColumnGroupShow = useCallback(() => {
-    const testGroup: ColumnGroupDefinition = {
-      groupId: 'test_group_show',
-      headerName: 'Test Column Show',
-      children: ['keyColumn', 'field1', 'field2'], // Use actual column IDs from your grid
-      openByDefault: false,
-      columnStates: {
-        'keyColumn': undefined, // Always visible
-        'field1': 'open',       // Only when expanded
-        'field2': 'closed'      // Only when collapsed
-      }
-    };
-    
-    setGroups([testGroup]);
-  }, []);
   
   // Reset all
   const handleResetAll = useCallback(() => {

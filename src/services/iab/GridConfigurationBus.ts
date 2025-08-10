@@ -1,3 +1,4 @@
+/// <reference types="@openfin/core" />
 import { v4 as uuidv4 } from 'uuid';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 
@@ -80,11 +81,11 @@ export class GridConfigurationBus {
       this.channel = await fin.InterApplicationBus.Channel.create(this.channelName);
       this.isProvider = true;
       
-      this.channel.onConnection((identity) => {
+      this.channel.onConnection((identity: any) => {
         console.log(`[GridConfigurationBus] Client connected:`, identity);
       });
 
-      this.channel.onDisconnection((identity) => {
+      this.channel.onDisconnection((identity: any) => {
         console.log(`[GridConfigurationBus] Client disconnected:`, identity);
       });
 
@@ -216,7 +217,7 @@ export class GridConfigurationBus {
 
       default:
         return {
-          requestId: request.requestId,
+          requestId: (request as any).requestId,
           success: false,
           error: `Unknown request type: ${(request as any).type}`
         };
@@ -244,7 +245,7 @@ export class GridConfigurationBus {
             reject(new Error(response.error || 'Request failed'));
           }
         })
-        .catch((error) => {
+        .catch((error: any) => {
           this.pendingRequests.delete(requestId);
           reject(error);
         });

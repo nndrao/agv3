@@ -122,7 +122,7 @@ const DraggableDialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={(node) => {
           if (typeof ref === 'function') ref(node);
-          else if (ref) ref.current = node;
+          else if (ref && 'current' in ref) (ref as any).current = node;
           contentRef.current = node;
         }}
         className={cn(

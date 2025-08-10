@@ -75,10 +75,12 @@ export interface FunctionDefinition {
 }
 
 export interface ExpressionHistory {
+  id?: string;
   expression: string;
   mode: ExpressionMode;
   timestamp: number;
   isValid?: boolean;
+  description?: string;
 }
 
 export interface ExpressionExample {

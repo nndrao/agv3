@@ -52,17 +52,17 @@ export function createCompletionProvider(
       // Add function suggestions from library
       Object.values(FUNCTION_LIBRARY).forEach(func => {
         const params = func.parameters
-          .map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`)
+          .map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`)
           .join(', ');
         
         suggestions.push({
           label: func.name,
           kind: monaco.languages.CompletionItemKind.Function,
-          insertText: `${func.name}(${func.parameters.map(p => p.name).join(', ')})`,
+          insertText: `${func.name}(${func.parameters.map((p: any) => p.name).join(', ')})`,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           detail: `${func.name}(${params}): ${func.returnType}`,
           documentation: {
-            value: `**${func.description}**\n\n${func.examples.map(ex => 
+            value: `**${func.description}**\n\n${func.examples.map((ex: any) => 
               `\`${ex.expression}\` → \`${ex.result}\``
             ).join('\n')}`
           },
@@ -133,46 +133,5 @@ export function createCompletionProvider(
       return { suggestions };
     },
 
-    // Provide signature help for functions
-    provideSignatureHelp: (model, position) => {
-      // Simple implementation - can be enhanced
-      const lineContent = model.getLineContent(position.lineNumber);
-      const offset = position.column - 1;
-      
-      // Find function name before opening parenthesis
-      let funcStart = offset;
-      while (funcStart > 0 && lineContent[funcStart] !== '(') {
-        funcStart--;
-      }
-      
-      if (funcStart === 0) return null;
-      
-      // Extract function name
-      let funcNameStart = funcStart - 1;
-      while (funcNameStart > 0 && /[a-zA-Z_]/.test(lineContent[funcNameStart])) {
-        funcNameStart--;
-      }
-      
-      const funcName = lineContent.substring(funcNameStart + 1, funcStart).toUpperCase();
-      const func = FUNCTION_LIBRARY[funcName];
-      
-      if (!func) return null;
-      
-      return {
-        value: {
-          signatures: [{
-            label: func.signature,
-            documentation: func.description,
-            parameters: func.parameters.map(p => ({
-              label: p.name,
-              documentation: `${p.type} - ${p.description}`
-            }))
-          }],
-          activeSignature: 0,
-          activeParameter: 0 // Can be calculated based on comma count
-        },
-        dispose: () => {}
-      };
-    }
   };
 }

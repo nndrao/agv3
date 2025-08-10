@@ -1,5 +1,3 @@
-import { FunctionDefinition } from '../types';
-
 export const FUNCTION_LIBRARY: Record<string, any> = {
   // Math Functions
   ABS: {
