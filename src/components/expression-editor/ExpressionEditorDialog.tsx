@@ -22,8 +22,7 @@ import {
   Palette
 } from 'lucide-react';
 import { ExpressionEditor } from './ExpressionEditor';
-import { ExpressionMode, Variable } from './types';
-import { ColumnDefinition } from '@/types';
+import { ExpressionMode, Variable, ColumnDefinition } from './types';
 
 // Sample columns for demo
 const SAMPLE_COLUMNS: ColumnDefinition[] = [
@@ -109,7 +108,7 @@ export const ExpressionEditorDialog: React.FC<ExpressionEditorDialogProps> = ({
       }
       return { result: 'Executed successfully' };
     } catch (error) {
-      throw new Error('Execution failed: ' + error.message);
+      throw new Error('Execution failed: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 

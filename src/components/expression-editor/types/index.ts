@@ -1,8 +1,12 @@
 // Expression Editor Types
 
-import { ColumnDefinition } from '@/types';
-
 export type ExpressionMode = 'conditional' | 'calculation' | 'filter' | 'validation';
+
+export interface ColumnDefinition {
+  field: string;
+  headerName: string;
+  type: string;
+}
 
 export interface ExpressionEditorProps {
   // Editor configuration

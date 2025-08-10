@@ -7,6 +7,7 @@ export interface Variable {
   value: any;
   type: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'object';
   description?: string;
+  category?: string;
 }
 
 export interface ColumnDefinition {
@@ -68,7 +69,16 @@ export interface FunctionDefinition {
   category: string;
   signature: string;
   description: string;
-  examples?: string[];
+  examples?: string[] | { expression: string; result: any }[];
+  parameters?: { name: string; type: string; description: string }[];
+  returnType?: string;
+}
+
+export interface ExpressionHistory {
+  expression: string;
+  mode: ExpressionMode;
+  timestamp: number;
+  isValid?: boolean;
 }
 
 export interface ExpressionExample {

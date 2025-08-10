@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Search, 
-  Database, 
   Hash, 
   Calendar, 
   ToggleLeft, 
@@ -13,7 +12,7 @@ import {
   Copy,
   Info
 } from 'lucide-react';
-import { ColumnDefinition } from '@/types';
+import { ColumnDefinition } from '../types';
 
 interface ColumnsTabProps {
   columns: ColumnDefinition[];

@@ -142,9 +142,11 @@ export const FunctionsTab: React.FC<FunctionsTabProps> = ({
   };
 
   const handleInsertFunction = (func: typeof FUNCTION_LIBRARY[string]) => {
-    const params = func.parameters
-      .map((p, i) => `\${${i + 1}:${p.name}}`)
-      .join(', ');
+    const params = (func as any).parameters
+      ? (func as any).parameters
+          .map((p: any, i: number) => `\${${i + 1}:${p.name}}`)
+          .join(', ')
+      : '';
     onInsert(`${func.name}(${params})`);
   };
 
@@ -165,7 +167,7 @@ export const FunctionsTab: React.FC<FunctionsTabProps> = ({
               {func.name}
             </span>
             <Badge variant="outline" className="text-xs">
-              {func.returnType}
+              {(func as any).returnType || 'any'}
             </Badge>
           </div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -174,19 +176,26 @@ export const FunctionsTab: React.FC<FunctionsTabProps> = ({
           <div className="text-sm mt-1">
             {func.description}
           </div>
-          {func.examples.length > 0 && (
+          {func.examples && func.examples.length > 0 && (
             <div className="mt-2 space-y-1">
-              {func.examples.slice(0, 1).map((ex, i) => (
-                <div key={i} className="text-xs">
-                  <code className="bg-muted px-1 py-0.5 rounded">
-                    {ex.expression}
-                  </code>
-                  <span className="text-muted-foreground"> → </span>
-                  <code className="bg-muted px-1 py-0.5 rounded">
-                    {JSON.stringify(ex.result)}
-                  </code>
-                </div>
-              ))}
+              {func.examples.slice(0, 1).map((ex, i) => {
+                const example = typeof ex === 'string' ? { expression: ex, result: '' } : ex;
+                return (
+                  <div key={i} className="text-xs">
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      {example.expression}
+                    </code>
+                    {example.result && (
+                      <>
+                        <span className="text-muted-foreground"> → </span>
+                        <code className="bg-muted px-1 py-0.5 rounded">
+                          {JSON.stringify(example.result)}
+                        </code>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -3,9 +3,9 @@ import {
   ValidationError, 
   ExpressionMode,
   CustomFunction,
-  Variable
+  Variable,
+  ColumnDefinition
 } from '../types';
-import { ColumnDefinition } from '@/types';
 import { FUNCTION_LIBRARY } from '../functions/functionLibrary';
 
 interface ValidationContext {

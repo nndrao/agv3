@@ -3,8 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ExpressionEditor } from './ExpressionEditor';
-import { ExpressionMode, Variable } from './types';
-import { ColumnDefinition } from '@/types';
+import { ExpressionMode, Variable, ColumnDefinition } from './types';
 
 // Sample columns for demo
 const SAMPLE_COLUMNS: ColumnDefinition[] = [
@@ -61,7 +60,7 @@ export const ExpressionEditorDemo: React.FC = () => {
       }
       return { result: 'Executed successfully' };
     } catch (error) {
-      throw new Error('Execution failed: ' + error.message);
+      throw new Error('Execution failed: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 

@@ -172,7 +172,7 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({ validation }) 
           ) : (
             <div className="space-y-1">
               {validation.errors.map((error, i) => renderError(error, i))}
-              {validation.warnings.map((warning, i) => renderError(warning, `w${i}`))}
+              {validation.warnings.map((warning, i) => renderError(warning, 1000 + i))}
             </div>
           )}
         </div>

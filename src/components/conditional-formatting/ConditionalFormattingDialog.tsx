@@ -12,17 +12,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Plus, 
-  Trash2, 
-  Copy, 
-  ChevronUp, 
-  ChevronDown,
   Eye,
-  EyeOff,
   Palette,
   Sparkles,
-  FileText,
-  Save,
-  X
+  FileText
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ConditionalRule, ConditionalFormattingDialogProps } from './types';
@@ -35,7 +28,6 @@ import { generateRuleId } from './utils/ruleUtils';
 export const ConditionalFormattingDialog: React.FC<ConditionalFormattingDialogProps> = ({
   open,
   onOpenChange,
-  columnId,
   columnName,
   columnType,
   availableColumns,

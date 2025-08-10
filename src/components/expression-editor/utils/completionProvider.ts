@@ -1,7 +1,6 @@
 import { Monaco } from '@monaco-editor/react';
 import { languages } from 'monaco-editor';
-import { ColumnDefinition } from '@/types';
-import { Variable, CustomFunction } from '../types';
+import { Variable, CustomFunction, ColumnDefinition } from '../types';
 import { FUNCTION_LIBRARY } from '../functions/functionLibrary';
 
 interface CompletionContext {

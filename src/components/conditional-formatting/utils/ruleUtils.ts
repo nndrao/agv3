@@ -30,11 +30,11 @@ export function createNewRule(name?: string): ConditionalRule {
 export function createRuleFromTemplate(template: ConditionalRuleTemplate): ConditionalRule {
   return {
     id: generateRuleId(),
-    name: template.rule.name,
+    name: template.rule.name || template.name,
     description: template.description,
     enabled: true,
     priority: 1,
-    expression: template.rule.expression,
+    expression: template.rule.expression || 'true',
     formatting: template.rule.formatting || {},
     scope: template.rule.scope || { target: 'cell' }
   };
@@ -145,7 +145,7 @@ export function applyRulesToColumnDef(
 
   return {
     ...columnDef,
-    cellClass: (params: any) => {
+    cellClass: (_params: any) => {
       const classes: string[] = [];
       const sortedRules = sortRulesByPriority(cellRules);
 
@@ -167,7 +167,7 @@ export function applyRulesToColumnDef(
 
       return classes.join(' ');
     },
-    cellStyle: (params: any) => {
+    cellStyle: (_params: any) => {
       let combinedStyle = {};
       const sortedRules = sortRulesByPriority(cellRules);
 

@@ -23,7 +23,7 @@ interface SavedExpression {
 
 export const DialogDemo: React.FC = () => {
   const [savedExpressions, setSavedExpressions] = useState<SavedExpression[]>([]);
-  const [selectedMode, setSelectedMode] = useState<ExpressionMode>('conditional');
+  const [selectedMode, setSelectedMode] = useState<ExpressionMode | 'all'>('conditional');
 
   const handleSaveExpression = (expression: string, mode: ExpressionMode) => {
     const newExpression: SavedExpression = {

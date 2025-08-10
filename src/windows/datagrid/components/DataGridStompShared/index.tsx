@@ -943,7 +943,7 @@ const DataGridStompSharedComponent = () => {
         requestAnimationFrame(() => {
           // Apply all changed options
           Object.entries(changedOptions).forEach(([key, value]) => {
-            gridApi.setGridOption(key, value);
+            gridApi.setGridOption(key as any, value);
           });
           
           // Only refresh if visual options changed
@@ -955,7 +955,6 @@ const DataGridStompSharedComponent = () => {
             gridApi.refreshCells({ force: true });
           }
           
-          const endTime = performance.now();
         });
       }
     }
@@ -1055,7 +1054,7 @@ const DataGridStompSharedComponent = () => {
     if (gridApi && activeProfileData?.gridOptions) {
       Object.entries(activeProfileData.gridOptions).forEach(([key, value]) => {
         if (key !== 'font') {
-          gridApi.setGridOption(key, value);
+          gridApi.setGridOption(key as any, value);
         }
       });
       gridApi.refreshCells({ force: true });
@@ -1096,7 +1095,6 @@ const DataGridStompSharedComponent = () => {
         // Verify application after a short delay
         setTimeout(() => {
           const appliedDefs = gridApi.getColumnDefs();
-          const hasGroups = appliedDefs?.some((def: any) => def.children);
           
           // Mark column groups as applied
           if (isProfileLoadingRef.current) {
@@ -1137,20 +1135,6 @@ const DataGridStompSharedComponent = () => {
     autoShow: true
   }), []);
 
-  // Window options for conditional formatting dialog - needs more space
-  const conditionalFormattingWindowOptions = useMemo(() => ({
-    defaultWidth: 1400,
-    defaultHeight: 900,
-    defaultCentered: true,
-    frame: true,
-    resizable: true,
-    maximizable: true,
-    minimizable: true,
-    alwaysOnTop: false,
-    saveWindowState: false,
-    autoShow: true
-  }), []);
-  
   // Create theme with dynamic font - use unsaved options if available
   const gridTheme = useMemo(() => {
     const fontFamily = unsavedGridOptions?.font || activeProfileData?.gridOptions?.font;
@@ -1283,7 +1267,7 @@ const DataGridStompSharedComponent = () => {
         }}
         windowName={`column-groups-${viewInstanceId}`}
         windowOptions={windowOptions}
-        onWindowCreated={(window) => {
+        onWindowCreated={() => {
         }}
       >
         <ColumnGroupEditorContent
@@ -1304,7 +1288,7 @@ const DataGridStompSharedComponent = () => {
         onOpenChange={setShowExpressionEditor}
         mode="conditional"
         availableColumns={columnDefs}
-        onSave={(expression, mode) => {
+        onSave={(_expression, mode) => {
           // Handle expression save - apply to selected columns
           toast({
             title: "Expression Saved",

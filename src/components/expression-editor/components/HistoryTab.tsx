@@ -156,7 +156,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                   {group}
                 </div>
                 <div className="space-y-2">
-                  {items.map(renderHistoryItem)}
+                  {(items as ExpressionHistory[]).map(renderHistoryItem)}
                 </div>
               </div>
             ))

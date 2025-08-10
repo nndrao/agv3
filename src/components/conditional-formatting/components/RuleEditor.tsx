@@ -6,13 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 // Use OpenFin-adapted Select for proper dropdown rendering in OpenFin windows
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/openfin/openfin-select';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ColorPicker } from './ColorPicker';
 import { IconPicker } from './IconPicker';
 import { ExpressionEditor } from '@/components/expression-editor/ExpressionEditor';
 import { ConditionalRule } from '../types';
-import { Palette, Code2, Settings, Type } from 'lucide-react';
+import { Palette, Code2, Settings } from 'lucide-react';
 
 interface RuleEditorProps {
   rule: ConditionalRule;
@@ -28,11 +27,9 @@ interface RuleEditorProps {
 export const RuleEditor: React.FC<RuleEditorProps> = ({
   rule,
   availableColumns,
-  onUpdateRule,
-  columnType
+  onUpdateRule
 }) => {
   const [localRule, setLocalRule] = useState(rule);
-  const [expressionValid, setExpressionValid] = useState(true);
 
   // Update rule property
   const updateRule = useCallback((updates: Partial<ConditionalRule>) => {
@@ -75,8 +72,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = ({
   }, [localRule, updateRule]);
 
   // Handle expression change
-  const handleExpressionChange = useCallback((expression: string, isValid: boolean) => {
-    setExpressionValid(isValid);
+  const handleExpressionChange = useCallback((expression: string, _isValid: boolean) => {
     updateRule({ expression });
   }, [updateRule]);
 
@@ -185,7 +181,11 @@ export const RuleEditor: React.FC<RuleEditorProps> = ({
                 <ExpressionEditor
                   mode="conditional"
                   initialExpression={localRule.expression}
-                  availableColumns={availableColumns}
+                  availableColumns={availableColumns.map(col => ({
+                    field: col.field,
+                    headerName: col.headerName || col.field,
+                    type: col.type || 'string'
+                  }))}
                   availableVariables={variables}
                   onChange={handleExpressionChange}
                   showPreview={true}
@@ -258,7 +258,7 @@ export const RuleEditor: React.FC<RuleEditorProps> = ({
                     <div>
                       <Label>Text Decoration</Label>
                       <Select
-                        value={localRule.formatting.style?.textDecoration || 'none'}
+                        value={String(localRule.formatting.style?.textDecoration || 'none')}
                         onValueChange={(value) => updateStyle({ textDecoration: value })}
                       >
                         <SelectTrigger>

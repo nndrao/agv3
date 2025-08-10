@@ -80,7 +80,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
+        const { width } = entry.contentRect;
         
         // More refined responsive breakpoints
         const isVerySmall = width < 400;
@@ -193,7 +193,6 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
 
     // Configure initial editor options (responsive settings will be applied by ResizeObserver)
     const containerWidth = containerRef.current?.offsetWidth || 800;
-    const containerHeight = containerRef.current?.offsetHeight || 400;
     
     // Determine initial responsive settings
     const isVerySmallInitial = containerWidth < 400;

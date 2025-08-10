@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Sparkles, 
-  Code2, 
   CheckCircle, 
   XCircle,
   Calculator,
@@ -72,7 +71,7 @@ const convertColDefToSimpleColumn = (colDef: ColDef): SimpleColumn => {
   return {
     field: colDef.field || '',
     headerName: colDef.headerName || colDef.field || '',
-    type: colDef.type || 'text'
+    type: Array.isArray(colDef.type) ? colDef.type[0] || 'text' : (colDef.type || 'text')
   };
 };
 
@@ -137,7 +136,7 @@ export const ExpressionEditorDialogControlled: React.FC<ExpressionEditorDialogCo
       }
       return { result: 'Executed successfully' };
     } catch (error) {
-      throw new Error('Execution failed: ' + error.message);
+      throw new Error('Execution failed: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 

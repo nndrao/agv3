@@ -7,12 +7,15 @@ import type {
   GridApi,
   ColumnState,
   FilterModel,
-  SortModel,
   Column,
-  ColDef,
-  ColGroupDef,
-  GridReadyEvent
+  ColDef
 } from 'ag-grid-community';
+
+// SortModel is not exported in v33, define it locally
+type SortModel = {
+  colId: string;
+  sort: 'asc' | 'desc' | null;
+}[];
 
 /**
  * Complete grid state interface
@@ -69,7 +72,7 @@ export interface GridState {
     pivotHeaderHeight?: number;
     pivotGroupHeaderHeight?: number;
     rowBuffer?: number;
-    rowSelection?: 'single' | 'multiple';
+    rowSelection?: 'single' | 'multiple' | any;
     suppressRowClickSelection?: boolean;
     suppressCellFocus?: boolean;
     enableRangeSelection?: boolean;
@@ -227,8 +230,8 @@ export class GridStateManager {
         
         // Filter and sort
         filterModel: this.gridApi.getFilterModel() || {},
-        sortModel: typeof this.gridApi.getSortModel === 'function' ? (this.gridApi.getSortModel() || []) : [],
-        quickFilter: typeof (this.gridApi as any).getQuickFilter === 'function' ? ((this.gridApi as any).getQuickFilter() || undefined) : undefined,
+        sortModel: this.extractSortModel(),
+        quickFilter: this.gridApi.getQuickFilter() || undefined,
         
         // Grouping
         rowGroupColumns: this.extractRowGroupColumns(),
@@ -349,7 +352,7 @@ export class GridStateManager {
         this.gridApi.setFilterModel(state.filterModel);
         
         if (state.quickFilter) {
-          this.gridApi.setQuickFilter(state.quickFilter);
+          this.gridApi.setGridOption('quickFilterText', state.quickFilter);
         }
       }
       
@@ -434,7 +437,7 @@ export class GridStateManager {
       
       // Clear filters
       this.gridApi.setFilterModel(null);
-      this.gridApi.setQuickFilter(null);
+      this.gridApi.setGridOption('quickFilterText', null);
       
       // Clear sorting (handled by resetColumnState above, but we can also explicitly clear it)
       // In AG-Grid v31+, sorting is part of column state
@@ -562,6 +565,33 @@ export class GridStateManager {
     return groups;
   }
   
+  private extractSortModel(): SortModel {
+    if (!this.gridApi) return [];
+    
+    const columnState = this.gridApi.getColumnState() || [];
+    const sortModel: SortModel = [];
+    
+    columnState.forEach((col: any) => {
+      if (col.sort) {
+        sortModel.push({
+          colId: col.colId,
+          sort: col.sort
+        });
+      }
+    });
+    
+    // Sort by sortIndex if available
+    sortModel.sort((a: any, b: any) => {
+      const aState = columnState.find((c: any) => c.colId === a.colId);
+      const bState = columnState.find((c: any) => c.colId === b.colId);
+      const aIndex = aState?.sortIndex ?? Number.MAX_SAFE_INTEGER;
+      const bIndex = bState?.sortIndex ?? Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex;
+    });
+    
+    return sortModel;
+  }
+  
   private extractRowGroupColumns(): string[] {
     if (!this.gridApi) return [];
     
@@ -685,7 +715,7 @@ export class GridStateManager {
     
     return {
       animateRows: this.gridApi.getGridOption('animateRows'),
-      enableCellChangeFlash: this.gridApi.getGridOption('enableCellChangeFlash'),
+      enableCellChangeFlash: (this.gridApi as any).getGridOption('enableCellChangeFlash'),
       suppressRowHoverHighlight: this.gridApi.getGridOption('suppressRowHoverHighlight'),
       rowHeight: this.gridApi.getGridOption('rowHeight'),
       headerHeight: this.gridApi.getGridOption('headerHeight'),
@@ -778,8 +808,8 @@ export class GridStateManager {
   private applyPaginationState(pagination: GridState['pagination']) {
     if (!this.gridApi) return;
     
-    if (pagination.pageSize && this.gridApi.paginationSetPageSize) {
-      this.gridApi.paginationSetPageSize(pagination.pageSize);
+    if (pagination.pageSize) {
+      this.gridApi.setGridOption('paginationPageSize', pagination.pageSize);
     }
     
     if (pagination.currentPage !== undefined && this.gridApi.paginationGoToPage) {
@@ -828,7 +858,7 @@ export class GridStateManager {
     
     Object.entries(options).forEach(([key, value]) => {
       if (value !== undefined) {
-        this.gridApi!.setGridOption(key, value);
+        this.gridApi!.setGridOption(key as any, value);
       }
     });
   }
