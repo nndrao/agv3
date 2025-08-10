@@ -28,9 +28,9 @@ export const WireframeFormatOptions: React.FC<WireframeFormatOptionsProps> = ({
     
     sides.forEach(side => {
       const borderKey = `border${side}` as keyof typeof rule.formatting.style;
-      const borderValue = rule.formatting.style?.[borderKey] as string;
-      if (borderValue && borderValue !== 'none') {
-        const parts = borderValue.split(' ');
+      const borderValue = rule.formatting.style?.[borderKey];
+      if (borderValue && typeof borderValue === 'string' && borderValue !== 'none') {
+        const parts = (borderValue as string).split(' ');
         if (parts.length >= 3) {
           borders.push({
             side,
@@ -236,7 +236,7 @@ export const WireframeFormatOptions: React.FC<WireframeFormatOptionsProps> = ({
                 <label className="wf-label">Size (px)</label>
                 <input
                   type="number"
-                  value={parseInt(rule.formatting.style?.fontSize || '14')}
+                  value={parseInt(String(rule.formatting.style?.fontSize || '14'))}
                   onChange={(e) => updateStyle({ fontSize: `${e.target.value}px` })}
                   className="wf-input"
                   min="8"

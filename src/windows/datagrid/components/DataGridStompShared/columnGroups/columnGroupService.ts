@@ -39,11 +39,10 @@ export class ColumnGroupService {
     const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, groups, gridApi);
     
     // Store the current column group state before applying new definitions
-    let currentGroupState: any[] = [];
     try {
       // Try to get column group state before changes
       if (typeof (gridApi as any).getColumnGroupState === 'function') {
-        currentGroupState = (gridApi as any).getColumnGroupState() || [];
+        (gridApi as any).getColumnGroupState();
       }
     } catch (e) {
     }
@@ -67,10 +66,7 @@ export class ColumnGroupService {
     setTimeout(() => {
       if (savedColumnState && savedColumnState.length > 0) {
         
-        // Check what columns have hide state
-        const hiddenColumns = savedColumnState.filter((col: any) => col.hide === true);
-        
-        const result = gridApi.applyColumnState({
+        gridApi.applyColumnState({
           state: savedColumnState,
           applyOrder: true,
           defaultState: { width: null }
@@ -97,14 +93,10 @@ export class ColumnGroupService {
                     columnDefs.forEach((def: any) => {
                       if (def.groupId === groupState.groupId && def.children) {
                         def.children.forEach((child: any) => {
-                          const colId = child.colId || child.field;
                           const columnGroupShow = child.columnGroupShow;
                           
                           if (columnGroupShow) {
-                            const shouldBeVisible = 
-                              (columnGroupShow === 'open' && groupState.open) ||
-                              (columnGroupShow === 'closed' && !groupState.open);
-                            
+                            // Column visibility is handled by AG-Grid based on columnGroupShow
                           }
                         });
                       }
@@ -132,7 +124,8 @@ export class ColumnGroupService {
           
           if (columnsWithGroupShow && columnsWithGroupShow.length > 0) {
             columnsWithGroupShow.forEach((col: any) => {
-              const colDef = gridApi.getColumnDef(col.colId);
+              // Column group show verification
+              gridApi.getColumnDef(col.colId);
             });
           }
         }, 100);
@@ -152,7 +145,7 @@ export class ColumnGroupService {
     
     // Verify what AG-Grid actually has
     setTimeout(() => {
-      const appliedDefs = gridApi.getColumnDefs();
+      gridApi.getColumnDefs();
       
       // Test column group expansion behavior
       if (columnApi) {
@@ -290,11 +283,6 @@ export class ColumnGroupService {
     });
 
     // Add ungrouped columns
-    const ungroupedCount = baseColumns.filter(col => {
-      const colId = col.colId || col.field;
-      return colId && !groupedColumnIds.has(colId);
-    }).length;
-    
     baseColumns.forEach(col => {
       const colId = col.colId || col.field;
       if (colId && !groupedColumnIds.has(colId)) {

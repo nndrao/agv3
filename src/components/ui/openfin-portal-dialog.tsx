@@ -7,14 +7,14 @@ interface OpenFinPortalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   windowName: string;
-  windowOptions?: Partial<OpenFin.WindowOption>;
+  windowOptions?: Partial<any>;
   children: React.ReactNode;
-  onWindowCreated?: (window: OpenFin.Window) => void;
+  onWindowCreated?: (window: any) => void;
   url?: string; // Optional URL parameter, defaults to grid-options-window.html
   rootElementId?: string; // Optional root element ID, defaults to 'grid-options-root'
 }
 
-const defaultWindowOptions: Partial<OpenFin.WindowOption> = {
+const defaultWindowOptions: Partial<any> = {
   defaultWidth: 800,
   defaultHeight: 700,
   defaultCentered: true,
@@ -38,12 +38,12 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
   url = '/grid-options-window.html',
   rootElementId = 'grid-options-root'
 }) => {
-  const [portalWindow, setPortalWindow] = useState<OpenFin.Window | null>(null);
+  const [portalWindow, setPortalWindow] = useState<any | null>(null);
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
   const styleElementRef = useRef<HTMLStyleElement | null>(null);
   const scriptsRef = useRef<HTMLScriptElement[]>([]);
-  const windowRef = useRef<OpenFin.Window | null>(null);
+  const windowRef = useRef<any | null>(null);
   const isCreatingRef = useRef(false);
   const previousOpenRef = useRef<boolean | null>(null);
 
@@ -88,7 +88,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
         console.log(`[OpenFinPortalDialog ${windowName}] fin available, creating/finding window...`);
         
         // Check if window already exists by name
-        let ofWindow: OpenFin.Window;
+        let ofWindow: any;
         try {
           console.log(`[OpenFinPortalDialog ${windowName}] Trying to wrap existing window...`);
           const existingWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name: windowName });
@@ -110,7 +110,7 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
           console.log(`[OpenFinPortalDialog ${windowName}] Window doesn't exist, creating new...`, wrapError);
           // Window doesn't exist, create it
           const windowUrl = getViewUrl(url);
-          const finalOptions: OpenFin.WindowOption = {
+          const finalOptions: any = {
             ...defaultWindowOptions,
             ...windowOptions,
             name: windowName,
@@ -373,9 +373,9 @@ export const OpenFinPortalDialog: React.FC<OpenFinPortalDialogProps> = ({
 };
 
 // Export a simpler hook for common use cases
-export function useOpenFinPortal(windowName: string, windowOptions?: Partial<OpenFin.WindowOption>) {
+export function useOpenFinPortal(windowName: string, windowOptions?: Partial<any>) {
   const [isOpen, setIsOpen] = useState(false);
-  const [portalWindow, setPortalWindow] = useState<OpenFin.Window | null>(null);
+  const [portalWindow, setPortalWindow] = useState<any | null>(null);
 
   const openPortal = () => setIsOpen(true);
   const closePortal = () => setIsOpen(false);

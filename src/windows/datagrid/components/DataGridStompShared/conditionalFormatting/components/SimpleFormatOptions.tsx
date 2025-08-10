@@ -98,7 +98,8 @@ export const SimpleFormatOptions: React.FC<SimpleFormatOptionsProps> = ({
 
   const getBorderValue = (side: 'top' | 'right' | 'bottom' | 'left') => {
     const key = `border${side.charAt(0).toUpperCase() + side.slice(1)}` as keyof typeof rule.formatting.style;
-    return parseBorder(rule.formatting.style?.[key] as string || '');
+    const value = rule.formatting.style?.[key];
+    return parseBorder(typeof value === 'string' ? value : '');
   };
 
   const updateBorder = (side: 'top' | 'right' | 'bottom' | 'left', property: 'width' | 'style' | 'color', value: string) => {
@@ -219,11 +220,11 @@ export const SimpleFormatOptions: React.FC<SimpleFormatOptionsProps> = ({
                 <div className="flex justify-between">
                   <Label className="text-xs">Opacity</Label>
                   <span className="text-xs text-muted-foreground">
-                    {Math.round((rule.formatting.style?.opacity || 1) * 100)}%
+                    {Math.round(((rule.formatting.style?.opacity as number) || 1) * 100)}%
                   </span>
                 </div>
                 <Slider
-                  value={[(rule.formatting.style?.opacity || 1) * 100]}
+                  value={[((rule.formatting.style?.opacity as number) || 1) * 100]}
                   onValueChange={([value]) => updateStyle({ opacity: value / 100 })}
                   max={100}
                   step={1}
@@ -259,7 +260,7 @@ export const SimpleFormatOptions: React.FC<SimpleFormatOptionsProps> = ({
             <div className="space-y-2">
               <Label className="text-xs">Font Size</Label>
               <Select
-                value={rule.formatting.style?.fontSize || 'inherit'}
+                value={String(rule.formatting.style?.fontSize || 'inherit')}
                 onValueChange={(value) => updateStyle({ fontSize: value === 'inherit' ? undefined : value })}
               >
                 <SelectTrigger className="h-9 text-xs">

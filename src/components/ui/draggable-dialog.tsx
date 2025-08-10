@@ -123,7 +123,7 @@ const DraggableDialogContent = React.forwardRef<
         ref={(node) => {
           if (typeof ref === 'function') ref(node);
           else if (ref && 'current' in ref) (ref as any).current = node;
-          contentRef.current = node;
+          if (contentRef && node) (contentRef as any).current = node;
         }}
         className={cn(
           'fixed z-50 grid w-full max-w-2xl gap-0 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg',

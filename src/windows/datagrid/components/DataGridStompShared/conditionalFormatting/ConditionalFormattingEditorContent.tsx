@@ -1,19 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, CheckCircle2, Plus, Sparkles, FileText } from 'lucide-react';
+import { CheckCircle2, Plus, Sparkles, FileText } from 'lucide-react';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ColDef } from 'ag-grid-community';
 import { RuleList } from '@/components/conditional-formatting/components/RuleList';
 import { RuleEditorSimplified } from './RuleEditorSimplified';
 import { RuleTemplates } from '@/components/conditional-formatting/components/RuleTemplates';
-import { createNewRule, duplicateRule, moveRule, generateRuleId, createRuleFromTemplate } from '@/components/conditional-formatting/utils/ruleUtils';
+import { createNewRule, duplicateRule, moveRule, createRuleFromTemplate } from '@/components/conditional-formatting/utils/ruleUtils';
 import { ConditionalRuleTemplate } from '@/components/conditional-formatting/types';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
-import { cn } from '@/lib/utils';
 import './conditionalFormatting.css';
 
 interface ConditionalFormattingEditorContentProps {
@@ -29,7 +28,6 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
   currentRules = [],
   onApply,
   onClose,
-  profileName
 }) => {
   const [rules, setRules] = useState<ConditionalRule[]>(currentRules);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(
@@ -41,7 +39,7 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
   const availableColumns = columnDefs.map(col => ({
     field: col.field || '',
     headerName: col.headerName,
-    type: col.type || 'text'
+    type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
   }));
 
   const selectedRule = rules.find(r => r.id === selectedRuleId);
@@ -156,7 +154,7 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
           <div className="cf-editor-panel">
             {showTemplates ? (
               <RuleTemplates
-                columnType={columnDefs[0]?.type}
+                columnType={Array.isArray(columnDefs[0]?.type) ? columnDefs[0].type[0] : columnDefs[0]?.type}
                 onSelectTemplate={handleSelectTemplate}
               />
             ) : selectedRule ? (
@@ -164,7 +162,7 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
                 rule={selectedRule}
                 availableColumns={availableColumns}
                 onUpdateRule={handleUpdateRule}
-                columnType={columnDefs[0]?.type}
+                columnType={Array.isArray(columnDefs[0]?.type) ? columnDefs[0].type[0] : columnDefs[0]?.type}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center">

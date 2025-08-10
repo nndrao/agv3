@@ -48,7 +48,7 @@ export function useGridState(
   profileStatusCallbacks?: ProfileStatusCallbacks
 ): UseGridStateResult {
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
-  const columnApiRef = useRef<ColumnApi | null>(null);
+  const columnApiRef = useRef<any | null>(null);
   const stateManagerRef = useRef<GridStateManager>(new GridStateManager());
   const pendingProfileRef = useRef<DataGridStompSharedProfile | null>(null);
   

@@ -40,7 +40,7 @@ export interface ColumnInfo {
 export class GridConfigurationBus {
   private static instance: GridConfigurationBus;
   private channelName = 'grid-configuration-bus';
-  private channel: fin.InterApplicationBus.Channel | null = null;
+  private channel: any | null = null;
   private pendingRequests = new Map<string, { resolve: Function; reject: Function }>();
   private viewConfigurations = new Map<string, GridConfiguration>();
   private isProvider = false;

@@ -218,7 +218,6 @@ export class GridStateManager {
     
     const {
       includeColumnDefs = true,
-      includeCustomState = true,
       rowIdField = 'id'
     } = options;
     
@@ -437,7 +436,7 @@ export class GridStateManager {
       
       // Clear filters
       this.gridApi.setFilterModel(null);
-      this.gridApi.setGridOption('quickFilterText', null);
+      this.gridApi.setGridOption('quickFilterText', '');
       
       // Clear sorting (handled by resetColumnState above, but we can also explicitly clear it)
       // In AG-Grid v31+, sorting is part of column state
@@ -470,7 +469,7 @@ export class GridStateManager {
     const columnState = this.gridApi.getColumnState() || [];
     
     // Debug: Log column state being extracted
-    const hiddenColumns = columnState.filter((col: any) => col.hide === true);
+    columnState.filter((col: any) => col.hide === true);
     
     // Check if we have columns with columnGroupShow
     const columnDefs = this.gridApi.getColumnDefs();

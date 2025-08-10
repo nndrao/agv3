@@ -2,8 +2,8 @@ import { IStatusPanel, IStatusPanelParams } from 'ag-grid-community';
 
 // AG-Grid expects a class-based component for status panels
 export class ConnectionStatusPanel implements IStatusPanel {
-  private eGui: HTMLElement;
-  private params: IStatusPanelParams;
+  private eGui!: HTMLElement;
+  private params!: IStatusPanelParams;
   private messageCount: number = 0;
   private snapshotMode: string = 'idle';
   private isConnected: boolean = false;
@@ -35,7 +35,7 @@ export class ConnectionStatusPanel implements IStatusPanel {
         this.refresh();
       };
       
-      params.api.addEventListener('statusBarUpdate', this.eventListener);
+      (params.api as any).addEventListener('statusBarUpdate', this.eventListener);
       
       // Initial update
       this.eventListener();
@@ -52,11 +52,11 @@ export class ConnectionStatusPanel implements IStatusPanel {
 
   destroy(): void {
     if (this.params.api && this.eventListener) {
-      this.params.api.removeEventListener('statusBarUpdate', this.eventListener);
+      (this.params.api as any).removeEventListener('statusBarUpdate', this.eventListener);
     }
   }
 
-  refresh(): void {
+  refresh(): boolean {
     
     // Update the HTML
     this.eGui.innerHTML = `
@@ -75,6 +75,7 @@ export class ConnectionStatusPanel implements IStatusPanel {
         </span>
       </span>
     `;
+    return true;
     
     // Add pulse animation CSS if not already added
     if (!document.getElementById('connection-status-panel-styles')) {

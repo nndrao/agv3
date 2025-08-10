@@ -50,12 +50,11 @@ export const verifyColumnVisibility = (gridApi: any, columnApi: any) => {
   
   // Check each column's visibility
   allColumns.forEach((col: any) => {
-    const colId = col.getColId();
-    const isVisible = col.isVisible();
-    const colDef = col.getColDef();
-    
+    col.getColId();
+    col.isVisible();
+    col.getColDef();
   });
   
   // Check column group states
-  const columnGroupStates = columnApi?.getColumnGroupState?.() || gridApi?.getColumnGroupState?.() || [];
+  columnApi?.getColumnGroupState?.() || gridApi?.getColumnGroupState?.() || [];
 };
