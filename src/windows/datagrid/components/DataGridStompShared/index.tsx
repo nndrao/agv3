@@ -37,7 +37,7 @@ import {
   getStatusBarConfig 
 } from './config/gridConfig';
 import { DEFAULT_PROFILE } from './config/profileDefaults';
-import { COMPONENT_TYPE } from './config/constants';
+import { COMPONENT_TYPE, INITIAL_GRID_OPTIONS } from './config/constants';
 import { getDefaultGridOptions } from './gridOptions/gridOptionsConfig';
 import { themeQuartz } from "ag-grid-community";
 
@@ -786,7 +786,10 @@ const DataGridStompSharedComponent = () => {
         requestAnimationFrame(() => {
           // Apply all changed options
           Object.entries(changedOptions).forEach(([key, value]) => {
-            gridApi.setGridOption(key as any, value);
+            // Skip initial-only properties that cannot be changed after initialization
+            if (!INITIAL_GRID_OPTIONS.includes(key)) {
+              gridApi.setGridOption(key as any, value);
+            }
           });
           
           // Only refresh if visual options changed
@@ -896,7 +899,8 @@ const DataGridStompSharedComponent = () => {
   useEffect(() => {
     if (gridApi && activeProfileData?.gridOptions) {
       Object.entries(activeProfileData.gridOptions).forEach(([key, value]) => {
-        if (key !== 'font') {
+        // Skip font and initial-only properties that cannot be changed after initialization
+        if (key !== 'font' && !INITIAL_GRID_OPTIONS.includes(key)) {
           gridApi.setGridOption(key as any, value);
         }
       });

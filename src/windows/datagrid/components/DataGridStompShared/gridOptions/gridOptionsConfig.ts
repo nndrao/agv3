@@ -201,13 +201,6 @@ export const gridOptionsSections: GridOptionsSection[] = [
         description: 'Prevent scrolling when popups are open',
         defaultValue: false
       },
-      {
-        key: 'suppressBrowserResizeObserver',
-        label: 'Suppress Browser Resize Observer',
-        type: 'boolean',
-        description: 'Disable browser resize observer',
-        defaultValue: false
-      }
     ]
   },
   {
@@ -279,13 +272,6 @@ export const gridOptionsSections: GridOptionsSection[] = [
         label: 'Suppress Agg Func in Header',
         type: 'boolean',
         description: 'Hide aggregation function in header',
-        defaultValue: false
-      },
-      {
-        key: 'suppressAggAtRootLevel',
-        label: 'Suppress Root Level Aggregation',
-        type: 'boolean',
-        description: 'Disable aggregation at root level',
         defaultValue: false
       },
       {
@@ -380,31 +366,10 @@ export const gridOptionsSections: GridOptionsSection[] = [
         ]
       },
       {
-        key: 'suppressRowDeselection',
-        label: 'Suppress Row Deselection',
-        type: 'boolean',
-        description: 'Prevent deselecting rows',
-        defaultValue: false
-      },
-      {
-        key: 'suppressRowClickSelection',
-        label: 'Suppress Row Click Selection',
-        type: 'boolean',
-        description: 'Disable row selection on click',
-        defaultValue: false
-      },
-      {
         key: 'suppressCellFocus',
         label: 'Suppress Cell Focus',
         type: 'boolean',
         description: 'Disable cell focus',
-        defaultValue: false
-      },
-      {
-        key: 'suppressMultiRangeSelection',
-        label: 'Suppress Multi Range Selection',
-        type: 'boolean',
-        description: 'Disable multiple range selection',
         defaultValue: false
       },
       {
@@ -415,66 +380,12 @@ export const gridOptionsSections: GridOptionsSection[] = [
         defaultValue: false
       },
       {
-        key: 'suppressRowClickHighlight',
-        label: 'Suppress Row Click Highlight',
-        type: 'boolean',
-        description: 'Disable row click highlighting',
-        defaultValue: false
-      },
-      {
         key: 'columnHoverHighlight',
         label: 'Column Hover Highlight',
         type: 'boolean',
         description: 'Enable column hover highlighting',
         defaultValue: false
       },
-      {
-        key: 'enableRangeSelection',
-        label: 'Enable Range Selection',
-        type: 'boolean',
-        description: 'Allow selecting cell ranges',
-        defaultValue: false
-      },
-      {
-        key: 'enableRangeHandle',
-        label: 'Enable Range Handle',
-        type: 'boolean',
-        description: 'Show range selection handle',
-        defaultValue: false
-      },
-      {
-        key: 'enableFillHandle',
-        label: 'Enable Fill Handle',
-        type: 'boolean',
-        description: 'Show fill handle for copying values',
-        defaultValue: false
-      },
-      {
-        key: 'fillHandleDirection',
-        label: 'Fill Handle Direction',
-        type: 'select',
-        description: 'Direction for fill handle operation',
-        defaultValue: 'xy',
-        options: [
-          { value: 'x', label: 'Horizontal Only' },
-          { value: 'y', label: 'Vertical Only' },
-          { value: 'xy', label: 'Both Directions' }
-        ]
-      },
-      {
-        key: 'suppressClearOnFillReduction',
-        label: 'Suppress Clear on Fill Reduction',
-        type: 'boolean',
-        description: 'Keep values when reducing fill selection',
-        defaultValue: false
-      },
-      {
-        key: 'rowMultiSelectWithClick',
-        label: 'Multi Select with Click',
-        type: 'boolean',
-        description: 'Enable multi-select without Ctrl key',
-        defaultValue: false
-      }
     ]
   },
   {
@@ -581,25 +492,11 @@ export const gridOptionsSections: GridOptionsSection[] = [
         defaultValue: false
       },
       {
-        key: 'unSortIcon',
-        label: 'Show Unsort Icon',
-        type: 'boolean',
-        description: 'Show icon to remove sorting',
-        defaultValue: false
-      },
-      {
         key: 'suppressFieldDotNotation',
         label: 'Suppress Field Dot Notation',
         type: 'boolean',
         description: 'Disable dot notation in field names',
         defaultValue: false
-      },
-      {
-        key: 'enableCellChangeFlash',
-        label: 'Enable Cell Change Flash',
-        type: 'boolean',
-        description: 'Flash cells when data changes',
-        defaultValue: true
       },
       {
         key: 'cellFlashDuration',
@@ -689,31 +586,10 @@ export const gridOptionsSections: GridOptionsSection[] = [
         defaultValue: false
       },
       {
-        key: 'groupSelectsChildren',
-        label: 'Group Selects Children',
-        type: 'boolean',
-        description: 'Selecting group selects all children',
-        defaultValue: false
-      },
-      {
         key: 'groupAggFiltering',
         label: 'Group Agg Filtering',
         type: 'boolean',
         description: 'Apply filters to aggregated group values',
-        defaultValue: false
-      },
-      {
-        key: 'groupIncludeFooter',
-        label: 'Group Include Footer',
-        type: 'boolean',
-        description: 'Show footer for each group',
-        defaultValue: false
-      },
-      {
-        key: 'groupIncludeTotalFooter',
-        label: 'Group Include Total Footer',
-        type: 'boolean',
-        description: 'Show total footer row',
         defaultValue: false
       },
       {
@@ -724,31 +600,10 @@ export const gridOptionsSections: GridOptionsSection[] = [
         defaultValue: false
       },
       {
-        key: 'groupSelectsFiltered',
-        label: 'Group Selects Filtered',
-        type: 'boolean',
-        description: 'Group selection includes only filtered rows',
-        defaultValue: false
-      },
-      {
         key: 'showOpenedGroup',
         label: 'Show Opened Group',
         type: 'boolean',
         description: 'Show opened groups in separate column',
-        defaultValue: false
-      },
-      {
-        key: 'groupRemoveSingleChildren',
-        label: 'Group Remove Single Children',
-        type: 'boolean',
-        description: 'Remove groups with single child',
-        defaultValue: false
-      },
-      {
-        key: 'groupRemoveLowestSingleChildren',
-        label: 'Group Remove Lowest Single Children',
-        type: 'boolean',
-        description: 'Remove only lowest level single children',
         defaultValue: false
       },
       {
@@ -810,20 +665,6 @@ export const gridOptionsSections: GridOptionsSection[] = [
           { value: ';', label: 'Semicolon' },
           { value: '|', label: 'Pipe' }
         ]
-      },
-      {
-        key: 'suppressCopyRowsToClipboard',
-        label: 'Suppress Copy Rows',
-        type: 'boolean',
-        description: 'Disable copying rows to clipboard',
-        defaultValue: false
-      },
-      {
-        key: 'suppressCopySingleCellRanges',
-        label: 'Suppress Copy Single Cell',
-        type: 'boolean',
-        description: 'Disable copying single cells',
-        defaultValue: false
       },
       {
         key: 'suppressLastEmptyLineOnPaste',
@@ -961,13 +802,6 @@ export const gridOptionsSections: GridOptionsSection[] = [
         defaultValue: false
       },
       {
-        key: 'suppressAsyncEvents',
-        label: 'Suppress Async Events',
-        type: 'boolean',
-        description: 'Make all events synchronous',
-        defaultValue: false
-      },
-      {
         key: 'suppressRowDrag',
         label: 'Suppress Row Drag',
         type: 'boolean',
@@ -1000,13 +834,6 @@ export const gridOptionsSections: GridOptionsSection[] = [
         label: 'Suppress Move When Dragging',
         type: 'boolean',
         description: 'Prevent row movement while dragging',
-        defaultValue: false
-      },
-      {
-        key: 'suppressLoadingOverlay',
-        label: 'Suppress Loading Overlay',
-        type: 'boolean',
-        description: 'Hide loading overlay',
         defaultValue: false
       },
       {
