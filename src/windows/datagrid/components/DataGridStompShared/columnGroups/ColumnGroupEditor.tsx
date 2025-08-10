@@ -39,7 +39,6 @@ const extractColumnsFromDefs = (columnDefs: any[]): ColumnDefinition[] => {
       // This is a regular column
       const colId = colDef.colId || colDef.field;
       const field = colDef.field || colDef.colId || '';
-      console.log('[extractColumnsFromDefs] Processing column:', { colId, field, headerName: colDef.headerName });
       columns.push({
         colId: colId,
         field: field,
@@ -51,7 +50,6 @@ const extractColumnsFromDefs = (columnDefs: any[]): ColumnDefinition[] => {
   };
   
   columnDefs.forEach(colDef => processColDef(colDef));
-  console.log('[extractColumnsFromDefs] Extracted columns:', columns.map(c => ({ colId: c.colId, field: c.field })));
   
   return columns;
 };
@@ -278,13 +276,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
       columnStates
     };
     
-    console.log('[ColumnGroupEditor] Creating new group:', {
-      headerName: newGroup.headerName,
-      openByDefault: newGroup.openByDefault,
-      columnStates: newGroup.columnStates,
-      children: newGroup.children
-    });
-    
     setGroups(prev => [...prev, newGroup]);
     setGroupName('');
     setSelectedColumns(new Set());
@@ -334,13 +325,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
           columnStates
         };
         
-        console.log('[ColumnGroupEditor] Updating group:', {
-          headerName: updatedGroup.headerName,
-          openByDefault: updatedGroup.openByDefault,
-          columnStates: updatedGroup.columnStates,
-          children: updatedGroup.children
-        });
-        
         return updatedGroup;
       }
       return group;
@@ -388,7 +372,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
       }
     };
     
-    console.log('[TEST] Applying test column group:', testGroup);
     setGroups([testGroup]);
   }, []);
   

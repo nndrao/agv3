@@ -59,10 +59,8 @@ const SelectContent = React.forwardRef<
       try {
         if (typeof fin !== 'undefined') {
           setIsOpenFinWindow(true);
-          console.log('[PortalAwareSelect] Running in OpenFin window');
         }
       } catch (e) {
-        console.log('[PortalAwareSelect] Not in OpenFin context');
       }
     };
     checkOpenFin();

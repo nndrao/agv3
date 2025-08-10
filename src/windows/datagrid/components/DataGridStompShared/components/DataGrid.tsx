@@ -19,7 +19,6 @@ export const DataGrid = React.memo<DataGridProps>(({
   snapshotData,
   gridOptions = {}
 }) => {
-  console.log('[🔍][DATA_GRID] DataGrid rendering with columnDefs:', columnDefs?.length || 0, 'columns');
   // Merge custom components with ag-grid components
   const components = useMemo(() => ({
     ...agGridComponents,
@@ -37,7 +36,6 @@ export const DataGrid = React.memo<DataGridProps>(({
       defaultColDef={defaultColDef}
       sideBar={sidebarVisible}
       onGridReady={(params) => {
-        console.log('[🔍][DATA_GRID] AG-Grid onGridReady fired');
         onGridReady(params);
       }}
       getRowId={getRowId}

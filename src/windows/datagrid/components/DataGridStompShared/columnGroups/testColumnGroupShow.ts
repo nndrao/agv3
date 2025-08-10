@@ -1,7 +1,6 @@
 // Test case to demonstrate expected columnGroupShow behavior
 
 export const testColumnGroupShowConfig = () => {
-  console.log('=== Column Group Show Test Configuration ===');
   
   // Expected behavior:
   // When a column group is collapsed (closed):
@@ -39,18 +38,15 @@ export const testColumnGroupShowConfig = () => {
     }
   ];
   
-  console.log('Test column definitions:', JSON.stringify(testColumnDefs, null, 2));
   
   return testColumnDefs;
 };
 
 // Helper to verify column visibility
 export const verifyColumnVisibility = (gridApi: any, columnApi: any) => {
-  console.log('=== Verifying Column Visibility ===');
   
   // Get all columns
   const allColumns = columnApi?.getAllColumns?.() || gridApi?.getAllColumns?.() || [];
-  console.log('Total columns:', allColumns.length);
   
   // Check each column's visibility
   allColumns.forEach((col: any) => {
@@ -58,14 +54,8 @@ export const verifyColumnVisibility = (gridApi: any, columnApi: any) => {
     const isVisible = col.isVisible();
     const colDef = col.getColDef();
     
-    console.log(`Column ${colId}:`, {
-      visible: isVisible,
-      columnGroupShow: colDef.columnGroupShow,
-      field: colDef.field
-    });
   });
   
   // Check column group states
   const columnGroupStates = columnApi?.getColumnGroupState?.() || gridApi?.getColumnGroupState?.() || [];
-  console.log('Column group states:', columnGroupStates);
 };

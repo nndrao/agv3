@@ -64,7 +64,6 @@ export function useSharedWorkerConnection(
   useEffect(() => {
     const initializeWorkerClient = async () => {
       try {
-        console.log('[useSharedWorkerConnection] Initializing SharedWorkerClient...');
         const client = new SharedWorkerClient({
           workerUrl: new URL('/src/workers/stompSharedWorker.ts', import.meta.url).href,
           reconnectInterval: CONNECTION_TIMEOUTS.RECONNECT,
@@ -73,11 +72,9 @@ export function useSharedWorkerConnection(
         
         // Set up event listeners before connecting
         client.on('connected', () => {
-          console.log('[useSharedWorkerConnection] SharedWorker connected');
         });
         
         client.on('disconnected', () => {
-          console.log('[useSharedWorkerConnection] SharedWorker disconnected');
           updateConnectionStatusInGrid(false, '');
         });
         
@@ -107,7 +104,6 @@ export function useSharedWorkerConnection(
         await client.connect();
         sharedWorkerClientRef.current = client;
         
-        console.log('[useSharedWorkerConnection] SharedWorkerClient initialized');
       } catch (error) {
         console.error('[useSharedWorkerConnection] Failed to initialize SharedWorkerClient:', error);
         toast({
@@ -138,7 +134,6 @@ export function useSharedWorkerConnection(
     
     // Prevent multiple simultaneous connections
     if (isConnected || isConnectingRef.current) {
-      console.log('[useSharedWorkerConnection] Already connected or is connecting, skipping');
       return;
     }
     

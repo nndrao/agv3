@@ -10,7 +10,6 @@ export class ConnectionStatusPanel implements IStatusPanel {
   private eventListener: (() => void) | null = null;
 
   init(params: IStatusPanelParams): void {
-    console.log('[RT-MSG-INIT] ConnectionStatusPanel init called');
     this.params = params;
     
     // Create the GUI element
@@ -20,9 +19,7 @@ export class ConnectionStatusPanel implements IStatusPanel {
     // Set up event listener for custom updates
     if (params.api) {
       this.eventListener = () => {
-        console.log('[RT-MSG-014a] Event handler triggered');
         const customContext = (params.api as any)._customContext || {};
-        console.log('[RT-MSG-014b] Custom context in handler:', customContext);
         
         // Update connection state
         if (customContext.connectionState) {
@@ -33,20 +30,16 @@ export class ConnectionStatusPanel implements IStatusPanel {
         if (customContext.snapshotData) {
           this.messageCount = customContext.snapshotData.messageCount || 0;
           this.snapshotMode = customContext.snapshotData.mode || 'idle';
-          console.log('[RT-MSG-014] Status panel updated via event - count:', this.messageCount);
         }
         
         this.refresh();
       };
       
-      console.log('[RT-MSG-INIT2] Adding event listener for statusBarUpdate');
       params.api.addEventListener('statusBarUpdate', this.eventListener);
       
       // Initial update
-      console.log('[RT-MSG-INIT3] Calling initial update');
       this.eventListener();
     } else {
-      console.warn('[RT-MSG-INIT-ERROR] No API available in init');
     }
     
     // Initial render
@@ -58,14 +51,12 @@ export class ConnectionStatusPanel implements IStatusPanel {
   }
 
   destroy(): void {
-    console.log('[ConnectionStatusPanel] destroy called');
     if (this.params.api && this.eventListener) {
       this.params.api.removeEventListener('statusBarUpdate', this.eventListener);
     }
   }
 
   refresh(): void {
-    console.log('[RT-MSG-012] ConnectionStatusPanel Rendering - messageCount:', this.messageCount, 'mode:', this.snapshotMode);
     
     // Update the HTML
     this.eGui.innerHTML = `

@@ -66,26 +66,18 @@ export function useGridState(
   
   // Apply profile grid state
   const applyProfileGridState = useCallback((profile: DataGridStompSharedProfile | null) => {
-    console.log('[🔍][PROFILE_LOAD] applyProfileGridState called with profile:', profile?.name);
-    console.log('[🔍][PROFILE_LOAD] Profile columnGroups:', profile?.columnGroups);
-    console.log('[🔍][PROFILE_LOAD] Profile gridState:', profile?.gridState);
-    console.log('[🔍][PROFILE_LOAD] GridApi available:', !!gridApiRef.current);
-    console.log('[🔍][PROFILE_LOAD] GridApi valid:', validateGridApi(gridApiRef.current));
     
     if (!profile) {
-      console.log('[🔍][PROFILE_LOAD] No profile to apply');
       return;
     }
     
     // Store column groups even if grid is not ready yet
     // They will be applied when the grid becomes ready
     if (profile.columnGroups && !gridApiRef.current) {
-      console.log('[🔍][PROFILE_LOAD] Grid not ready yet, storing column groups for later');
       stateManagerRef.current.setColumnGroups(profile.columnGroups);
     }
     
     if (!gridApiRef.current || !validateGridApi(gridApiRef.current)) {
-      console.log('[🔍][PROFILE_LOAD] Grid not ready - storing profile for later application');
       pendingProfileRef.current = profile;
       // Notify that profile is pending
       if (profileStatusCallbacks?.onProfileApplying) {
@@ -97,23 +89,17 @@ export function useGridState(
     try {
       // Set column groups in state manager if available
       if (profile.columnGroups) {
-        console.log('[🔍][PROFILE_LOAD] Setting column groups in state manager:', profile.columnGroups);
         stateManagerRef.current.setColumnGroups(profile.columnGroups);
       }
       
       // If profile contains full grid state, use it
       if (profile.gridState) {
-        console.log('[🔍][PROFILE_LOAD] Profile has gridState, applying...');
-        console.log('[🔍][PROFILE_LOAD] GridState has columnGroups:', !!profile.gridState.columnGroups);
-        console.log('[🔍][PROFILE_LOAD] Profile has separate columnGroups:', !!profile.columnGroups);
         
         // If gridState has column groups, use those; otherwise use profile.columnGroups
         if (!profile.gridState.columnGroups && profile.columnGroups) {
-          console.log('[🔍][PROFILE_LOAD] Merging columnGroups into gridState');
           profile.gridState.columnGroups = profile.columnGroups;
         }
         
-        console.log('[🔍][PROFILE_LOAD] Final gridState.columnGroups:', profile.gridState.columnGroups);
         
         const stateApplied = stateManagerRef.current.applyState(profile.gridState, {
           applyColumnState: true,
@@ -128,22 +114,17 @@ export function useGridState(
           rowIdField: providerConfig?.keyColumn || 'id'
         });
         
-        console.log('[🔍][PROFILE_LOAD] State applied successfully:', stateApplied);
         
         // After applying state, check if we have column groups to apply
         const storedGroups = stateManagerRef.current.getColumnGroups();
-        console.log('[🔍][PROFILE_LOAD] Stored column groups after state apply:', storedGroups);
         
         // Return indication that column groups need to be applied
         // This will be handled by the column groups effect in the main component
         if (storedGroups && storedGroups.length > 0) {
-          console.log('[🔍][PROFILE_LOAD] Column groups are ready to be applied by the main component');
         }
       } else {
-        console.log('[🔍][PROFILE_LOAD] No gridState, using legacy properties');
         // Fallback to legacy properties
         if (profile.columnState && profile.columnState.length > 0) {
-          console.log('[🔍][PROFILE_LOAD] Applying legacy columnState:', profile.columnState);
           gridApiRef.current.applyColumnState({
             state: profile.columnState,
             applyOrder: true
@@ -151,11 +132,9 @@ export function useGridState(
         }
         
         if (profile.filterModel && Object.keys(profile.filterModel).length > 0) {
-          console.log('[🔍][PROFILE_LOAD] Applying legacy filterModel:', profile.filterModel);
           gridApiRef.current.setFilterModel(profile.filterModel);
         }
       }
-      console.log('[🔍][PROFILE_LOAD] Profile grid state applied successfully');
       
       // Always notify success when grid state is applied
       if (profileStatusCallbacks?.onProfileApplied) {
@@ -235,10 +214,6 @@ export function useGridState(
   
   // Grid ready handler
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
-    console.log('[🔍][GRID_READY] Grid ready event fired');
-    console.log('[🔍][GRID_READY] Active profile data:', activeProfileData);
-    console.log('[🔍][GRID_READY] Pending profile:', pendingProfileRef.current);
-    console.log('[🔍][GRID_READY] Grid API initialized:', !!params.api);
     
     gridApiRef.current = params.api;
     columnApiRef.current = params.columnApi || null;
@@ -255,21 +230,14 @@ export function useGridState(
     const profileToApply = pendingProfileRef.current || activeProfileData;
     
     if (profileToApply) {
-      console.log('[🔍][GRID_READY] Applying profile:', profileToApply.name);
-      console.log('[🔍][GRID_READY] Profile source:', pendingProfileRef.current ? 'pending' : 'active');
-      console.log('[🔍][GRID_READY] Profile has grid options:', !!profileToApply.gridOptions);
-      console.log('[🔍][GRID_READY] Profile has column groups:', !!profileToApply.columnGroups);
-      console.log('[🔍][GRID_READY] Profile has grid state:', !!profileToApply.gridState);
       
       // Store column groups in state manager for the column groups effect
       if (profileToApply.columnGroups) {
-        console.log('[🔍][GRID_READY] Storing column groups for later application');
         stateManagerRef.current.setColumnGroups(profileToApply.columnGroups);
       }
       
       // We'll apply the grid state AFTER column groups are applied
       // This is handled by delaying the grid state application
-      console.log('[🔍][GRID_READY] Delaying grid state application to allow column groups to be applied first');
       
       // Notify that we're applying the profile if this is a pending profile
       if (pendingProfileRef.current && profileStatusCallbacks?.onProfileApplying) {
@@ -277,32 +245,25 @@ export function useGridState(
       }
       
       setTimeout(() => {
-        console.log('[🔍][GRID_READY] Now applying grid state after column groups');
         applyProfileGridState(profileToApply);
         // Clear the pending profile after applying
         pendingProfileRef.current = null;
       }, 200); // Give column groups time to be applied
     } else {
-      console.log('[🔍][GRID_READY] No profile data available to apply');
     }
   }, [activeProfileData, applyProfileGridState, profileStatusCallbacks]);
   
   // Apply profile state when it changes
   useEffect(() => {
-    console.log('[🔍][PROFILE_CHANGE_EFFECT] Active profile data changed:', activeProfileData?.name);
-    console.log('[🔍][PROFILE_CHANGE_EFFECT] Grid ready:', !!gridApiRef.current);
     
     if (activeProfileData) {
-      console.log('[🔍][PROFILE_CHANGE_EFFECT] Attempting to apply profile grid state');
       applyProfileGridState(activeProfileData);
       
       // If the grid isn't ready, the profile will be stored as pending
       // and applied when the grid becomes ready
       if (!gridApiRef.current) {
-        console.log('[🔍][PROFILE_CHANGE_EFFECT] Grid not ready, profile stored as pending');
       }
     } else {
-      console.log('[🔍][PROFILE_CHANGE_EFFECT] No active profile data');
     }
   }, [activeProfileData, applyProfileGridState]);
   

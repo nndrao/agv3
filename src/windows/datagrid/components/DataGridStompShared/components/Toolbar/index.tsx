@@ -34,8 +34,6 @@ export const Toolbar = React.memo<ToolbarProps>(({
   profileName,
   profileError
 }) => {
-  console.log('[Toolbar] Rendering with profileOperation:', profileOperation, 'profileName:', profileName);
-  
   return (
     <div className="h-14 border-b bg-background flex items-center px-4 gap-2">
       {/* Profile management section */}

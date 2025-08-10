@@ -87,10 +87,8 @@ export const ProfileStatusIndicator: React.FC<ProfileStatusIndicatorProps> = ({
   const [visible, setVisible] = useState(operation !== 'idle');
   const [displayOperation, setDisplayOperation] = useState<ProfileOperation>(operation);
   
-  console.log('[ProfileStatusIndicator] Render - operation:', operation, 'visible:', visible);
   
   useEffect(() => {
-    console.log('[ProfileStatusIndicator] Effect - operation changed to:', operation);
     if (operation === 'idle') {
       // Hide immediately when idle
       setVisible(false);
@@ -166,14 +164,12 @@ export function useProfileStatus() {
   const [error, setError] = useState<string>('');
   
   const startOperation = (op: ProfileOperation, name?: string) => {
-    console.log('[ProfileStatus] Starting operation:', op, 'name:', name);
     setOperation(op);
     setProfileName(name || '');
     setError('');
   };
   
   const completeOperation = (success: boolean = true, errorMsg?: string) => {
-    console.log('[ProfileStatus] Completing operation - success:', success, 'error:', errorMsg);
     if (success) {
       // If successful, just hide immediately without showing "Done"
       setOperation('idle');

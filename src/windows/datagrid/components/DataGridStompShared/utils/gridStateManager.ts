@@ -167,7 +167,6 @@ export class GridStateManager {
    * Set column groups for state extraction
    */
   setColumnGroups(groups: any[]) {
-    console.log('[🔍][COLUMN_GROUPS_PERSIST] GridStateManager.setColumnGroups called with:', groups);
     this.columnGroups = groups || [];
   }
   
@@ -175,12 +174,10 @@ export class GridStateManager {
    * Get column groups
    */
   getColumnGroups(): any[] {
-    console.log('[🔍][COLUMN_GROUPS_PERSIST] GridStateManager.getColumnGroups returning:', this.columnGroups);
     return this.columnGroups;
   }
   
   setPendingColumnState(columnState: ColumnState[]): void {
-    console.log('[🔍][GRID_STATE_APPLY] Storing pending column state:', columnState?.length, 'columns');
     this.pendingColumnState = columnState;
   }
   
@@ -270,10 +267,8 @@ export class GridStateManager {
       
       // Include column groups if they exist
       if (this.columnGroups && this.columnGroups.length > 0) {
-        console.log('[🔍][COLUMN_GROUPS_PERSIST] Including column groups in extracted state:', this.columnGroups);
         state.columnGroups = this.columnGroups;
       } else {
-        console.log('[🔍][COLUMN_GROUPS_PERSIST] No column groups to include in extracted state');
       }
       
       // Include pinned rows if they exist
@@ -302,8 +297,6 @@ export class GridStateManager {
    * Apply grid state
    */
   applyState(state: GridState, options: ApplyStateOptions = {}): boolean {
-    console.log('[🔍][GRID_STATE_APPLY] applyState called');
-    console.log('[🔍][GRID_STATE_APPLY] State has columnGroups:', !!state.columnGroups, state.columnGroups?.length);
     
     if (!this.gridApi || !state) {
       console.warn('[🔍][GRID_STATE_APPLY] Cannot apply state - GridApi or state not available');
@@ -326,7 +319,6 @@ export class GridStateManager {
       animateChanges = false
     } = options;
     
-    console.log('[🔍][GRID_STATE_APPLY] Options:', options);
     
     try {
       // Apply column state (but delay if we have column groups to apply first)
@@ -334,27 +326,22 @@ export class GridStateManager {
       
       if (applyColumnState && state.columnState) {
         if (hasColumnGroups) {
-          console.log('[🔍][GRID_STATE_APPLY] Delaying column state application - column groups need to be applied first');
           // Store column state to be applied later by ColumnGroupService
           this.setPendingColumnState(state.columnState);
         } else {
-          console.log('[🔍][GRID_STATE_APPLY] Applying column state directly (no column groups)');
           this.applyColumnState(state.columnState);
         }
       }
       
       // Store column group state for later application
       if (state.columnGroupState && state.columnGroupState.length > 0) {
-        console.log('[🔍][GRID_STATE_APPLY] Storing pending column group state:', state.columnGroupState);
         this.pendingColumnGroupState = state.columnGroupState;
       }
       
       // Store column groups for later use (they need to be applied via ColumnGroupService)
       if (state.columnGroups && state.columnGroups.length > 0) {
-        console.log('[🔍][COLUMN_GROUPS_RESTORE] Storing column groups from state:', state.columnGroups);
         this.columnGroups = state.columnGroups;
       } else {
-        console.log('[🔍][COLUMN_GROUPS_RESTORE] No column groups in state to store');
       }
       
       // Apply filters
@@ -480,9 +467,7 @@ export class GridStateManager {
     const columnState = this.gridApi.getColumnState() || [];
     
     // Debug: Log column state being extracted
-    console.log('[🔍][COLUMN_STATE_EXTRACT] Extracting column state:', columnState.length, 'columns');
     const hiddenColumns = columnState.filter((col: any) => col.hide === true);
-    console.log('[🔍][COLUMN_STATE_EXTRACT] Hidden columns:', hiddenColumns.map((c: any) => c.colId));
     
     // Check if we have columns with columnGroupShow
     const columnDefs = this.gridApi.getColumnDefs();
@@ -503,7 +488,6 @@ export class GridStateManager {
       };
       checkForGroupShow(columnDefs);
       if (columnsWithGroupShow.length > 0) {
-        console.log('[🔍][COLUMN_STATE_EXTRACT] Columns with columnGroupShow:', columnsWithGroupShow);
       }
     }
     
@@ -565,9 +549,6 @@ export class GridStateManager {
                   open: isOpen
                 });
                 
-                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT] Group ${def.groupId}: ${isOpen ? 'open' : 'closed'}`);
-                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT]   - hasOpenColumns: ${hasOpenColumns}, openColumnsHidden: ${openColumnsHidden}`);
-                console.log(`[🔍][COLUMN_GROUP_STATE_EXTRACT]   - hasClosedColumns: ${hasClosedColumns}, closedColumnsVisible: ${closedColumnsVisible}`);
               }
             });
           };

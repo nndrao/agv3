@@ -110,10 +110,7 @@ export const SettingsSection = React.memo<SettingsSectionProps>(({
               Grid Options
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => {
-            console.log('[SettingsSection] Column Groups clicked');
-            onOpenColumnGroups();
-          }}>
+          <DropdownMenuItem onClick={onOpenColumnGroups}>
             <Layers className="h-4 w-4 mr-2" />
             Column Groups
           </DropdownMenuItem>
