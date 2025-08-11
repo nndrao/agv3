@@ -149,7 +149,6 @@ export function useColumnGroupManagement({
       getPendingColumnState, clearPendingColumnState, getPendingColumnGroupState, clearPendingColumnGroupState]);
   
   return {
-    handleApplyColumnGroups,
-    columnGroupsAppliedRef
+    handleApplyColumnGroups
   };
 }

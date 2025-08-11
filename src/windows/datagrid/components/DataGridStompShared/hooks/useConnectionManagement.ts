@@ -189,7 +189,6 @@ export function useConnectionManagement({
   return {
     connectToSharedWorker,
     disconnectFromSharedWorker,
-    handleProviderChange,
-    hasAutoConnected: hasAutoConnected.current
+    handleProviderChange
   };
 }

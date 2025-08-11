@@ -51,19 +51,6 @@ export function useProfileOperations({
   const gridStateAppliedRef = useRef(false);
   const columnGroupsAppliedRef = useRef(false);
   
-  // Profile status callbacks
-  const profileStatusCallbacks = {
-    onProfileApplying: (_profileName: string) => {
-      // This is called when a profile is pending application (grid not ready)
-    },
-    onProfileApplied: (_profileName: string, _success: boolean, _error?: string) => {
-      if (isProfileLoadingRef.current) {
-        gridStateAppliedRef.current = true;
-        checkProfileApplicationComplete();
-      }
-    }
-  };
-  
   // Load profile with status indication
   const handleProfileLoad = useCallback(async (versionId: string) => {
     // Don't show indicator if selecting the already active profile
@@ -210,14 +197,6 @@ export function useProfileOperations({
     await setActiveProfile(versionId);
   }, [setActiveProfile]);
   
-  // Mark column groups as applied (for profile loading completion)
-  const markColumnGroupsApplied = useCallback(() => {
-    if (isProfileLoadingRef.current) {
-      columnGroupsAppliedRef.current = true;
-      checkProfileApplicationComplete();
-    }
-  }, [checkProfileApplicationComplete]);
-  
   // Update profile loading state when it completes
   useEffect(() => {
     const checkComplete = () => {
@@ -236,10 +215,7 @@ export function useProfileOperations({
   
   return {
     profileLoadingState,
-    profileStatusCallbacks,
     isProfileLoadingRef,
-    gridStateAppliedRef,
-    columnGroupsAppliedRef,
     
     handleProfileLoad,
     saveCurrentState,
@@ -247,7 +223,6 @@ export function useProfileOperations({
     handleProfileImport,
     handleProfileRename,
     handleSetDefault,
-    handleDeleteProfile: deleteProfile,
-    markColumnGroupsApplied
+    handleDeleteProfile: deleteProfile
   };
 }

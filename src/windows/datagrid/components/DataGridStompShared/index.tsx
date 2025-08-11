@@ -102,7 +102,6 @@ const DataGridStompSharedComponent = () => {
   // Grid options management
   const {
     unsavedGridOptions,
-    setUnsavedGridOptions,
     handleApplyGridOptions,
     getCurrentGridOptions,
     clearUnsavedOptions,
@@ -168,17 +167,13 @@ const DataGridStompSharedComponent = () => {
   // ========== Profile Operations Hook ==========
   const {
     profileLoadingState,
-    profileStatusCallbacks,
     isProfileLoadingRef,
-    gridStateAppliedRef,
-    columnGroupsAppliedRef,
     handleProfileLoad,
     saveCurrentState,
     handleProfileExport,
     handleProfileImport,
     handleProfileRename,
-    handleSetDefault,
-    markColumnGroupsApplied
+    handleSetDefault
   } = useProfileOperations({
     profiles,
     activeProfile,
