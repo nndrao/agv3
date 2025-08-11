@@ -1,114 +1,144 @@
 import React, { useEffect, useState } from 'react';
-import { GridConfigurationBus, ColumnInfo } from '@/services/iab/GridConfigurationBus';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ConditionalFormattingEditorContent } from '@/windows/datagrid/components/DataGridStompShared/conditionalFormatting/ConditionalFormattingEditorContent';
+import { initializeDialog, sendDialogResponse } from '@/services/openfin/OpenFinDialogService';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
 import '@/index.css';
 
+interface ColumnInfo {
+  field: string;
+  headerName: string;
+  type?: string;
+}
+
+interface ConditionalFormattingData {
+  columnDefs: Array<{
+    field: string;
+    headerName?: string;
+    type?: string;
+  }>;
+  currentRules?: ConditionalRule[];
+  profileName?: string;
+}
+
 export const ConditionalFormattingApp: React.FC = () => {
   const [rules, setRules] = useState<ConditionalRule[]>([]);
   const [availableColumns, setAvailableColumns] = useState<ColumnInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewId, setViewId] = useState<string>('');
+  const [profileName, setProfileName] = useState<string>('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
   const { toast } = useToast();
-
-  const bus = GridConfigurationBus.getInstance();
 
   useEffect(() => {
     const initialize = async () => {
       try {
         // Set document title
         document.title = 'Conditional Formatting Rules';
-        
-        // Get viewId from window custom data or URL params
-        const customData = await fin.me.getOptions();
-        const params = new URLSearchParams(window.location.search);
-        const id = customData.customData?.viewId || params.get('viewId');
-        
-        if (!id) {
-          throw new Error('No viewId provided');
-        }
-        
-        setViewId(id);
 
-        // Get theme from customData or localStorage
-        const inheritedTheme = customData.customData?.theme || localStorage.getItem('ui-theme') || 'dark';
+        // Get theme from localStorage
+        const inheritedTheme = localStorage.getItem('ui-theme') || 'dark';
         setTheme(inheritedTheme as 'light' | 'dark' | 'system');
 
-        // Initialize bus as client
-        await bus.initializeAsClient();
-
-        // Get available columns
-        const columns = await bus.sendRequest<ColumnInfo[]>({
-          type: 'GET_AVAILABLE_COLUMNS',
-          viewId: id
+        // Initialize dialog communication
+        await initializeDialog({
+          onInitialize: (data: ConditionalFormattingData) => {
+            console.log('[ConditionalFormattingApp] Received initial data:', data);
+            
+            // Convert column definitions to the format expected by the component
+            const columns = data.columnDefs.map(col => ({
+              field: col.field,
+              headerName: col.headerName || col.field,
+              type: col.type
+            }));
+            
+            setAvailableColumns(columns);
+            setRules(data.currentRules || []);
+            setProfileName(data.profileName || '');
+            setIsLoading(false);
+          },
+          getData: () => ({ rules })
         });
-        setAvailableColumns(columns);
 
-        // Get current profile to retrieve existing rules
-        const profile = await bus.sendRequest<any>({
-          type: 'GET_PROFILE',
-          viewId: id
-        });
-        
-        if (profile?.conditionalFormatting) {
-          setRules(profile.conditionalFormatting);
-        }
-
-        setIsLoading(false);
       } catch (error) {
         console.error('[ConditionalFormattingApp] Initialization error:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to initialize conditional formatting',
-          variant: 'destructive'
-        });
-        setIsLoading(false);
+        
+        // If running in development without OpenFin, use mock data
+        if (typeof fin === 'undefined') {
+          console.warn('[ConditionalFormattingApp] Running without OpenFin - using mock data');
+          
+          setAvailableColumns([
+            { field: 'id', headerName: 'ID', type: 'number' },
+            { field: 'name', headerName: 'Name', type: 'string' },
+            { field: 'value', headerName: 'Value', type: 'number' },
+            { field: 'price', headerName: 'Price', type: 'number' },
+            { field: 'quantity', headerName: 'Quantity', type: 'number' },
+            { field: 'status', headerName: 'Status', type: 'string' },
+            { field: 'date', headerName: 'Date', type: 'date' }
+          ]);
+          setRules([]);
+          setIsLoading(false);
+          
+          toast({
+            title: 'Development Mode',
+            description: 'Running without OpenFin - using mock data',
+            variant: 'default'
+          });
+        } else {
+          // Show error and allow closing
+          setIsLoading(false);
+        }
       }
     };
 
     initialize();
-
-    return () => {
-      bus.destroy();
-    };
   }, []);
 
   const handleApply = async (updatedRules?: ConditionalRule[]) => {
     try {
       const rulesToApply = updatedRules || rules;
       
-      // Send rules to the grid
-      await bus.sendRequest({
-        type: 'APPLY_CONDITIONAL_FORMATTING',
-        viewId,
-        rules: rulesToApply
-      });
-
-      toast({
-        title: 'Success',
-        description: 'Conditional formatting rules applied'
-      });
-
-      // Close the window after a short delay
-      setTimeout(() => {
-        fin.me.close();
-      }, 1000);
+      console.log('[ConditionalFormattingApp] Applying rules:', rulesToApply);
+      
+      // Send response to parent
+      await sendDialogResponse('apply', { rules: rulesToApply });
+      
     } catch (error) {
       console.error('[ConditionalFormattingApp] Failed to apply rules:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to apply conditional formatting rules',
-        variant: 'destructive'
-      });
+      
+      // If not in OpenFin, just log and close
+      if (typeof fin === 'undefined') {
+        console.log('[ConditionalFormattingApp] Would send rules:', rulesToApply);
+        toast({
+          title: 'Rules Configured',
+          description: `${rulesToApply.length} rule(s) configured (dev mode)`,
+          variant: 'default'
+        });
+        setTimeout(() => window.close(), 1000);
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to apply rules',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
-  const handleCancel = () => {
-    fin.me.close();
+  const handleCancel = async () => {
+    try {
+      // Send cancel response to parent
+      await sendDialogResponse('cancel');
+      
+    } catch (error) {
+      console.error('[ConditionalFormattingApp] Failed to close:', error);
+      
+      // If not in OpenFin, just close
+      if (typeof fin === 'undefined') {
+        window.close();
+      }
+    }
   };
 
   if (isLoading) {
@@ -135,7 +165,7 @@ export const ConditionalFormattingApp: React.FC = () => {
               handleApply(updatedRules);
             }}
             onClose={handleCancel}
-            profileName={viewId}
+            profileName={profileName}
           />
         </div>
         <Toaster />

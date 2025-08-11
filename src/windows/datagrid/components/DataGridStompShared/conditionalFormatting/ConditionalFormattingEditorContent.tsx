@@ -8,11 +8,6 @@ import { RuleEditorSimplified } from './RuleEditorSimplified';
 import { RuleTemplates } from '@/components/conditional-formatting/components/RuleTemplates';
 import { createNewRule, duplicateRule, moveRule, createRuleFromTemplate } from '@/components/conditional-formatting/utils/ruleUtils';
 import { ConditionalRuleTemplate } from '@/components/conditional-formatting/types';
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from '@/components/ui/resizable';
 import './conditionalFormatting.css';
 
 interface ConditionalFormattingEditorContentProps {
@@ -99,18 +94,10 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
 
   return (
     <div className="conditional-formatting-dialog">
-      {/* Main Content Area with Resizable Panels */}
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="flex-1 min-h-0"
-        id="conditional-formatting-panels"
-      >
+      {/* Main Content Area with Flex Layout */}
+      <div className="cf-content-wrapper">
         {/* Left Panel - Rules List */}
-        <ResizablePanel 
-          defaultSize={20} 
-          minSize={16} 
-          maxSize={30}
-          style={{ minWidth: '220px' }}>
+        <div className="cf-sidebar-panel">
           <div className="cf-rules-panel">
             <div className="cf-rules-header">
               <div className="flex gap-3">
@@ -145,12 +132,10 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
               />
             </div>
           </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
+        </div>
 
         {/* Center Panel - Rule Editor or Templates */}
-        <ResizablePanel defaultSize={80} minSize={60}>
+        <div className="cf-main-panel">
           <div className="cf-editor-panel">
             {showTemplates ? (
               <RuleTemplates
@@ -178,8 +163,8 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
               </div>
             )}
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        </div>
+      </div>
       
       {/* Footer */}
       <div className="cf-footer">

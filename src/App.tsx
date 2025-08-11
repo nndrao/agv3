@@ -10,6 +10,8 @@ import { App as ProviderStatusApp } from './windows/provider-status/App';
 import { RenameDialogApp } from './windows/rename-dialog/RenameDialogApp';
 import { DialogDemo } from '@/components/expression-editor/DialogDemo';
 import { ConditionalFormattingApp } from './windows/conditional-formatting/ConditionalFormattingApp';
+import { GridOptionsApp } from './windows/grid-options/GridOptionsApp';
+import { ColumnGroupsApp } from './windows/column-groups/ColumnGroupsApp';
 
 // Register AG-Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -50,6 +52,26 @@ function App() {
           element={
             <div className="h-screen w-screen">
               <ConditionalFormattingApp />
+            </div>
+          }
+        />
+        
+        {/* Grid Options */}
+        <Route
+          path="/grid-options"
+          element={
+            <div className="h-screen w-screen">
+              <GridOptionsApp />
+            </div>
+          }
+        />
+        
+        {/* Column Groups */}
+        <Route
+          path="/column-groups"
+          element={
+            <div className="h-screen w-screen">
+              <ColumnGroupsApp />
             </div>
           }
         />

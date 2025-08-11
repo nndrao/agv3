@@ -36,7 +36,8 @@
       "Bash(true)",
       "Bash(npx eslint:*)",
       "Bash(touch:*)",
-      "Bash(npx vite build:*)"
+      "Bash(npx vite build:*)",
+      "Bash(timeout 10 npm run dev:*)"
     ],
     "deny": []
   }

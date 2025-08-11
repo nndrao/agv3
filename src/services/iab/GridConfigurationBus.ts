@@ -115,15 +115,31 @@ export class GridConfigurationBus {
 
   // Initialize as client (dialog window)
   async initializeAsClient(): Promise<void> {
-    try {
-      console.log('[GridConfigurationBus] Initializing as client');
-      
-      this.channel = await fin.InterApplicationBus.Channel.connect(this.channelName);
-      
-      console.log('[GridConfigurationBus] Client connected to channel');
-    } catch (error) {
-      console.error('[GridConfigurationBus] Failed to initialize as client:', error);
-      throw error;
+    const maxRetries = 10;
+    const retryDelay = 500; // ms
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[GridConfigurationBus] Initializing as client (attempt ${attempt}/${maxRetries})`);
+        
+        this.channel = await fin.InterApplicationBus.Channel.connect(this.channelName);
+        
+        console.log('[GridConfigurationBus] Client connected to channel');
+        return;
+      } catch (error) {
+        console.warn(`[GridConfigurationBus] Connection attempt ${attempt} failed:`, error.message);
+        
+        if (attempt === maxRetries) {
+          console.error('[GridConfigurationBus] Failed to connect after maximum retries');
+          throw new Error(`Failed to connect to ${this.channelName} after ${maxRetries} attempts. Make sure the main grid window is open.`);
+        }
+        
+        // Wait before retrying
+        if (attempt < maxRetries) {
+          console.log(`[GridConfigurationBus] Retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
     }
   }
 

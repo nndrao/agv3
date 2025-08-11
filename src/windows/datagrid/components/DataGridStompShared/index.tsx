@@ -22,13 +22,11 @@ import {
 import { Toolbar } from './components/Toolbar';
 import { BusyIndicator } from './components/BusyIndicator';
 import { DataGrid } from './components/DataGrid';
-import { GridOptionsEditorContent } from './gridOptions/GridOptionsEditor';
-import { ColumnGroupEditorContent } from './columnGroups/ColumnGroupEditor';
 import { ColumnGroupService } from './columnGroups/columnGroupService';
-import { OpenFinPortalDialog } from '@/components/ui/openfin-portal-dialog';
 import { ExpressionEditorDialogControlled } from '@/components/expression-editor/ExpressionEditorDialogControlled';
 import { GridConfigurationBus } from '@/services/iab/GridConfigurationBus';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
+import { dialogService } from '@/services/openfin/OpenFinDialogService';
 
 // Import types and config
 import { DataGridStompSharedProfile, ProviderConfig } from './types';
@@ -120,18 +118,13 @@ const DataGridStompSharedComponent = () => {
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
-  const [showGridOptionsDialog, setShowGridOptionsDialog] = useState(false);
-  const [gridOptionsForEditor, setGridOptionsForEditor] = useState<Record<string, any> | null>(null);
-  const [showColumnGroupDialog, setShowColumnGroupDialog] = useState(false);
+  // Removed dialog states as they're now managed by the dialog service
   const [showExpressionEditor, setShowExpressionEditor] = useState(false);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   const [unsavedGridOptions, setUnsavedGridOptions] = useState<Record<string, any> | null>(null);
   const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [conditionalFormattingRules, _setConditionalFormattingRules] = useState<ConditionalRule[]>([]);
-  
-  // Stable refs for dialog state
-  const gridOptionsDialogRef = useRef(false);
+  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalRule[]>([]);
   
   // Refs for lifecycle management
   const isInitialMount = useRef(true);
@@ -346,7 +339,7 @@ const DataGridStompSharedComponent = () => {
         // Register initial configuration only if we didn't clean up
         if (!isCleanedUp) {
           bus.registerGridConfiguration(viewInstanceId, {
-            gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
+            gridOptions: unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions(),
             columnDefs: columnDefs || [],
             profile: activeProfileData,
             conditionalFormatting: conditionalFormattingRules
@@ -378,12 +371,12 @@ const DataGridStompSharedComponent = () => {
   useEffect(() => {
     const bus = GridConfigurationBus.getInstance();
     bus.updateGridConfiguration(viewInstanceId, {
-      gridOptions: gridOptionsForEditor || getDefaultGridOptions(),
+      gridOptions: unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions(),
       columnDefs: columnDefs || [],
       profile: activeProfileData,
       conditionalFormatting: conditionalFormattingRules
     });
-  }, [viewInstanceId, gridOptionsForEditor, columnDefs, activeProfileData, conditionalFormattingRules]);
+  }, [viewInstanceId, unsavedGridOptions, activeProfileData?.gridOptions, columnDefs, activeProfileData, conditionalFormattingRules]);
   
   // Monitor columnDefs changes and update grid if ready
   useEffect(() => {
@@ -706,64 +699,21 @@ const DataGridStompSharedComponent = () => {
     }
   }, [saveViewTitle, toast]);
   
-  // Memoized callbacks
-  const handleOpenSaveDialog = useCallback(() => setShowSaveDialog(true), []);
-  const handleOpenProfileDialog = useCallback(() => setShowProfileDialog(true), []);
-  const handleOpenGridOptions = useCallback(() => {
-    // Capture current options when opening - use unsaved if available
-    const currentOptions = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
-    setGridOptionsForEditor(currentOptions);
-    gridOptionsDialogRef.current = true;
-    setShowGridOptionsDialog(true);
-  }, [unsavedGridOptions, activeProfileData?.gridOptions]);
+  // Window options for dialogs (must be defined before callbacks that use it)
+  const windowOptions = useMemo(() => ({
+    defaultWidth: 800,
+    defaultHeight: 700,
+    defaultCentered: true,
+    frame: true,
+    resizable: true,
+    maximizable: false,
+    minimizable: true,
+    alwaysOnTop: false,
+    saveWindowState: false,
+    autoShow: true
+  }), []);
   
-  const handleOpenColumnGroups = useCallback(() => {
-    setShowColumnGroupDialog(true);
-  }, []);
-  
-  const handleOpenExpressionEditor = useCallback(() => {
-    setShowExpressionEditor(true);
-  }, []);
-  
-  const handleOpenConditionalFormatting = useCallback(async () => {
-    try {
-      await WindowManager.openConditionalFormatting(viewInstanceId);
-    } catch (error) {
-      console.error('[DataGridStompShared] Failed to open conditional formatting:', error);
-      toast({
-        title: "Error",
-        description: "Failed to open conditional formatting dialog",
-        variant: "destructive"
-      });
-    }
-  }, [viewInstanceId, toast]);
-  
-  const handleSaveNewProfile = useCallback(async (name: string) => {
-    await saveCurrentState(true, name);
-    setShowSaveDialog(false);
-  }, [saveCurrentState]);
-  
-  const handleProviderChange = useCallback((providerId: string | null) => {
-    setSelectedProviderId(providerId);
-    // Reset connection flags when provider changes
-    hasAutoConnected.current = false;
-  }, []);
-  
-  const handleThemeToggle = useCallback(() => {
-    setTheme(isDarkMode ? 'light' : 'dark');
-  }, [isDarkMode, setTheme]);
-  
-  // Stable callback for dialog open/close
-  const handleGridOptionsDialogChange = useCallback((open: boolean) => {
-    gridOptionsDialogRef.current = open;
-    setShowGridOptionsDialog(open);
-    if (!open) {
-      // Clear editor options when closing
-      setGridOptionsForEditor(null);
-    }
-  }, []);
-  
-  // Handle grid options apply - only apply to grid, don't save to storage
+  // Handle grid options apply - must be defined before handleOpenGridOptions
   const handleApplyGridOptions = useCallback((newOptions: Record<string, any>) => {
     // Performance optimization: batch update grid options
     if (gridApi) {
@@ -812,12 +762,9 @@ const DataGridStompSharedComponent = () => {
       title: "Grid Options Applied",
       description: "Grid options applied to grid (not saved to profile)"
     });
-    
-    // Close the grid options dialog after successfully applying changes
-    handleGridOptionsDialogChange(false);
-  }, [gridApi, toast, handleGridOptionsDialogChange, unsavedGridOptions, activeProfileData?.gridOptions]);
+  }, [gridApi, toast, unsavedGridOptions, activeProfileData?.gridOptions]);
   
-  // Handle column groups apply
+  // Handle column groups apply - must be defined before handleOpenColumnGroups
   const handleApplyColumnGroups = useCallback((groups: any[]) => {
     
     if (!gridApi) {
@@ -857,32 +804,132 @@ const DataGridStompSharedComponent = () => {
           groups.forEach(group => {
             setGroupOpened.call(columnApi || gridApi, group.groupId, true);
           });
-          
-          // Then collapse them after a delay to see the effect
-          setTimeout(() => {
-            groups.forEach(group => {
-              setGroupOpened.call(columnApi || gridApi, group.groupId, false);
-            });
-          }, 2000);
-        } else {
         }
       }, 100);
       
       toast({
         title: "Column Groups Applied",
-        description: `${groups.length} column groups applied successfully (not saved to profile)`
+        description: `${groups.length} column group(s) have been applied`
       });
     } catch (error) {
       console.error('[handleApplyColumnGroups] Error applying column groups:', error);
       toast({
         title: "Error",
-        description: "Failed to apply column groups. Please check the console for details.",
+        description: "Failed to apply column groups",
         variant: "destructive"
       });
     }
+  }, [gridApi, columnApi, columnDefs, toast, getPendingColumnState, clearPendingColumnState]);
+  
+  // Handle conditional formatting apply
+  const handleApplyConditionalFormatting = useCallback((rules: ConditionalRule[]) => {
+    setConditionalFormattingRules(rules);
     
-    setShowColumnGroupDialog(false);
-  }, [gridApi, columnApi, columnDefs, toast]);
+    toast({
+      title: "Conditional Formatting Applied",
+      description: `${rules.length} rule(s) have been applied to the grid`
+    });
+    
+    // Apply the rules to the grid if needed
+    // This would typically involve updating cell styles based on the rules
+  }, [toast]);
+  
+  // Memoized callbacks
+  const handleOpenSaveDialog = useCallback(() => setShowSaveDialog(true), []);
+  const handleOpenProfileDialog = useCallback(() => setShowProfileDialog(true), []);
+  const handleOpenGridOptions = useCallback(async () => {
+    // Capture current options when opening - use unsaved if available
+    const currentOptions = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
+    
+    // Open dialog using the new service
+    await dialogService.openDialog({
+      name: `grid-options-${viewInstanceId}`,
+      route: '/grid-options',
+      data: {
+        options: currentOptions,
+        profileName: activeProfile?.name
+      },
+      windowOptions: {
+        ...windowOptions,
+        defaultWidth: 900,
+        defaultHeight: 700
+      },
+      onApply: (data) => {
+        if (data?.options) {
+          handleApplyGridOptions(data.options);
+        }
+      }
+    });
+  }, [unsavedGridOptions, activeProfileData?.gridOptions, activeProfile?.name, viewInstanceId, windowOptions, handleApplyGridOptions]);
+  
+  const handleOpenColumnGroups = useCallback(async () => {
+    // Open dialog using the new service
+    await dialogService.openDialog({
+      name: `column-groups-${viewInstanceId}`,
+      route: '/column-groups',
+      data: {
+        columnDefs: columnDefs,
+        currentGroups: unsavedColumnGroups || activeProfileData?.columnGroups,
+        profileName: activeProfile?.name
+      },
+      windowOptions: {
+        ...windowOptions,
+        defaultWidth: 1000,
+        defaultHeight: 700
+      },
+      onApply: (data) => {
+        if (data?.groups) {
+          handleApplyColumnGroups(data.groups);
+        }
+      }
+    });
+  }, [columnDefs, unsavedColumnGroups, activeProfileData?.columnGroups, activeProfile?.name, viewInstanceId, windowOptions, handleApplyColumnGroups]);
+  
+  const handleOpenExpressionEditor = useCallback(() => {
+    setShowExpressionEditor(true);
+  }, []);
+  
+  const handleOpenConditionalFormatting = useCallback(async () => {
+    // Open dialog using the new service
+    await dialogService.openDialog({
+      name: `conditional-formatting-${viewInstanceId}`,
+      route: '/conditional-formatting',
+      data: {
+        columnDefs: columnDefs.map(col => ({
+          field: col.field,
+          headerName: col.headerName,
+          type: col.type
+        })),
+        currentRules: conditionalFormattingRules,
+        profileName: activeProfile?.name
+      },
+      windowOptions: {
+        ...windowOptions,
+        defaultWidth: 1200,
+        defaultHeight: 800
+      },
+      onApply: (data) => {
+        if (data?.rules) {
+          handleApplyConditionalFormatting(data.rules);
+        }
+      }
+    });
+  }, [columnDefs, conditionalFormattingRules, activeProfile?.name, viewInstanceId, windowOptions, handleApplyConditionalFormatting]);
+  
+  const handleSaveNewProfile = useCallback(async (name: string) => {
+    await saveCurrentState(true, name);
+    setShowSaveDialog(false);
+  }, [saveCurrentState]);
+  
+  const handleProviderChange = useCallback((providerId: string | null) => {
+    setSelectedProviderId(providerId);
+    // Reset connection flags when provider changes
+    hasAutoConnected.current = false;
+  }, []);
+  
+  const handleThemeToggle = useCallback(() => {
+    setTheme(isDarkMode ? 'light' : 'dark');
+  }, [isDarkMode, setTheme]);
   
   
   // Apply theme changes to grid
@@ -967,20 +1014,6 @@ const DataGridStompSharedComponent = () => {
       }
     }
   }, [gridApi, columnApi, columnDefs, activeProfileData?.columnGroups, unsavedColumnGroups, setColumnGroups, getColumnGroups, checkProfileApplicationComplete]);
-  
-  // Memoize window options (must be before early return)
-  const windowOptions = useMemo(() => ({
-    defaultWidth: 800,
-    defaultHeight: 700,
-    defaultCentered: true,
-    frame: true,
-    resizable: true,
-    maximizable: false,
-    minimizable: true,
-    alwaysOnTop: false,
-    saveWindowState: false,
-    autoShow: true
-  }), []);
 
   // Create theme with dynamic font - use unsaved options if available
   const gridTheme = useMemo(() => {
@@ -1091,44 +1124,6 @@ const DataGridStompSharedComponent = () => {
         onRename={handleRenameView}
       />
       
-      {/* Grid Options Editor in OpenFin Window */}
-      <OpenFinPortalDialog
-        open={showGridOptionsDialog}
-        onOpenChange={handleGridOptionsDialogChange}
-        windowName={`grid-options-${viewInstanceId}`}
-        windowOptions={windowOptions}
-      >
-        <GridOptionsEditorContent
-          currentOptions={gridOptionsForEditor || getDefaultGridOptions()}
-          onApply={handleApplyGridOptions}
-          onClose={() => handleGridOptionsDialogChange(false)}
-          profileName={activeProfile?.name}
-        />
-      </OpenFinPortalDialog>
-      
-      {/* Column Groups Editor in OpenFin Window */}
-      <OpenFinPortalDialog
-        open={showColumnGroupDialog}
-        onOpenChange={(open) => {
-          setShowColumnGroupDialog(open);
-        }}
-        windowName={`column-groups-${viewInstanceId}`}
-        windowOptions={windowOptions}
-        onWindowCreated={() => {
-        }}
-      >
-        <ColumnGroupEditorContent
-          gridApi={gridApi}
-          columnApi={columnApi}
-          columnDefs={columnDefs}
-          currentGroups={unsavedColumnGroups || activeProfileData?.columnGroups}
-          onApply={handleApplyColumnGroups}
-          onClose={() => {
-            setShowColumnGroupDialog(false);
-          }}
-        />
-      </OpenFinPortalDialog>
-      
       {/* Expression Editor Dialog */}
       <ExpressionEditorDialogControlled 
         open={showExpressionEditor}
@@ -1143,8 +1138,6 @@ const DataGridStompSharedComponent = () => {
           });
         }}
       />
-      
-      {/* Conditional Formatting is now opened via IAB in a separate window */}
     </div>
   );
 };
