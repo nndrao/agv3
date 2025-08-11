@@ -39,7 +39,6 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
   const restoreViewTitle = useCallback(() => {
     const savedTitle = localStorage.getItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId));
     if (savedTitle) {
-      console.log(`[useViewTitle] Restoring saved title: "${savedTitle}" for instance: ${viewInstanceId}`);
       
       // Apply the title immediately
       document.title = savedTitle;
@@ -59,14 +58,12 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
               title: savedTitle,
               titleOrder: 'options'
             });
-            console.log(`[useViewTitle] Successfully restored title: "${savedTitle}"`);
           } catch (e) {
             console.warn('[useViewTitle] Could not update view options:', e);
           }
         }, 500);
       }
     } else {
-      console.log(`[useViewTitle] No saved title found for instance: ${viewInstanceId}`);
     }
   }, [viewInstanceId]);
   
@@ -77,7 +74,6 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
         // Use the viewInstanceId which is unique for each view
         const savedTitle = localStorage.getItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId));
         if (savedTitle) {
-          console.log(`[useViewTitle] Found saved title: "${savedTitle}" for instance: ${viewInstanceId}`);
           
           // Apply the title immediately
           document.title = savedTitle;
@@ -97,14 +93,12 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
                   title: savedTitle,
                   titleOrder: 'options'
                 });
-                console.log(`[useViewTitle] Successfully restored title: "${savedTitle}"`);
               } catch (e) {
                 console.warn('[useViewTitle] Could not update view options:', e);
               }
             }, 500);
           }
         } else {
-          console.log(`[useViewTitle] No saved title found for instance: ${viewInstanceId}`);
         }
       } catch (error) {
         console.warn('[useViewTitle] Could not restore title:', error);

@@ -26,8 +26,9 @@ export function useSnapshotData(
   const isSnapshotCompleteRef = useRef(false);
   const messageCountRef = useRef(0);
   const lastUpdateTimeRef = useRef(0);
+  const snapshotModeRef = useRef<SnapshotMode>(SNAPSHOT_MODES.IDLE);
   
-  // Update message count in AG-Grid context
+  // Update message count in AG-Grid context only (no React state)
   const updateMessageCountInGrid = useCallback((count: number, forceUpdate = false) => {
     const now = Date.now();
     // Batch updates - only update every 100ms unless forced
@@ -36,32 +37,46 @@ export function useSnapshotData(
     }
     lastUpdateTimeRef.current = now;
     
-    if (gridApiRef.current && gridApiRef.current.getContext) {
+    
+    // Update ref only (no re-renders)
+    messageCountRef.current = count;
+    
+    
+    if (gridApiRef.current) {
       try {
-        const context = gridApiRef.current.getContext();
-        gridApiRef.current.updateContext({
-          ...context,
-          snapshotData: {
-            mode: snapshotMode,
-            messageCount: count,
-            isComplete: isSnapshotCompleteRef.current
-          }
-        });
-        // Refresh status bar to update the connection panel
-        gridApiRef.current.refreshHeader();
+        // AG-Grid v31+ doesn't have getContext/updateContext
+        // We need to use the context property or refresh with new params
+        
+        // Store the data in a way the status panel can access it
+        if (!gridApiRef.current._customContext) {
+          gridApiRef.current._customContext = {};
+        }
+        
+        gridApiRef.current._customContext.snapshotData = {
+          mode: snapshotModeRef.current,
+          messageCount: count,
+          isComplete: isSnapshotCompleteRef.current
+        };
+        
+        
+        // Dispatch custom event to update status bar
+        if (typeof gridApiRef.current.dispatchEvent === 'function') {
+          gridApiRef.current.dispatchEvent({ type: 'statusBarUpdate' });
+        } else {
+        }
       } catch (error) {
-        console.warn('[useSnapshotData] Grid API not ready yet:', error);
       }
+    } else {
     }
-  }, [snapshotMode]);
+  }, []); // Remove dependency to avoid stale closures
   
   // Handle snapshot data accumulation
   const handleSnapshotData = useCallback((data: any[]) => {
     if (!isSnapshotCompleteRef.current) {
       // During snapshot - accumulate data in ref
       snapshotDataRef.current.push(...data);
-      messageCountRef.current += data.length;
-      updateMessageCountInGrid(messageCountRef.current);
+      const newCount = messageCountRef.current + data.length;
+      updateMessageCountInGrid(newCount);
       
       // Update mode to receiving if not already
       setSnapshotMode((prev) => prev === SNAPSHOT_MODES.REQUESTING ? SNAPSHOT_MODES.RECEIVING : prev);
@@ -71,6 +86,7 @@ export function useSnapshotData(
   // Handle real-time updates
   const handleRealtimeUpdate = useCallback((updates: any[]) => {
     if (!gridApiRef.current || updates.length === 0) return;
+    
     
     // If we're still in snapshot mode, treat as snapshot data
     if (!isSnapshotCompleteRef.current) {
@@ -82,19 +98,19 @@ export function useSnapshotData(
     if (gridApiRef.current) {
       gridApiRef.current.applyTransactionAsync({ update: updates });
     }
-    messageCountRef.current += updates.length;
     
-    // Update grid context with batched message count
-    updateMessageCountInGrid(messageCountRef.current);
+    // Update message count - force update for real-time messages
+    const newCount = messageCountRef.current + updates.length;
+    updateMessageCountInGrid(newCount, true); // Force update to bypass throttling
   }, [handleSnapshotData, updateMessageCountInGrid]);
   
   // Complete snapshot and set all data at once
   const completeSnapshot = useCallback(() => {
     if (snapshotDataRef.current.length > 0 && !isSnapshotCompleteRef.current) {
-      console.log(`[useSnapshotData] Setting snapshot data: ${snapshotDataRef.current.length} rows`);
       setRowData(snapshotDataRef.current);
       isSnapshotCompleteRef.current = true;
       setSnapshotMode(SNAPSHOT_MODES.COMPLETE);
+      snapshotModeRef.current = SNAPSHOT_MODES.COMPLETE;
       toast({
         title: "Snapshot Complete",
         description: `Loaded ${snapshotDataRef.current.length} rows`,
@@ -105,6 +121,7 @@ export function useSnapshotData(
   // Reset snapshot state
   const resetSnapshot = useCallback(() => {
     setSnapshotMode(SNAPSHOT_MODES.IDLE);
+    snapshotModeRef.current = SNAPSHOT_MODES.IDLE;
     setRowData([]);
     snapshotDataRef.current = [];
     isSnapshotCompleteRef.current = false;
@@ -115,13 +132,11 @@ export function useSnapshotData(
   
   // Request snapshot from SharedWorker
   const requestSnapshot = useCallback(async (workerClient: SharedWorkerClient, providerId: string) => {
-    console.log('[useSnapshotData] Requesting snapshot from SharedWorker');
     setSnapshotMode(SNAPSHOT_MODES.REQUESTING);
     
     try {
       const snapshot = await workerClient.getSnapshot(providerId);
       if (snapshot && snapshot.length > 0) {
-        console.log(`[useSnapshotData] Received snapshot from SharedWorker: ${snapshot.length} rows`);
         handleSnapshotData(snapshot);
         
         // Mark snapshot as complete after receiving cached data
@@ -129,7 +144,6 @@ export function useSnapshotData(
         setRowData(snapshot);
         isSnapshotCompleteRef.current = true;
         setSnapshotMode(SNAPSHOT_MODES.COMPLETE);
-        messageCountRef.current = snapshot.length;
         updateMessageCountInGrid(snapshot.length, true); // Force update
         
         toast({
@@ -137,7 +151,6 @@ export function useSnapshotData(
           description: `Loaded ${snapshot.length} cached rows from SharedWorker`,
         });
       } else {
-        console.log('[useSnapshotData] No cached snapshot available, waiting for live data');
         // Keep showing the busy indicator since snapshot is still being loaded
       }
     } catch (error) {
@@ -151,6 +164,11 @@ export function useSnapshotData(
     }
   }, [handleSnapshotData, toast]);
   
+  // Keep ref in sync with state
+  useEffect(() => {
+    snapshotModeRef.current = snapshotMode;
+  }, [snapshotMode]);
+  
   // Effect to handle mode transitions
   useEffect(() => {
     // When mode changes to complete, ensure data is set
@@ -158,11 +176,6 @@ export function useSnapshotData(
       completeSnapshot();
     }
   }, [snapshotMode, completeSnapshot]);
-  
-  // Update grid context when mode changes
-  useEffect(() => {
-    updateMessageCountInGrid(messageCountRef.current, true);
-  }, [snapshotMode, updateMessageCountInGrid]);
   
   return {
     snapshotData: {

@@ -118,7 +118,6 @@ export interface GridOptionsConfig {
   // Row Grouping
   groupDisplayType?: 'singleColumn' | 'multipleColumns' | 'groupRows' | 'custom';
   groupDefaultExpanded?: number;
-  autoGroupColumnDef?: any;
   groupMaintainOrder?: boolean;
   groupSelectsChildren?: boolean;
   groupAggFiltering?: boolean;

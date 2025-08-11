@@ -29,3 +29,31 @@ export const STORAGE_KEYS = {
 
 // Component types for profile management
 export const COMPONENT_TYPE = 'DataGridStompShared';
+
+// Grid options that are initial-only and cannot be changed after grid initialization
+export const INITIAL_GRID_OPTIONS = [
+  'detailRowHeight',
+  'detailRowAutoHeight',
+  'enableRtl',
+  'scrollbarWidth',
+  'debounceVerticalScrollbar',
+  'suppressMaxRenderedRowRestriction',
+  'suppressAnimationFrame',
+  'suppressPreventDefaultOnMouseWheel',
+  'suppressRowVirtualisation',
+  'suppressColumnVirtualisation',
+  'valueCache',
+  'valueCacheNeverExpires',
+  'paginationPageSizeSelector',
+  'stopEditingWhenCellsLoseFocus',
+  'undoRedoCellEditing',
+  'undoRedoCellEditingLimit',
+  'allowShowChangeAfterFilter',
+  'suppressGroupRowsSticky',
+  'keepDetailRows',
+  'keepDetailRowsCount',
+  'ensureDomOrder',
+  'suppressRowTransform',
+  'tooltipMouseTrack',
+  'debug'
+];

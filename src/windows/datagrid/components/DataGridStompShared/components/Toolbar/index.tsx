@@ -2,6 +2,7 @@ import React from 'react';
 import { ProfileSection } from './ProfileSection';
 import { ConnectionSection } from './ConnectionSection';
 import { SettingsSection } from './SettingsSection';
+import { ProfileStatusIndicator, ProfileOperation } from '../ProfileStatusIndicator';
 import { ToolbarProps } from '../../types';
 
 export const Toolbar = React.memo<ToolbarProps>(({
@@ -26,7 +27,12 @@ export const Toolbar = React.memo<ToolbarProps>(({
   onOpenRenameDialog,
   onOpenGridOptions,
   onOpenColumnGroups,
-  viewInstanceId
+  onOpenExpressionEditor,
+  onOpenConditionalFormatting,
+  viewInstanceId,
+  profileOperation,
+  profileName,
+  profileError
 }) => {
   return (
     <div className="h-14 border-b bg-background flex items-center px-4 gap-2">
@@ -42,6 +48,16 @@ export const Toolbar = React.memo<ToolbarProps>(({
         onOpenSaveDialog={onOpenSaveDialog}
         onOpenProfileDialog={onOpenProfileDialog}
       />
+      
+      {/* Profile status indicator - shows loading/saving/error states */}
+      {profileOperation && profileOperation !== 'idle' && (
+        <ProfileStatusIndicator
+          operation={profileOperation as ProfileOperation}
+          profileName={profileName}
+          error={profileError}
+          className="ml-2"
+        />
+      )}
       
       <div className="h-6 w-px bg-border" />
       
@@ -65,6 +81,8 @@ export const Toolbar = React.memo<ToolbarProps>(({
         onOpenRenameDialog={onOpenRenameDialog}
         onOpenGridOptions={onOpenGridOptions}
         onOpenColumnGroups={onOpenColumnGroups}
+        onOpenExpressionEditor={onOpenExpressionEditor}
+        onOpenConditionalFormatting={onOpenConditionalFormatting}
         profiles={profiles}
         activeProfile={activeProfile}
         viewInstanceId={viewInstanceId}

@@ -1,0 +1,592 @@
+/* Conditional Formatting Dialog Professional Styles */
+
+/* Root container */
+.conditional-formatting-dialog {
+  @apply h-full flex flex-col bg-background;
+  /* tighten overall density */
+  --cf-panel-padding: 12px;
+  --cf-gap: 8px;
+}
+
+/* Content Wrapper - Flex layout instead of ResizablePanels */
+.cf-content-wrapper {
+  @apply flex-1 flex min-h-0;
+}
+
+/* Sidebar Panel */
+.cf-sidebar-panel {
+  @apply flex flex-col border-r;
+  width: 260px;
+  min-width: 220px;
+  flex-shrink: 0;
+}
+
+/* Main Panel */
+.cf-main-panel {
+  @apply flex-1 flex flex-col min-w-0;
+}
+
+/* Header Section */
+.cf-header {
+  @apply px-6 py-4 border-b bg-card;
+}
+
+.cf-header-title {
+  @apply text-lg font-semibold text-foreground;
+}
+
+.cf-header-subtitle {
+  @apply text-sm text-muted-foreground mt-1;
+}
+
+/* Rules List Panel */
+.cf-rules-panel {
+  @apply h-full flex flex-col bg-muted/5;
+  min-width: 220px;
+}
+
+.cf-rules-header { padding: var(--cf-panel-padding); border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
+
+.cf-rules-actions {
+  @apply flex gap-3;
+}
+
+.cf-rules-list { @apply flex-1 overflow-auto; padding: calc(var(--cf-panel-padding) - 6px); }
+
+.cf-rule-item {
+  @apply flex items-center gap-2 px-3 py-2 mb-1 rounded-md cursor-pointer transition-all;
+  @apply hover:bg-accent/50;
+}
+
+.cf-rule-item.selected {
+  @apply bg-accent border border-accent-foreground/20;
+}
+
+.cf-rule-item.disabled {
+  @apply opacity-50;
+}
+
+.cf-rule-indicator {
+  @apply w-2 h-2 rounded-full flex-shrink-0;
+}
+
+.cf-rule-indicator.enabled {
+  @apply bg-green-500;
+}
+
+.cf-rule-indicator.disabled {
+  @apply bg-muted-foreground;
+}
+
+.cf-rule-name {
+  @apply flex-1 text-sm font-medium truncate;
+}
+
+.cf-rule-priority {
+  @apply text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded;
+}
+
+/* Rule Editor Section */
+.cf-editor-panel { @apply h-full flex flex-col bg-background; }
+
+.cf-editor-header {
+  @apply px-6 py-4 border-b bg-card/50;
+}
+
+.cf-editor-header-grid {
+  @apply grid gap-4;
+}
+
+.cf-field-group {
+  @apply space-y-2;
+}
+
+.cf-field-label {
+  @apply text-sm font-medium text-foreground;
+}
+
+.cf-field-description {
+  @apply text-xs text-muted-foreground;
+}
+
+.cf-field-row {
+  @apply flex items-center gap-3;
+}
+
+.cf-field-input {
+  @apply flex-1;
+}
+
+/* Expression Editor Section */
+.cf-expression-section {
+  @apply h-full flex flex-col;
+}
+
+.cf-expression-header {
+  @apply px-6 py-3 border-b bg-muted/10;
+}
+
+.cf-expression-title {
+  @apply text-sm font-semibold text-foreground;
+}
+
+.cf-expression-hint {
+  @apply text-xs text-muted-foreground mt-0.5;
+}
+
+/* Formatting Options Section */
+.cf-formatting-section {
+  @apply h-full overflow-y-auto bg-card/30;
+}
+
+.cf-formatting-content {
+  @apply p-6 space-y-6;
+}
+
+.cf-formatting-group {
+  @apply space-y-3;
+}
+
+.cf-formatting-group-title {
+  @apply text-sm font-semibold text-foreground mb-3;
+}
+
+.cf-formatting-grid {
+  @apply grid grid-cols-2 gap-4;
+}
+
+/* Color Picker Enhancement */
+.cf-color-field {
+  @apply space-y-2;
+}
+
+.cf-color-label {
+  @apply text-xs font-medium text-muted-foreground uppercase tracking-wide;
+}
+
+/* Footer Section */
+.cf-footer { @apply flex items-center justify-between border-t bg-card; padding: var(--cf-panel-padding); }
+
+.cf-footer-info {
+  @apply text-sm text-muted-foreground;
+}
+
+.cf-footer-actions {
+  @apply flex items-center gap-3;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .cf-header {
+    @apply px-4 py-3;
+  }
+  
+  .cf-editor-header {
+    @apply px-4 py-3;
+  }
+  
+  .cf-formatting-content {
+    @apply p-4;
+  }
+  
+  .cf-footer {
+    @apply px-4 py-3;
+  }
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.cf-rule-item {
+  animation: slideIn 0.2s ease-out;
+}
+
+/* Scrollbar Styling */
+.cf-rules-list::-webkit-scrollbar,
+.cf-formatting-section::-webkit-scrollbar {
+  @apply w-2;
+}
+
+.cf-rules-list::-webkit-scrollbar-track,
+.cf-formatting-section::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.cf-rules-list::-webkit-scrollbar-thumb,
+.cf-formatting-section::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full;
+}
+
+.cf-rules-list::-webkit-scrollbar-thumb:hover,
+.cf-formatting-section::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+/* Professional Button Styles */
+.cf-btn-primary {
+  @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  @apply px-4 py-2 rounded-md font-medium text-sm;
+  @apply transition-all duration-200;
+}
+
+.cf-btn-secondary {
+  @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  @apply px-4 py-2 rounded-md font-medium text-sm;
+  @apply transition-all duration-200;
+}
+
+.cf-btn-ghost {
+  @apply hover:bg-accent hover:text-accent-foreground;
+  @apply px-4 py-2 rounded-md font-medium text-sm;
+  @apply transition-all duration-200;
+}
+
+/* Visual Hierarchy Enhancements */
+.cf-section-divider {
+  @apply border-b border-border/50 my-4;
+}
+
+.cf-emphasis {
+  @apply font-semibold text-foreground;
+}
+
+.cf-muted {
+  @apply text-muted-foreground text-sm;
+}
+
+/* Status Indicators */
+.cf-status-badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+}
+
+.cf-status-badge.success {
+  @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+}
+
+.cf-status-badge.warning {
+  @apply bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400;
+}
+
+.cf-status-badge.error {
+  @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+}
+
+.cf-status-badge.info {
+  @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+}
+
+/* Enhanced Format Options Styles */
+.format-options-container {
+  @apply h-full flex flex-col;
+}
+
+.format-section {
+  @apply space-y-2;
+}
+
+.format-section-header {
+  @apply flex items-center gap-2 mb-2;
+}
+
+.format-section-icon {
+  @apply w-3 h-3 flex-shrink-0;
+}
+
+.format-section-title {
+  @apply text-xs font-medium text-foreground;
+}
+
+.format-section-content {
+  @apply pl-5 space-y-2;
+}
+
+/* Color Input Styles */
+input[type="color"] {
+  @apply appearance-none border-0 p-0 rounded cursor-pointer;
+  @apply hover:shadow-md transition-shadow duration-200;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  @apply p-0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  @apply border-0 rounded;
+}
+
+input[type="color"]::-moz-color-swatch {
+  @apply border-0 rounded;
+}
+
+.color-input-group {
+  @apply flex items-center gap-2;
+}
+
+.color-input-field {
+  @apply h-7 w-full rounded border cursor-pointer;
+  @apply hover:border-primary transition-colors duration-200;
+}
+
+.color-input-text {
+  @apply h-7 w-20 text-[10px] font-mono;
+}
+
+/* Typography Controls */
+.typography-grid {
+  @apply grid grid-cols-2 gap-2;
+}
+
+.typography-control {
+  @apply space-y-1;
+}
+
+.typography-label {
+  @apply text-[10px] text-muted-foreground;
+}
+
+.typography-select {
+  @apply h-7 text-xs;
+}
+
+/* Border Controls */
+.border-style-editor {
+  @apply space-y-3;
+}
+
+.border-control-header {
+  @apply flex items-center justify-between;
+}
+
+.border-toggle-btn {
+  @apply text-xs text-primary hover:underline cursor-pointer transition-colors;
+}
+
+.border-grid {
+  @apply grid gap-2;
+}
+
+.border-side-control {
+  @apply grid grid-cols-4 gap-2 items-center;
+}
+
+.border-side-label {
+  @apply text-[10px] capitalize;
+}
+
+.border-side-select {
+  @apply h-6 text-[10px];
+}
+
+.border-color-input {
+  @apply h-6 w-full rounded border cursor-pointer;
+  @apply hover:border-primary transition-colors;
+}
+
+/* Advanced Options */
+.advanced-options {
+  @apply space-y-2;
+}
+
+.advanced-field {
+  @apply space-y-1;
+}
+
+.advanced-label {
+  @apply text-[10px] text-muted-foreground;
+}
+
+.advanced-input {
+  @apply h-7 text-xs;
+}
+
+.advanced-grid {
+  @apply grid grid-cols-2 gap-2;
+}
+
+/* Compact Spacing Utilities */
+.format-compact {
+  @apply py-1 px-2;
+}
+
+.format-tight {
+  @apply py-0.5 px-1;
+}
+
+/* Hover Effects */
+.format-hover-lift {
+  @apply hover:shadow-sm transition-shadow duration-200;
+}
+
+.format-hover-highlight {
+  @apply hover:bg-accent/5 transition-colors duration-200;
+}
+
+/* Focus States */
+.format-focus-ring {
+  @apply focus:ring-2 focus:ring-primary/20 focus:ring-offset-1;
+}
+
+/* Responsive Typography Selector */
+@media (max-width: 640px) {
+  .typography-grid {
+    @apply grid-cols-1;
+  }
+  
+  .border-side-control {
+    @apply grid-cols-2;
+  }
+}
+
+/* Dark Mode Enhancements */
+.dark input[type="color"] {
+  @apply bg-gray-800 hover:bg-gray-700;
+}
+
+.dark .color-input-field {
+  @apply border-gray-600 hover:border-primary;
+}
+
+.dark .format-section-icon {
+  @apply opacity-80;
+}
+
+/* Professional Transitions */
+.format-transition {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+/* Section Separators */
+.format-separator {
+  @apply border-b border-border/30 my-3;
+}
+
+/* Elegant Shadow Effects */
+.format-shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.format-shadow-md {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Gradient Backgrounds for Section Icons */
+.format-icon-gradient-color {
+  @apply bg-gradient-to-r from-blue-500 to-purple-500;
+}
+
+.format-icon-gradient-text {
+  @apply bg-gradient-to-r from-slate-600 to-slate-400;
+}
+
+.format-icon-gradient-border {
+  @apply border-2 border-gray-500;
+}
+
+.format-icon-gradient-advanced {
+  @apply bg-gradient-to-r from-amber-500 to-orange-500;
+}
+
+.format-icon-gradient-row {
+  @apply bg-gradient-to-r from-green-500 to-emerald-500;
+}
+
+/* Consistent Font Size System for Conditional Formatting */
+.cf-text-base {
+  @apply text-sm; /* 14px - Base text size */
+}
+
+.cf-text-label {
+  @apply text-xs font-medium; /* 12px - Labels and headers */
+}
+
+.cf-text-sublabel {
+  @apply text-xs text-muted-foreground; /* 12px - Sub-labels */
+}
+
+.cf-text-small {
+  @apply text-xs; /* 12px - Small text, buttons, inputs */
+}
+
+.cf-text-tiny {
+  @apply text-[11px]; /* 11px - Very small helper text */
+}
+
+/* Consistent Select Styling */
+.cf-select-trigger {
+  @apply h-8 text-xs; /* 32px height, 12px font */
+}
+
+.cf-select-content .cf-select-item {
+  @apply text-xs py-1.5; /* Match trigger font size */
+}
+
+/* Consistent Input Styling */
+.cf-input {
+  @apply h-8 text-xs; /* 32px height, 12px font */
+}
+
+.cf-input-small {
+  @apply h-7 text-xs; /* 28px height, 12px font */
+}
+
+/* Consistent Button Styling */
+.cf-button {
+  @apply h-8 px-3 text-xs font-medium; /* 32px height, 12px font */
+}
+
+.cf-button-small {
+  @apply h-7 px-2 text-xs; /* 28px height, 12px font */
+}
+
+/* Override Select dropdown font sizes globally in this context */
+.conditional-formatting-dialog [role="combobox"] {
+  @apply text-xs;
+}
+
+.conditional-formatting-dialog [role="option"] {
+  @apply text-xs py-1.5 px-2;
+}
+
+.conditional-formatting-dialog [data-radix-select-viewport] {
+  @apply text-xs;
+}
+
+/* Ensure consistent font in select items */
+.conditional-formatting-dialog [data-state="checked"],
+.conditional-formatting-dialog [data-state="unchecked"] {
+  @apply text-xs;
+}
+
+/* Label consistency */
+.conditional-formatting-dialog label {
+  @apply text-xs;
+}
+
+/* Input consistency */
+.conditional-formatting-dialog input[type="text"],
+.conditional-formatting-dialog input[type="number"],
+.conditional-formatting-dialog textarea {
+  @apply text-xs;
+}
+
+/* Consistent icon sizing */
+.cf-icon-xs {
+  @apply w-3 h-3;
+}
+
+.cf-icon-sm {
+  @apply w-4 h-4;
+}
+
+.cf-icon-md {
+  @apply w-5 h-5;
+}

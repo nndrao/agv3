@@ -95,10 +95,16 @@ export function useProfileManagement<T extends BaseProfile>({
 
   // Apply profile when active profile changes
   useEffect(() => {
+    console.log('[🔍][APP_STARTUP_EFFECT] Active profile changed');
+    console.log('[🔍][APP_STARTUP_EFFECT] - activeProfile:', activeProfile?.name);
+    console.log('[🔍][APP_STARTUP_EFFECT] - activeProfile.config:', activeProfile?.config);
     if (activeProfile && onProfileChange) {
       const profileData = activeProfile.config as T;
+      console.log('[🔍][APP_STARTUP_EFFECT] Calling onProfileChange with:', profileData);
       setActiveProfileData(profileData);
       onProfileChange(profileData);
+    } else {
+      console.log('[🔍][APP_STARTUP_EFFECT] Skipping - missing activeProfile or onProfileChange');
     }
   }, [activeProfile, onProfileChange]);
 
@@ -118,21 +124,26 @@ export function useProfileManagement<T extends BaseProfile>({
   }, [autoSaveInterval, activeProfileData]);
 
   const loadConfiguration = async () => {
+    console.log('[🔍][APP_STARTUP] Loading configuration for view:', viewInstanceId);
     log('Loading configuration for view:', viewInstanceId);
     setIsLoading(true);
     setError(null);
 
     try {
       // Try to load existing configuration
+      console.log('[🔍][APP_STARTUP] Attempting to load config for ID:', viewInstanceId);
       log('Attempting to load config for ID:', viewInstanceId);
       const existingConfig = await StorageClient.get(viewInstanceId);
+      console.log('[🔍][APP_STARTUP] Loaded config from storage:', existingConfig);
       log('Loaded config from storage:', existingConfig);
       
       if (existingConfig) {
+        console.log('[🔍][APP_STARTUP] Found existing configuration');
         log('Found existing configuration:', existingConfig);
         setConfig(existingConfig);
         const loadedProfiles = existingConfig.settings || [];
         setProfiles(loadedProfiles);
+        console.log('[🔍][APP_STARTUP] Loaded profiles count:', loadedProfiles.length);
         log('Loaded profiles:', loadedProfiles.length);
         
         // Find and set active profile
@@ -141,17 +152,21 @@ export function useProfileManagement<T extends BaseProfile>({
             s => s.versionId === existingConfig.activeSetting
           );
           if (active) {
+            console.log('[🔍][APP_STARTUP] Setting active profile:', active.name);
+            console.log('[🔍][APP_STARTUP] Active profile config:', active.config);
             setActiveProfile(active);
             setActiveProfileData(active.config as T);
             log('Set active profile:', active.name);
           } else {
             // Fallback to first profile if active not found
+            console.log('[🔍][APP_STARTUP] Active profile not found, using first profile');
             setActiveProfile(loadedProfiles[0]);
             setActiveProfileData(loadedProfiles[0].config as T);
             log('Active profile not found, using first profile');
           }
         } else if (loadedProfiles.length > 0) {
           // No active setting, use first profile
+          console.log('[🔍][APP_STARTUP] No active setting, using first profile');
           setActiveProfile(loadedProfiles[0]);
           setActiveProfileData(loadedProfiles[0].config as T);
           log('No active setting, using first profile');
@@ -362,10 +377,7 @@ export function useProfileManagement<T extends BaseProfile>({
       setActiveProfile(profile);
       setActiveProfileData(profile.config as T);
 
-      toast({
-        title: "Profile Loaded",
-        description: `Switched to profile: ${profile.name}`
-      });
+      // Don't show toast here - the status indicator handles this
     } catch (err) {
       log('Error loading profile:', err);
       setError(err as Error);

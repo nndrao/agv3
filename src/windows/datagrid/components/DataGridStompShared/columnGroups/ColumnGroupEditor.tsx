@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, Plus, Check, XCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { X, Plus, Check, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DraggableDialog,
@@ -39,7 +39,6 @@ const extractColumnsFromDefs = (columnDefs: any[]): ColumnDefinition[] => {
       // This is a regular column
       const colId = colDef.colId || colDef.field;
       const field = colDef.field || colDef.colId || '';
-      console.log('[extractColumnsFromDefs] Processing column:', { colId, field, headerName: colDef.headerName });
       columns.push({
         colId: colId,
         field: field,
@@ -51,7 +50,6 @@ const extractColumnsFromDefs = (columnDefs: any[]): ColumnDefinition[] => {
   };
   
   columnDefs.forEach(colDef => processColDef(colDef));
-  console.log('[extractColumnsFromDefs] Extracted columns:', columns.map(c => ({ colId: c.colId, field: c.field })));
   
   return columns;
 };
@@ -190,7 +188,6 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOpenStates, setColumnOpenStates] = useState<Map<string, 'open' | 'closed' | 'undefined'>>(new Map());
   const [groupName, setGroupName] = useState('');
-  const [groupOpenState, setGroupOpenState] = useState<'open' | 'closed' | 'undefined'>('open');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   
@@ -319,13 +316,15 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     
     setGroups(prev => prev.map(group => {
       if (group.groupId === selectedGroupId) {
-        return {
+        const updatedGroup = {
           ...group,
           headerName: groupName,
           children: Array.from(selectedColumns),
           openByDefault: false, // Default to collapsed to see columnGroupShow effect
           columnStates
         };
+        
+        return updatedGroup;
       }
       return group;
     }));

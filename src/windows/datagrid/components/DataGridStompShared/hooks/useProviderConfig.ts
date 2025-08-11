@@ -30,20 +30,13 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
     return columns.map((col: any) => {
       const processedCol = { ...col };
       
-      // Debug logging
-      if (col.valueFormatter || col.cellRenderer) {
-        console.log(`Processing column ${col.field}:`, {
-          originalValueFormatter: col.valueFormatter,
-          originalCellRenderer: col.cellRenderer
-        });
-      }
+      // Debug logging removed
       
       // Resolve string-based valueFormatter to actual function
       if (col.valueFormatter && typeof col.valueFormatter === 'string') {
         const formatterFunc = agGridValueFormatters[col.valueFormatter as keyof typeof agGridValueFormatters];
         if (formatterFunc) {
           processedCol.valueFormatter = formatterFunc;
-          console.log(`✅ Resolved valueFormatter '${col.valueFormatter}' for column ${col.field}`);
         } else {
           console.warn(`❌ Could not resolve valueFormatter '${col.valueFormatter}' for column ${col.field}`);
           processedCol.valueFormatter = undefined;
@@ -53,7 +46,6 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
       // Verify cellRenderer exists in components
       if (col.cellRenderer && typeof col.cellRenderer === 'string') {
         if (agGridComponents[col.cellRenderer as keyof typeof agGridComponents]) {
-          console.log(`✅ CellRenderer '${col.cellRenderer}' exists for column ${col.field}`);
         } else {
           console.warn(`❌ CellRenderer '${col.cellRenderer}' not found for column ${col.field}`);
         }
@@ -77,17 +69,14 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
     
     // Prevent concurrent loads of the same provider
     if (loadingProviderIdRef.current === providerId) {
-      console.log('[useProviderConfig] Already loading provider:', providerId);
       return;
     }
     
-    console.log('[useProviderConfig] Loading provider config for:', providerId);
     loadingProviderIdRef.current = providerId;
     setIsLoading(true);
     
     try {
       const config = await StorageClient.get(providerId);
-      console.log('[useProviderConfig] Loaded config from storage:', config);
       
       if (config) {
         // The config structure might be flat, not nested
@@ -99,13 +88,12 @@ export function useProviderConfig(selectedProviderId: string | null): UseProvide
         // Only update state if this provider is still selected
         if (loadingProviderIdRef.current === providerId) {
           setProviderConfig(stompConfig);
-          console.log('[useProviderConfig] Set provider config:', stompConfig);
           
           // Set column definitions from config
           if (stompConfig.columnDefinitions && stompConfig.columnDefinitions.length > 0) {
             const processedColumns = processColumnDefinitions(stompConfig.columnDefinitions);
             setColumnDefs(processedColumns);
-            console.log('[useProviderConfig] Set column definitions:', processedColumns.length, 'columns');
+          } else {
           }
         }
       }

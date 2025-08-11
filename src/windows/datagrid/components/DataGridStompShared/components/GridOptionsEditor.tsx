@@ -9,11 +9,6 @@ import { ChevronDown, ChevronRight, RotateCcw, Search } from 'lucide-react';
 import {
   DraggableDialog,
   DraggableDialogContent,
-  DraggableDialogDescription,
-  DraggableDialogFooter,
-  DraggableDialogHeader,
-  DraggableDialogTitle,
-  DraggableDialogBody,
 } from '@/components/ui/draggable-dialog';
 import {
   GRID_OPTIONS_CATEGORIES,

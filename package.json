@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "build:check": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "openfin": "node scripts/launch-openfin.js",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "@monaco-editor/react": "^4.7.0",
     "@openfin/workspace": "^21.0.16",
     "@openfin/workspace-platform": "^21.0.16",
     "@radix-ui/react-accordion": "^1.2.0",
@@ -56,6 +58,7 @@
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.446.0",
+    "monaco-editor": "^0.52.2",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Column Group State Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .log {
+            background: #2d2d2d;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .info { color: #9cdcfe; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <h1>Column Group State Persistence Test</h1>
+    
+    <div>
+        <button onclick="testSaveState()">Test Save State</button>
+        <button onclick="testLoadState()">Test Load State</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+    
+    <script>
+        const logsDiv = document.getElementById('logs');
+        
+        function log(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log ${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.appendChild(logEntry);
+        }
+        
+        function clearLogs() {
+            logsDiv.innerHTML = '';
+            log('Logs cleared', 'info');
+        }
+        
+        function testSaveState() {
+            log('Testing column group state save...', 'info');
+            
+            // Simulate saving state
+            const testState = {
+                columnGroups: [
+                    {
+                        groupId: 'group1',
+                        headerName: 'Test Group 1',
+                        children: ['col1', 'col2', 'col3'],
+                        openByDefault: false
+                    },
+                    {
+                        groupId: 'group2',
+                        headerName: 'Test Group 2',
+                        children: ['col4', 'col5'],
+                        openByDefault: true
+                    }
+                ],
+                columnGroupState: [
+                    { groupId: 'group1', open: false },
+                    { groupId: 'group2', open: true }
+                ]
+            };
+            
+            try {
+                localStorage.setItem('test-column-group-state', JSON.stringify(testState));
+                log('✓ Column group state saved successfully', 'success');
+                log('State: ' + JSON.stringify(testState, null, 2), 'info');
+            } catch (error) {
+                log('✗ Failed to save state: ' + error, 'error');
+            }
+        }
+        
+        function testLoadState() {
+            log('Testing column group state load...', 'info');
+            
+            try {
+                const savedState = localStorage.getItem('test-column-group-state');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    log('✓ Column group state loaded successfully', 'success');
+                    log('Loaded state: ' + JSON.stringify(state, null, 2), 'info');
+                    
+                    // Verify state structure
+                    if (state.columnGroups && state.columnGroupState) {
+                        log('✓ State structure is valid', 'success');
+                        log(`  - ${state.columnGroups.length} column groups`, 'info');
+                        log(`  - ${state.columnGroupState.length} group states`, 'info');
+                        
+                        // Check each group state
+                        state.columnGroupState.forEach(gs => {
+                            log(`  - Group ${gs.groupId}: ${gs.open ? 'expanded' : 'collapsed'}`, 'info');
+                        });
+                    } else {
+                        log('✗ Invalid state structure', 'error');
+                    }
+                } else {
+                    log('No saved state found - run "Test Save State" first', 'info');
+                }
+            } catch (error) {
+                log('✗ Failed to load state: ' + error, 'error');
+            }
+        }
+        
+        // Initial message
+        log('Column Group State Test Page Ready', 'success');
+        log('This page tests the persistence of column group expanded/collapsed states', 'info');
+        log('Click "Test Save State" to simulate saving, then "Test Load State" to verify', 'info');
+    </script>
+</body>
+</html>
