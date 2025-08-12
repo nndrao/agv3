@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inline Style Editor Test - Runtime CSS Generation</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #8AAAA7;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .expression-input {
+            width: 100%;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .style-preview {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .rule-metadata {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        
+        .button {
+            background: #8AAAA7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        .button:hover {
+            background: #7a9a97;
+        }
+        
+        .grid-demo {
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .grid-row {
+            display: table-row;
+        }
+        
+        .grid-cell {
+            display: table-cell;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        
+        .grid-header {
+            background: #D9D9D9;
+            font-weight: bold;
+        }
+        
+        .keyboard-hint {
+            background: #fffbf0;
+            border-left: 4px solid #ffa500;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Inline Style Editor - Runtime CSS Generation</h1>
+    
+    <div class="keyboard-hint">
+        <strong>💡 In the actual implementation:</strong> Press <code>Ctrl+Shift+D</code> in the Monaco editor to open the visual style editor
+    </div>
+    
+    <div class="section">
+        <h2>1. Expression Entry</h2>
+        <p>Type your condition expression (this would be in Monaco editor):</p>
+        <textarea class="expression-input" id="expression" placeholder="params.data.pnl >= 2000">params.data.pnl >= 2000</textarea>
+        
+        <button class="button" onclick="openStyleEditor()">Open Style Editor (Ctrl+Shift+D)</button>
+    </div>
+    
+    <div class="section">
+        <h2>2. Generated Metadata</h2>
+        <p>After configuring styles visually, this metadata is inserted:</p>
+        <div class="rule-metadata" id="metadata">/* @rule-style {
+  "id": "rule-pnl-2000",
+  "styles": {
+    "backgroundColor": "#10b981",
+    "color": "#ffffff",
+    "fontWeight": "bold"
+  }
+} */
+params.data.pnl >= 2000</div>
+    </div>
+    
+    <div class="section">
+        <h2>3. Runtime CSS Generation</h2>
+        <p>At runtime, the system generates:</p>
+        
+        <h3>CSS Class (injected into document):</h3>
+        <div class="rule-metadata">.cr-rule-pnl-2000 {
+  background-color: #10b981;
+  color: #ffffff;
+  font-weight: bold;
+}</div>
+        
+        <h3>AG-Grid cellClassRules:</h3>
+        <div class="rule-metadata">columnDef.cellClassRules = {
+  'cr-rule-pnl-2000': (params) => {
+    const value = params.value;
+    const data = params.data;
+    return params.data.pnl >= 2000;
+  }
+}</div>
+    </div>
+    
+    <div class="section">
+        <h2>4. Live Grid Demo</h2>
+        <div class="grid-demo">
+            <div class="grid-row">
+                <div class="grid-cell grid-header">Symbol</div>
+                <div class="grid-cell grid-header">P&L</div>
+                <div class="grid-cell grid-header">Status</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">AAPL</div>
+                <div class="grid-cell" id="cell1">1500</div>
+                <div class="grid-cell">Active</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">GOOGL</div>
+                <div class="grid-cell" id="cell2">2500</div>
+                <div class="grid-cell">Active</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">MSFT</div>
+                <div class="grid-cell" id="cell3">-500</div>
+                <div class="grid-cell">Inactive</div>
+            </div>
+        </div>
+        
+        <button class="button" onclick="applyRules()">Apply Runtime Rules</button>
+        <button class="button" onclick="clearRules()">Clear Rules</button>
+    </div>
+    
+    <div class="section">
+        <h2>5. Multiple Rules Example</h2>
+        <button class="button" onclick="addMultipleRules()">Add Multiple Rules</button>
+        
+        <div class="rule-metadata" id="multipleRules" style="display: none;">
+Rule 1: P&L >= 2000 → Green background
+Rule 2: P&L < 0 → Red background
+Rule 3: Status = 'Inactive' → Gray text</div>
+    </div>
+    
+    <script>
+        // Simulate the runtime CSS manager
+        const injectedStyles = new Map();
+        
+        function injectCss(className, styles) {
+            // Remove existing style if it exists
+            if (injectedStyles.has(className)) {
+                injectedStyles.get(className).remove();
+            }
+            
+            // Create new style element
+            const styleElement = document.createElement('style');
+            styleElement.textContent = `.${className} { ${styles} }`;
+            document.head.appendChild(styleElement);
+            injectedStyles.set(className, styleElement);
+        }
+        
+        function applyRules() {
+            // Inject CSS for P&L rule
+            injectCss('cr-rule-pnl-2000', 
+                'background-color: #10b981; color: #ffffff; font-weight: bold;');
+            
+            // Apply classes based on conditions
+            const cells = [
+                { element: document.getElementById('cell1'), value: 1500 },
+                { element: document.getElementById('cell2'), value: 2500 },
+                { element: document.getElementById('cell3'), value: -500 }
+            ];
+            
+            cells.forEach(cell => {
+                // Simulate cellClassRules evaluation
+                if (cell.value >= 2000) {
+                    cell.element.classList.add('cr-rule-pnl-2000');
+                } else {
+                    cell.element.classList.remove('cr-rule-pnl-2000');
+                }
+            });
+        }
+        
+        function clearRules() {
+            // Remove all injected styles
+            injectedStyles.forEach(style => style.remove());
+            injectedStyles.clear();
+            
+            // Remove classes from cells
+            document.querySelectorAll('.grid-cell').forEach(cell => {
+                cell.className = 'grid-cell';
+            });
+            
+            // Restore header class
+            document.querySelectorAll('.grid-header').forEach(cell => {
+                cell.classList.add('grid-header');
+            });
+        }
+        
+        function addMultipleRules() {
+            // Show multiple rules
+            document.getElementById('multipleRules').style.display = 'block';
+            
+            // Inject multiple CSS classes
+            injectCss('cr-rule-pnl-positive', 
+                'background-color: #10b981; color: #ffffff;');
+            injectCss('cr-rule-pnl-negative', 
+                'background-color: #ef4444; color: #ffffff;');
+            injectCss('cr-rule-inactive', 
+                'color: #9ca3af; font-style: italic;');
+            
+            // Apply multiple rules
+            const rows = [
+                { pnl: document.getElementById('cell1'), status: 'Active', value: 1500 },
+                { pnl: document.getElementById('cell2'), status: 'Active', value: 2500 },
+                { pnl: document.getElementById('cell3'), status: 'Inactive', value: -500 }
+            ];
+            
+            rows.forEach((row, index) => {
+                const statusCell = row.pnl.parentElement.children[2];
+                
+                // Apply P&L rules
+                row.pnl.classList.remove('cr-rule-pnl-positive', 'cr-rule-pnl-negative');
+                if (row.value >= 2000) {
+                    row.pnl.classList.add('cr-rule-pnl-positive');
+                } else if (row.value < 0) {
+                    row.pnl.classList.add('cr-rule-pnl-negative');
+                }
+                
+                // Apply status rules
+                statusCell.classList.remove('cr-rule-inactive');
+                if (statusCell.textContent === 'Inactive') {
+                    statusCell.classList.add('cr-rule-inactive');
+                }
+            });
+        }
+        
+        function openStyleEditor() {
+            alert('In the actual implementation, this would open the visual style editor popup with:\n\n' +
+                  '• Color pickers for background and text\n' +
+                  '• Font controls (family, size, weight)\n' +
+                  '• Border configuration\n' +
+                  '• Text alignment options\n' +
+                  '• Live preview\n\n' +
+                  'The user configures styles visually and clicks "Insert Style" to add the metadata.');
+        }
+    </script>
+</body>
+</html>

@@ -39,48 +39,46 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
   onUpdateRule,
   columnType
 }) => {
-  const [localRule, setLocalRule] = useState(rule);
   const [expressionValid, setExpressionValid] = useState(true);
 
   // Update rule property
   const updateRule = useCallback((updates: Partial<ConditionalRule>) => {
-    const updatedRule = { ...localRule, ...updates };
-    setLocalRule(updatedRule);
+    const updatedRule = { ...rule, ...updates };
     onUpdateRule(updatedRule);
-  }, [localRule, onUpdateRule]);
+  }, [rule, onUpdateRule]);
 
   // Update formatting
   const updateFormatting = useCallback((key: string, value: any) => {
     updateRule({
       formatting: {
-        ...localRule.formatting,
+        ...rule.formatting,
         [key]: value
       }
     });
-  }, [localRule, updateRule]);
+  }, [rule, updateRule]);
 
   // Update style
   const updateStyle = useCallback((styleUpdates: any) => {
     updateRule({
       formatting: {
-        ...localRule.formatting,
+        ...rule.formatting,
         style: {
-          ...localRule.formatting.style,
+          ...rule.formatting.style,
           ...styleUpdates
         }
       }
     });
-  }, [localRule, updateRule]);
+  }, [rule, updateRule]);
 
   // Update scope
   const updateScope = useCallback((scopeUpdates: any) => {
     updateRule({
       scope: {
-        ...localRule.scope,
+        ...rule.scope,
         ...scopeUpdates
       }
     });
-  }, [localRule, updateRule]);
+  }, [rule, updateRule]);
 
   // Handle expression change
   const handleExpressionChange = useCallback((expression: string, isValid: boolean) => {
@@ -105,7 +103,7 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
           <div className="col-span-2">
             <Input
               id="rule-name"
-              value={localRule.name}
+              value={rule.name}
               onChange={(e) => updateRule({ name: e.target.value })}
               placeholder="Rule name"
               className="w-full"
@@ -117,7 +115,7 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
               id="rule-priority"
               type="number"
               min="1"
-              value={localRule.priority}
+              value={rule.priority}
               onChange={(e) => updateRule({ priority: parseInt(e.target.value) || 1 })}
               className="w-16"
             />
@@ -129,7 +127,7 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
             <div className="flex items-center gap-2">
               <Switch
                 id="rule-enabled"
-                checked={localRule.enabled}
+                checked={rule.enabled}
                 onCheckedChange={(enabled) => updateRule({ enabled })}
               />
               <Label htmlFor="rule-enabled" className="cursor-pointer text-sm">Enabled</Label>
@@ -138,11 +136,11 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
             <div className="flex items-center gap-2">
               <Label htmlFor="rule-scope" className="text-sm">Apply to:</Label>
               <Select
-                value={localRule.scope.target}
+                value={rule.scope.target}
                 onValueChange={(value: 'cell' | 'row') => {
                   updateScope({ 
                     target: value,
-                    applyToColumns: value === 'row' ? [] : localRule.scope.applyToColumns
+                    applyToColumns: value === 'row' ? [] : rule.scope.applyToColumns
                   });
                 }}
               >
@@ -158,7 +156,7 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
           </div>
           
           <Input
-            value={localRule.description || ''}
+            value={rule.description || ''}
             onChange={(e) => updateRule({ description: e.target.value })}
             placeholder="Description (optional)"
             className="w-64"
@@ -166,7 +164,7 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
         </div>
         
         {/* Column Selector for Cell-only rules */}
-        {localRule.scope.target === 'cell' && (
+        {rule.scope.target === 'cell' && (
           <div className="space-y-1">
             <div className="flex items-start gap-2">
               <Label htmlFor="column-selector" className="text-sm pt-2">Columns:</Label>
@@ -176,13 +174,13 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
                     value: col.field,
                     label: col.headerName || col.field
                   }))}
-                  selected={localRule.scope.applyToColumns || []}
+                  selected={rule.scope.applyToColumns || []}
                   onChange={(columns) => updateScope({ applyToColumns: columns })}
                   placeholder="Select columns to apply this rule..."
                   emptyText="No columns found"
                   className="w-full"
                 />
-                {(!localRule.scope.applyToColumns || localRule.scope.applyToColumns.length === 0) && (
+                {(!rule.scope.applyToColumns || rule.scope.applyToColumns.length === 0) && (
                   <p className="text-xs text-muted-foreground mt-1">
                     If no columns are selected, the rule will apply to all columns
                   </p>
@@ -212,8 +210,9 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
             {/* Expression Editor takes remaining space */}
             <div className="flex-1 overflow-hidden">
               <ExpressionEditor
+                key={rule.id}
                 mode="conditional"
-                initialExpression={localRule.expression}
+                initialExpression={rule.expression || ''}
                 availableColumns={availableColumns}
                 availableVariables={variables}
                 onChange={handleExpressionChange}
@@ -233,11 +232,9 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
         <ResizablePanel defaultSize={35} minSize={30} maxSize={45}>
           <div className="h-full p-2 overflow-auto">
             <ShadcnFormatOptions
-              rule={localRule}
-              onUpdateRule={(updatedRule) => {
-                setLocalRule(updatedRule);
-                onUpdateRule(updatedRule);
-              }}
+              key={rule.id}
+              rule={rule}
+              onUpdateRule={onUpdateRule}
             />
           </div>
         </ResizablePanel>

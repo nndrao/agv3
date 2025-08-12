@@ -134,4 +134,5 @@ export interface DataGridProps {
   connectionState: ConnectionState;
   snapshotData: SnapshotData;
   gridOptions?: Record<string, any>;
+  rowClassRules?: Record<string, (params: any) => boolean>;
 }

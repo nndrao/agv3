@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual If-Else Style Builder - Advanced Conditional Formatting</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Main Container */
+        .editor-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Monaco Editor Side */
+        .monaco-side {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e1e;
+            border-right: 1px solid #3e3e42;
+        }
+
+        .editor-toolbar {
+            background: #2d2d30;
+            padding: 8px 12px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .toolbar-btn {
+            padding: 6px 12px;
+            background: #3c3c3c;
+            border: 1px solid #464647;
+            color: #cccccc;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .toolbar-btn:hover {
+            background: #464647;
+            border-color: #007acc;
+        }
+
+        .toolbar-btn.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: white;
+        }
+
+        .monaco-editor-mock {
+            flex: 1;
+            background: #1e1e1e;
+            padding: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            overflow-y: auto;
+        }
+
+        .code-line {
+            height: 20px;
+            margin: 2px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .line-number {
+            color: #858585;
+            width: 40px;
+            text-align: right;
+            padding-right: 12px;
+            user-select: none;
+        }
+
+        .code-content {
+            flex: 1;
+        }
+
+        .keyword { color: #569cd6; }
+        .string { color: #ce9178; }
+        .property { color: #9cdcfe; }
+        .value { color: #b5cea8; }
+        .operator { color: #d4d4d4; }
+        .comment { color: #6a9955; font-style: italic; }
+
+        /* Visual Builder Side */
+        .builder-panel {
+            width: 600px;
+            background: #252526;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        .builder-header {
+            background: #2d2d30;
+            padding: 12px 16px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .builder-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e1e1e1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 4px;
+            background: #1e1e1e;
+            padding: 2px;
+            border-radius: 4px;
+        }
+
+        .mode-btn {
+            padding: 4px 12px;
+            background: transparent;
+            border: none;
+            color: #8b8b8b;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background: #007acc;
+            color: white;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: #cccccc;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            background: #3e3e42;
+        }
+
+        /* Conditions Container */
+        .conditions-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .conditions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            color: #cccccc;
+            font-weight: 600;
+        }
+
+        .add-condition-btn {
+            padding: 5px 12px;
+            background: #0e639c;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+        }
+
+        .add-condition-btn:hover {
+            background: #1177bb;
+        }
+
+        /* Condition Card */
+        .condition-card {
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .condition-card.else-block {
+            border-style: dashed;
+            border-color: #464647;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .condition-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .condition-type {
+            font-size: 11px;
+            padding: 2px 6px;
+            background: #007acc;
+            color: white;
+            border-radius: 3px;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }
+
+        .condition-type.else-if {
+            background: #d97706;
+        }
+
+        .condition-type.else {
+            background: #6b7280;
+        }
+
+        .condition-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .condition-action-btn {
+            background: transparent;
+            border: none;
+            color: #8b8b8b;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .condition-action-btn:hover {
+            background: #3e3e42;
+            color: #cccccc;
+        }
+
+        /* Condition Builder */
+        .condition-builder {
+            background: #1e1e1e;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        .condition-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .condition-input {
+            flex: 1;
+            background: #3c3c3c;
+            border: 1px solid #464647;
+            color: #d4d4d4;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .condition-select {
+            background: #3c3c3c;
+            border: 1px solid #464647;
+            color: #d4d4d4;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .operator-btn {
+            padding: 4px 8px;
+            background: #464647;
+            border: none;
+            color: #d4d4d4;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .operator-btn:hover {
+            background: #007acc;
+            color: white;
+        }
+
+        .operator-btn.active {
+            background: #007acc;
+            color: white;
+        }
+
+        /* Style Preview */
+        .style-preview {
+            background: #1e1e1e;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        /* Style Properties */
+        .style-properties {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .style-prop {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .style-prop-label {
+            color: #8b8b8b;
+        }
+
+        .style-prop-value {
+            color: #d4d4d4;
+            font-family: monospace;
+        }
+
+        .color-chip {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid #464647;
+            display: inline-block;
+        }
+
+        /* Quick Style Templates */
+        .quick-styles {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .style-template {
+            padding: 4px 8px;
+            background: #3c3c3c;
+            border: 1px solid #464647;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .style-template:hover {
+            background: #464647;
+            border-color: #007acc;
+        }
+
+        .style-template.danger {
+            border-left: 3px solid #dc2626;
+        }
+
+        .style-template.warning {
+            border-left: 3px solid #f59e0b;
+        }
+
+        .style-template.success {
+            border-left: 3px solid #10b981;
+        }
+
+        .style-template.info {
+            border-left: 3px solid #3b82f6;
+        }
+
+        /* Footer */
+        .builder-footer {
+            padding: 16px;
+            background: #2d2d30;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .generate-btn {
+            padding: 8px 16px;
+            background: #0e639c;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .generate-btn:hover {
+            background: #1177bb;
+        }
+
+        /* Complex Condition Builder */
+        .compound-condition {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #1e1e1e;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .condition-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .logical-operator {
+            padding: 2px 8px;
+            background: #007acc;
+            color: white;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .add-condition-part {
+            padding: 2px 6px;
+            background: #464647;
+            border: none;
+            color: #d4d4d4;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .add-condition-part:hover {
+            background: #007acc;
+            color: white;
+        }
+
+        /* Value type indicators */
+        .value-type {
+            display: inline-block;
+            padding: 2px 4px;
+            background: #464647;
+            color: #d4d4d4;
+            border-radius: 2px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+
+        .value-type.number { background: #4fc3f7; color: #1e1e1e; }
+        .value-type.string { background: #81c784; color: #1e1e1e; }
+        .value-type.boolean { background: #ba68c8; color: white; }
+        .value-type.range { background: #ffb74d; color: #1e1e1e; }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <!-- Monaco Editor Side -->
+        <div class="monaco-side">
+            <div class="editor-toolbar">
+                <button class="toolbar-btn">
+                    <span>↶</span> Undo
+                </button>
+                <button class="toolbar-btn">
+                    <span>↷</span> Redo
+                </button>
+                <button class="toolbar-btn active">
+                    <span>🎨</span> Visual Builder
+                </button>
+                <button class="toolbar-btn">
+                    <span>▶</span> Test
+                </button>
+            </div>
+            
+            <div class="monaco-editor-mock">
+                <div class="code-line">
+                    <span class="line-number">1</span>
+                    <span class="code-content">
+                        <span class="comment">// Advanced conditional formatting with if-else</span>
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">2</span>
+                    <span class="code-content">
+                        <span class="keyword">const</span> <span class="property">getRowStyle</span> = (<span class="property">row</span>, <span class="property">value</span>) => {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">3</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;<span class="keyword">if</span> (<span class="property">value</span> <span class="operator">></span> <span class="value">1000</span> <span class="operator">&&</span> <span class="property">row.priority</span> <span class="operator">===</span> <span class="string">"High"</span>) {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">4</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">5</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">backgroundColor</span>: <span class="string">"#dc2626"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">6</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">color</span>: <span class="string">"#ffffff"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">7</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">fontWeight</span>: <span class="string">"bold"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">8</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">border</span>: <span class="string">"2px solid #b91c1c"</span>
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">9</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;};
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">10</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;} <span class="keyword">else if</span> (<span class="property">value</span> <span class="operator">>=</span> <span class="value">500</span> <span class="operator">&&</span> <span class="property">value</span> <span class="operator"><=</span> <span class="value">1000</span>) {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">11</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">12</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">backgroundColor</span>: <span class="string">"#f59e0b"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">13</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">color</span>: <span class="string">"#000000"</span>
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">14</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;};
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">15</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;} <span class="keyword">else if</span> (<span class="property">value</span> <span class="operator"><</span> <span class="value">500</span> <span class="operator">||</span> <span class="property">row.status</span> <span class="operator">===</span> <span class="string">"Completed"</span>) {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">16</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">17</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">backgroundColor</span>: <span class="string">"#10b981"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">18</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">color</span>: <span class="string">"#ffffff"</span>,
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">19</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">opacity</span>: <span class="value">0.9</span>
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">20</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;};
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">21</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;} <span class="keyword">else</span> {
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">22</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> {};
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">23</span>
+                    <span class="code-content">
+                        &nbsp;&nbsp;}
+                    </span>
+                </div>
+                <div class="code-line">
+                    <span class="line-number">24</span>
+                    <span class="code-content">
+                        };
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visual Builder Panel -->
+        <div class="builder-panel">
+            <div class="builder-header">
+                <div class="builder-title">
+                    <span>🎨</span>
+                    Visual Conditional Style Builder
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <div class="mode-toggle">
+                        <button class="mode-btn">Switch/Case</button>
+                        <button class="mode-btn active">If/Else</button>
+                    </div>
+                    <button class="close-btn">✕</button>
+                </div>
+            </div>
+
+            <div class="conditions-container">
+                <div class="conditions-header">
+                    <span class="section-title">Conditional Rules</span>
+                    <button class="add-condition-btn">
+                        <span>+</span> Add Condition
+                    </button>
+                </div>
+
+                <!-- Condition 1: Complex AND condition -->
+                <div class="condition-card">
+                    <div class="condition-header">
+                        <div>
+                            <span class="condition-type">IF</span>
+                            <span style="color: #d4d4d4; font-size: 13px;">Critical High Priority</span>
+                        </div>
+                        <div class="condition-actions">
+                            <button class="condition-action-btn">⬆</button>
+                            <button class="condition-action-btn">⬇</button>
+                            <button class="condition-action-btn">✏️</button>
+                            <button class="condition-action-btn">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="compound-condition">
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>value</option>
+                                <option>row.priority</option>
+                                <option>row.status</option>
+                            </select>
+                            <select class="condition-select">
+                                <option>></option>
+                                <option>>=</option>
+                                <option><</option>
+                                <option><=</option>
+                                <option>===</option>
+                                <option>!==</option>
+                            </select>
+                            <input type="text" class="condition-input" value="1000" style="width: 80px;">
+                            <span class="value-type number">NUM</span>
+                        </div>
+                        <span class="logical-operator">AND</span>
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>row.priority</option>
+                                <option>row.status</option>
+                                <option>value</option>
+                            </select>
+                            <select class="condition-select">
+                                <option>===</option>
+                                <option>!==</option>
+                                <option>includes</option>
+                            </select>
+                            <input type="text" class="condition-input" value='"High"' style="width: 80px;">
+                            <span class="value-type string">STR</span>
+                        </div>
+                        <button class="add-condition-part">+ AND</button>
+                    </div>
+
+                    <div class="style-preview" style="background-color: #dc2626; color: #ffffff; font-weight: bold; border: 2px solid #b91c1c;">
+                        Preview: Critical Item
+                    </div>
+                    <div class="style-properties">
+                        <div class="style-prop">
+                            <span class="style-prop-label">Background:</span>
+                            <span class="color-chip" style="background: #dc2626;"></span>
+                            <span class="style-prop-value">#dc2626</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Text:</span>
+                            <span class="color-chip" style="background: #ffffff;"></span>
+                            <span class="style-prop-value">#ffffff</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Font:</span>
+                            <span class="style-prop-value">bold</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Border:</span>
+                            <span class="style-prop-value">2px solid</span>
+                        </div>
+                    </div>
+
+                    <div class="quick-styles">
+                        <span style="font-size: 11px; color: #8b8b8b;">Quick Styles:</span>
+                        <button class="style-template danger">Danger</button>
+                        <button class="style-template warning">Warning</button>
+                        <button class="style-template success">Success</button>
+                        <button class="style-template info">Info</button>
+                        <button class="style-template">Custom...</button>
+                    </div>
+                </div>
+
+                <!-- Condition 2: Range condition -->
+                <div class="condition-card">
+                    <div class="condition-header">
+                        <div>
+                            <span class="condition-type else-if">ELSE IF</span>
+                            <span style="color: #d4d4d4; font-size: 13px;">Medium Range (500-1000)</span>
+                        </div>
+                        <div class="condition-actions">
+                            <button class="condition-action-btn">⬆</button>
+                            <button class="condition-action-btn">⬇</button>
+                            <button class="condition-action-btn">✏️</button>
+                            <button class="condition-action-btn">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="compound-condition">
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>value</option>
+                            </select>
+                            <select class="condition-select">
+                                <option>>=</option>
+                            </select>
+                            <input type="text" class="condition-input" value="500" style="width: 60px;">
+                            <span class="value-type range">RANGE</span>
+                        </div>
+                        <span class="logical-operator">AND</span>
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>value</option>
+                            </select>
+                            <select class="condition-select">
+                                <option><=</option>
+                            </select>
+                            <input type="text" class="condition-input" value="1000" style="width: 60px;">
+                            <span class="value-type range">RANGE</span>
+                        </div>
+                    </div>
+
+                    <div class="style-preview" style="background-color: #f59e0b; color: #000000;">
+                        Preview: Medium Priority
+                    </div>
+                    <div class="style-properties">
+                        <div class="style-prop">
+                            <span class="style-prop-label">Background:</span>
+                            <span class="color-chip" style="background: #f59e0b;"></span>
+                            <span class="style-prop-value">#f59e0b</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Text:</span>
+                            <span class="color-chip" style="background: #000000;"></span>
+                            <span class="style-prop-value">#000000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Condition 3: OR condition -->
+                <div class="condition-card">
+                    <div class="condition-header">
+                        <div>
+                            <span class="condition-type else-if">ELSE IF</span>
+                            <span style="color: #d4d4d4; font-size: 13px;">Low or Completed</span>
+                        </div>
+                        <div class="condition-actions">
+                            <button class="condition-action-btn">⬆</button>
+                            <button class="condition-action-btn">⬇</button>
+                            <button class="condition-action-btn">✏️</button>
+                            <button class="condition-action-btn">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="compound-condition">
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>value</option>
+                            </select>
+                            <select class="condition-select">
+                                <option><</option>
+                            </select>
+                            <input type="text" class="condition-input" value="500" style="width: 60px;">
+                        </div>
+                        <span class="logical-operator" style="background: #d97706;">OR</span>
+                        <div class="condition-group">
+                            <select class="condition-select">
+                                <option>row.status</option>
+                            </select>
+                            <select class="condition-select">
+                                <option>===</option>
+                            </select>
+                            <input type="text" class="condition-input" value='"Completed"' style="width: 100px;">
+                            <span class="value-type string">STR</span>
+                        </div>
+                        <button class="add-condition-part">+ OR</button>
+                    </div>
+
+                    <div class="style-preview" style="background-color: #10b981; color: #ffffff; opacity: 0.9;">
+                        Preview: Success State
+                    </div>
+                    <div class="style-properties">
+                        <div class="style-prop">
+                            <span class="style-prop-label">Background:</span>
+                            <span class="color-chip" style="background: #10b981;"></span>
+                            <span class="style-prop-value">#10b981</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Text:</span>
+                            <span class="color-chip" style="background: #ffffff;"></span>
+                            <span class="style-prop-value">#ffffff</span>
+                        </div>
+                        <div class="style-prop">
+                            <span class="style-prop-label">Opacity:</span>
+                            <span class="style-prop-value">0.9</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Else Block -->
+                <div class="condition-card else-block">
+                    <div class="condition-header">
+                        <div>
+                            <span class="condition-type else">ELSE</span>
+                            <span style="color: #8b8b8b; font-size: 13px;">Default Style</span>
+                        </div>
+                        <div class="condition-actions">
+                            <button class="condition-action-btn">✏️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="style-preview" style="background-color: transparent; color: inherit;">
+                        Default Style (No Changes)
+                    </div>
+                    <div class="style-properties">
+                        <div class="style-prop">
+                            <span class="style-prop-label">Returns:</span>
+                            <span class="style-prop-value">Empty object {}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Helper Text -->
+                <div style="margin-top: 16px; padding: 12px; background: #1e1e1e; border-radius: 4px; border-left: 3px solid #007acc;">
+                    <div style="font-size: 12px; color: #3794ff; margin-bottom: 6px;">💡 Advanced Features:</div>
+                    <ul style="font-size: 11px; color: #8b8b8b; list-style: none; padding: 0; margin: 0;">
+                        <li>• Use AND/OR operators to combine multiple conditions</li>
+                        <li>• Check ranges with >= and <= operators</li>
+                        <li>• Access nested properties like row.data.value</li>
+                        <li>• Mix different data types (numbers, strings, booleans)</li>
+                        <li>• Drag conditions to reorder priority</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="builder-footer">
+                <div class="footer-info">
+                    <span style="color: #8b8b8b; font-size: 12px;">3 conditions + 1 else block</span>
+                </div>
+                <div class="footer-actions">
+                    <button class="generate-btn" style="background: transparent; border: 1px solid #464647; color: #cccccc;">
+                        Test Conditions
+                    </button>
+                    <button class="generate-btn">
+                        <span>⚡</span> Generate Code
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add new condition functionality
+        document.querySelector('.add-condition-btn').addEventListener('click', function() {
+            const container = document.querySelector('.conditions-container');
+            const elseBlock = document.querySelector('.condition-card.else-block');
+            
+            const newCondition = document.createElement('div');
+            newCondition.className = 'condition-card';
+            newCondition.style.opacity = '0';
+            newCondition.innerHTML = `
+                <div class="condition-header">
+                    <div>
+                        <span class="condition-type else-if">ELSE IF</span>
+                        <span style="color: #d4d4d4; font-size: 13px;">New Condition</span>
+                    </div>
+                    <div class="condition-actions">
+                        <button class="condition-action-btn">⬆</button>
+                        <button class="condition-action-btn">⬇</button>
+                        <button class="condition-action-btn">✏️</button>
+                        <button class="condition-action-btn">🗑️</button>
+                    </div>
+                </div>
+                
+                <div class="compound-condition">
+                    <div class="condition-group">
+                        <select class="condition-select">
+                            <option>value</option>
+                            <option>row.priority</option>
+                            <option>row.status</option>
+                        </select>
+                        <select class="condition-select">
+                            <option>===</option>
+                            <option>!==</option>
+                            <option>></option>
+                            <option><</option>
+                        </select>
+                        <input type="text" class="condition-input" placeholder="Enter value">
+                    </div>
+                    <button class="add-condition-part">+ AND</button>
+                </div>
+
+                <div class="style-preview" style="background-color: #3c3c3c; color: #d4d4d4;">
+                    Configure Style
+                </div>
+                <div class="quick-styles">
+                    <span style="font-size: 11px; color: #8b8b8b;">Quick Styles:</span>
+                    <button class="style-template danger">Danger</button>
+                    <button class="style-template warning">Warning</button>
+                    <button class="style-template success">Success</button>
+                    <button class="style-template info">Info</button>
+                </div>
+            `;
+            
+            container.insertBefore(newCondition, elseBlock);
+            
+            // Animate in
+            setTimeout(() => {
+                newCondition.style.opacity = '1';
+            }, 10);
+        });
+
+        // Style template click handlers
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('style-template')) {
+                const card = e.target.closest('.condition-card');
+                const preview = card.querySelector('.style-preview');
+                
+                if (e.target.classList.contains('danger')) {
+                    preview.style.backgroundColor = '#dc2626';
+                    preview.style.color = '#ffffff';
+                    preview.style.fontWeight = 'bold';
+                } else if (e.target.classList.contains('warning')) {
+                    preview.style.backgroundColor = '#f59e0b';
+                    preview.style.color = '#000000';
+                } else if (e.target.classList.contains('success')) {
+                    preview.style.backgroundColor = '#10b981';
+                    preview.style.color = '#ffffff';
+                } else if (e.target.classList.contains('info')) {
+                    preview.style.backgroundColor = '#3b82f6';
+                    preview.style.color = '#ffffff';
+                }
+            }
+        });
+
+        // Generate code animation
+        document.querySelector('.generate-btn').addEventListener('click', function() {
+            const codeLines = document.querySelectorAll('.code-line');
+            codeLines.forEach((line, index) => {
+                setTimeout(() => {
+                    line.style.background = 'rgba(0, 122, 204, 0.1)';
+                    setTimeout(() => {
+                        line.style.background = 'transparent';
+                    }, 300);
+                }, index * 30);
+            });
+        });
+
+        // Add AND/OR condition parts
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('add-condition-part')) {
+                const isOr = e.target.textContent.includes('OR');
+                const compound = e.target.closest('.compound-condition');
+                
+                const newPart = document.createElement('div');
+                newPart.innerHTML = `
+                    <span class="logical-operator" style="${isOr ? 'background: #d97706;' : ''}">${isOr ? 'OR' : 'AND'}</span>
+                    <div class="condition-group">
+                        <select class="condition-select">
+                            <option>value</option>
+                            <option>row.priority</option>
+                            <option>row.status</option>
+                        </select>
+                        <select class="condition-select">
+                            <option>===</option>
+                            <option>!==</option>
+                        </select>
+                        <input type="text" class="condition-input" placeholder="value">
+                    </div>
+                `;
+                
+                compound.insertBefore(newPart, e.target);
+            }
+        });
+    </script>
+</body>
+</html>

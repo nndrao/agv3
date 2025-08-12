@@ -107,7 +107,11 @@ class OpenFinDialogService {
 
       const finalOptions = {
         ...defaultOptions,
-        ...config.windowOptions
+        ...config.windowOptions,
+        customData: {
+          ...defaultOptions.customData,
+          dialogData: config.data // Pass initial data via customData as fallback
+        }
       };
 
       console.log(`[DialogService] Opening dialog: ${config.name}`, finalOptions);
@@ -126,8 +130,9 @@ class OpenFinDialogService {
             if (config.onApply && response.data) {
               config.onApply(response.data);
             }
-            this.closeDialog(config.name);
+            // Don't close dialog on apply - let user continue editing
             break;
+          case 'close':
           case 'cancel':
             if (config.onCancel) {
               config.onCancel();
@@ -299,7 +304,7 @@ class OpenFinDialogService {
    * Sends a response from child dialog to parent
    * Child-side method
    */
-  async sendResponse(action: 'apply' | 'cancel' | 'error', data?: any, error?: string): Promise<void> {
+  async sendResponse(action: 'apply' | 'cancel' | 'close' | 'error', data?: any, error?: string): Promise<void> {
     const context = (window as any).__dialogContext;
     if (!context) {
       throw new Error('Dialog context not initialized. Call initializeChild first.');
@@ -360,5 +365,5 @@ export const dialogService = OpenFinDialogService.getInstance();
 export const initializeDialog = (config: DialogChildConfig) => 
   dialogService.initializeChild(config);
 
-export const sendDialogResponse = (action: 'apply' | 'cancel' | 'error', data?: any, error?: string) =>
+export const sendDialogResponse = (action: 'apply' | 'cancel' | 'close' | 'error', data?: any, error?: string) =>
   dialogService.sendResponse(action, data, error);

@@ -119,8 +119,12 @@ export function useDialogManagement({
         defaultHeight: 800
       },
       onApply: (data) => {
+        console.log('[useDialogManagement] Conditional formatting onApply called with data:', data);
         if (data?.rules) {
+          console.log('[useDialogManagement] Applying conditional formatting rules:', data.rules);
           onApplyConditionalFormatting(data.rules);
+        } else {
+          console.warn('[useDialogManagement] No rules found in data:', data);
         }
       }
     });

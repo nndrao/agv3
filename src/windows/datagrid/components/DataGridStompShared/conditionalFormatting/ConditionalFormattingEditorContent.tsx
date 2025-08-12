@@ -37,7 +37,11 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
     type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
   }));
 
-  const selectedRule = rules.find(r => r.id === selectedRuleId);
+  const selectedRule = React.useMemo(
+    () => rules.find(r => r.id === selectedRuleId),
+    [rules, selectedRuleId]
+  );
+  
 
   const handleAddRule = useCallback(() => {
     const newRule = createNewRule();
@@ -157,7 +161,10 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
                   </div>
                   <div>
                     <p className="text-lg font-medium text-muted-foreground">No rule selected</p>
-                    <p className="text-sm text-muted-foreground/70 mt-1">Create a new rule or select from templates to get started</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Click on any rule in the sidebar to edit it,<br />
+                      or create a new rule to get started
+                    </p>
                   </div>
                 </div>
               </div>
@@ -180,14 +187,15 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
             variant="outline"
             onClick={onClose}
           >
-            Cancel
+            Close
           </Button>
           <Button
             onClick={handleApply}
             className="min-w-[100px]"
+            variant="default"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
-            Apply Rules
+            Apply
           </Button>
         </div>
       </div>

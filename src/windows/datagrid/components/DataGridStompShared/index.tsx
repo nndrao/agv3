@@ -37,6 +37,14 @@ import { DEFAULT_COL_DEF, getStatusBarConfig } from './config/gridConfig';
 import { DEFAULT_PROFILE } from './config/profileDefaults';
 import { COMPONENT_TYPE } from './config/constants';
 import { getDefaultGridOptions } from './gridOptions/gridOptionsConfig';
+import { 
+  loadConditionalFormattingRules,
+  saveConditionalFormattingRules,
+  applyConditionalFormattingToColumns,
+  getRowClassRules,
+  cleanupConditionalFormatting,
+  initializeConditionalFormatting
+} from '@/utils/conditionalFormattingRuntime';
 
 // Import styles
 import "@/index.css";
@@ -62,7 +70,7 @@ const DataGridStompSharedComponent = () => {
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(false);
   const [showColumnSettings, setShowColumnSettings] = useState<boolean>(false);
   const [activeProfileData, setActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
-  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalRule[]>([]);
+  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalRule[]>(() => loadConditionalFormattingRules());
   const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   
@@ -71,7 +79,53 @@ const DataGridStompSharedComponent = () => {
   const viewInstanceId = useMemo(() => getViewInstanceId(), []);
   
   // ========== Custom Hooks - Core Functionality ==========
-  const { providerConfig, columnDefs } = useProviderConfig(selectedProviderId);
+  const { providerConfig, columnDefs: baseColumnDefs } = useProviderConfig(selectedProviderId);
+  
+  // ========== Conditional Formatting Rules ==========
+  const gridInstanceId = useMemo(() => `grid-${viewInstanceId}`, [viewInstanceId]);
+  
+  // Initialize conditional formatting for this grid instance
+  useEffect(() => {
+    initializeConditionalFormatting(gridInstanceId, conditionalFormattingRules);
+    
+    // Cleanup on unmount
+    return () => {
+      cleanupConditionalFormatting(gridInstanceId);
+    };
+  }, [gridInstanceId, conditionalFormattingRules]);
+  
+  // Reload rules when they change in storage
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'conditionalFormattingRules' && e.newValue) {
+        try {
+          const newRules = JSON.parse(e.newValue);
+          setConditionalFormattingRules(newRules);
+          initializeConditionalFormatting(gridInstanceId, newRules);
+        } catch (error) {
+          console.error('Failed to parse conditional rules from storage:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [gridInstanceId]);
+  
+  // Apply conditional rules to column definitions
+  const columnDefs = useMemo(() => {
+    if (!baseColumnDefs) {
+      return baseColumnDefs;
+    }
+    
+    // Apply conditional formatting with instance-specific classes
+    return applyConditionalFormattingToColumns(baseColumnDefs, conditionalFormattingRules, gridInstanceId);
+  }, [baseColumnDefs, conditionalFormattingRules, gridInstanceId]);
+  
+  // Get row class rules for row-level formatting
+  const rowClassRules = useMemo(() => {
+    return getRowClassRules(conditionalFormattingRules, gridInstanceId);
+  }, [conditionalFormattingRules, gridInstanceId]);
   
   // Grid state management with all grid-related operations
   const { 
@@ -229,12 +283,38 @@ const DataGridStompSharedComponent = () => {
   
   // ========== Conditional Formatting Handler ==========
   const handleApplyConditionalFormatting = useCallback((rules: ConditionalRule[]) => {
+    console.log('[DataGridStompShared] handleApplyConditionalFormatting called with rules:', rules);
+    console.log('[DataGridStompShared] Rule details:', JSON.stringify(rules, null, 2));
+    
+    // Save rules to localStorage using the utility function
+    saveConditionalFormattingRules(rules);
+    console.log('[DataGridStompShared] Rules saved to localStorage');
+    
+    // Verify what was saved
+    const savedRules = localStorage.getItem('conditionalFormattingRules');
+    console.log('[DataGridStompShared] Verified saved rules:', savedRules ? JSON.parse(savedRules) : null);
+    
+    // Update local state
     setConditionalFormattingRules(rules);
+    console.log('[DataGridStompShared] Local state updated');
+    
+    // Re-initialize formatting with new rules
+    initializeConditionalFormatting(gridInstanceId, rules);
+    console.log('[DataGridStompShared] Conditional formatting re-initialized for grid:', gridInstanceId);
+    
+    // Force grid refresh to apply new formatting
+    if (gridApi) {
+      console.log('[DataGridStompShared] Refreshing grid cells');
+      gridApi.refreshCells({ force: true });
+    } else {
+      console.warn('[DataGridStompShared] Grid API not available, cannot refresh cells');
+    }
+    
     toast({
       title: "Conditional Formatting Applied",
       description: `${rules.length} rule(s) have been applied to the grid`
     });
-  }, [toast]);
+  }, [gridInstanceId, gridApi, toast]);
   
   // ========== Dialog Management Hook ==========
   const {
@@ -461,6 +541,7 @@ const DataGridStompSharedComponent = () => {
           connectionState={connectionState}
           snapshotData={snapshotData}
           gridOptions={getCurrentGridOptions()}
+          rowClassRules={rowClassRules}
         />
       </div>
       
