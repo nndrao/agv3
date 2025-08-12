@@ -69,19 +69,34 @@ export const ConditionalFormattingApp: React.FC = () => {
             onInitialize: (data: ConditionalFormattingData) => {
               console.log('[ConditionalFormattingApp] Received data via IAB:', data);
               
-              // Only update if we don't have data yet or if this is newer
-              if (!dialogData || dataSource === 'localStorage') {
+              // Always update columns from parent window
+              if (data.columnDefs && data.columnDefs.length > 0) {
                 const columns = data.columnDefs.map(col => ({
                   field: col.field,
                   headerName: col.headerName || col.field,
                   type: col.type
                 }));
                 
-                setAvailableColumns(columns);
+                // Only update if columns actually changed
+                setAvailableColumns(prevColumns => {
+                  // Check if columns are different
+                  if (prevColumns.length !== columns.length) {
+                    return columns;
+                  }
+                  const isDifferent = columns.some((col, idx) => 
+                    col.field !== prevColumns[idx]?.field || 
+                    col.headerName !== prevColumns[idx]?.headerName
+                  );
+                  return isDifferent ? columns : prevColumns;
+                });
+                console.log('[ConditionalFormattingApp] Updated columns from IAB:', columns.length);
+              }
+              
+              // Update rules if we don't have data yet or if this is newer
+              if (!dialogData || dataSource === 'localStorage') {
                 setRules(data.currentRules || []);
                 setProfileName(data.profileName || '');
-                
-                console.log('[ConditionalFormattingApp] Updated with IAB data');
+                console.log('[ConditionalFormattingApp] Updated rules from IAB');
               }
             },
             getData: () => ({ rules })

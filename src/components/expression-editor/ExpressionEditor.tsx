@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Editor, Monaco } from '@monaco-editor/react';
 import 'monaco-editor/min/vs/editor/editor.main.css';
 import { editor } from 'monaco-editor';
@@ -79,6 +79,23 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     }
   }, [initialExpression, id]); // Also watch id to force update when component key changes
   
+  // Re-register completion provider when columns change
+  useEffect(() => {
+    if (monacoRef.current && editorRef.current && completionProviderDisposable.current) {
+      // Dispose of previous provider
+      completionProviderDisposable.current.dispose();
+      
+      // Register new provider with updated columns
+      completionProviderDisposable.current = monacoRef.current.languages.registerCompletionItemProvider('expression', 
+        createFilteredCompletionProvider(monacoRef.current, {
+          columns: availableColumns,
+          variables: availableVariables,
+          functions: customFunctions
+        }, activeCompletionFilter.current || 'all')
+      );
+    }
+  }, [availableColumns, availableVariables, customFunctions]);
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -104,30 +121,8 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
         // Update compact mode based on size
         setIsCompact(isSmall);
         
-        // Update editor options based on container size
+        // Trigger layout update when container size changes
         if (editorRef.current) {
-          editorRef.current.updateOptions({
-            // Disable minimap to avoid left-side reserved space
-            minimap: { enabled: false },
-            lineNumbers: isVerySmall ? 'off' : 'on',
-            lineNumbersMinChars: isSmall ? 2 : 3,
-            folding: !isVerySmall,
-            renderLineHighlight: isVerySmall ? 'none' : 'all',
-            overviewRulerLanes: isSmall ? 0 : (isMedium ? 2 : 3),
-            scrollbar: {
-              vertical: 'auto',
-              horizontal: 'auto',
-              verticalScrollbarSize: isSmall ? 8 : 12,
-              horizontalScrollbarSize: isSmall ? 8 : 12,
-              useShadows: !isVerySmall
-            },
-            fontSize: isVerySmall ? 12 : (isSmall ? 13 : 14),
-            wordWrap: isSmall ? 'on' : 'off',
-            renderWhitespace: isVerySmall ? 'none' : 'boundary',
-            glyphMargin: false
-          });
-          
-          // Trigger layout update
           editorRef.current.layout();
         }
       }
@@ -176,7 +171,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   };
 
   // Handle editor mount
-  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+  const handleEditorDidMount = useCallback((editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
@@ -205,24 +200,10 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     // Register default completion provider
     registerCompletionProvider('all');
 
-    // Configure initial editor options (responsive settings will be applied by ResizeObserver)
-    const containerWidth = containerRef.current?.offsetWidth || 800;
-    
-    // Determine initial responsive settings
-    const isVerySmallInitial = containerWidth < 400;
-    const isSmallInitial = containerWidth < 600;
-    const isMediumInitial = containerWidth < 900;
-    
+    // Configure basic editor options
     editor.updateOptions({
-      // Disable minimap to prevent left gutter width
-      minimap: { enabled: false },
-      lineNumbers: isVerySmallInitial ? 'off' : 'on',
-      lineNumbersMinChars: isSmallInitial ? 2 : 3,
-      roundedSelection: false,
-      scrollBeyondLastLine: false,
       automaticLayout: true,
-      fontSize: isVerySmallInitial ? 12 : (isSmallInitial ? 13 : 14),
-      fontFamily: 'JetBrains Mono, Consolas, "Courier New", monospace',
+      minimap: { enabled: false },
       suggestOnTriggerCharacters: true,
       quickSuggestions: {
         other: true,
@@ -232,19 +213,18 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
       parameterHints: {
         enabled: true
       },
-      folding: !isVerySmallInitial,
-      renderLineHighlight: isVerySmallInitial ? 'none' : 'all',
-      overviewRulerLanes: isSmallInitial ? 0 : (isMediumInitial ? 2 : 3),
-      scrollbar: {
-        vertical: 'auto',
-        horizontal: 'auto',
-        verticalScrollbarSize: isSmallInitial ? 8 : 12,
-        horizontalScrollbarSize: isSmallInitial ? 8 : 12,
-        useShadows: !isVerySmallInitial
-      },
-      wordWrap: isSmallInitial ? 'on' : 'off',
-      renderWhitespace: isVerySmallInitial ? 'none' : 'boundary',
-      glyphMargin: false
+      // Fix overflow widgets (suggestion, hover, etc.)
+      fixedOverflowWidgets: true,
+      // Set line height for better readability
+      fontSize: 14,
+      // Configure suggestions
+      suggest: {
+        showWords: true,
+        showSnippets: true,
+        showIcons: true,
+        maxVisibleSuggestions: 10,
+        shareSuggestSelections: false
+      }
     });
 
     // Add keyboard shortcuts
@@ -418,7 +398,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
         }, 1000);
       }
     });
-  };
+  }, [availableColumns, availableVariables, customFunctions, executeExpression]);
 
   // Handle undo/redo
   const handleUndo = () => {
@@ -614,7 +594,9 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                 onMount={handleEditorDidMount}
                 options={{
                   readOnly,
-                  automaticLayout: true
+                  automaticLayout: true,
+                  fixedOverflowWidgets: true,
+                  fontSize: 14
                 }}
               />
             </div>
@@ -814,7 +796,9 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                   onMount={handleEditorDidMount}
                   options={{
                     readOnly,
-                    automaticLayout: true
+                    automaticLayout: true,
+                    fixedOverflowWidgets: true,
+                    fontSize: 14
                   }}
                 />
               </div>

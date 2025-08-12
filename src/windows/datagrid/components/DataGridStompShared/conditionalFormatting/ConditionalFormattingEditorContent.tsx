@@ -30,12 +30,15 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
   );
   const [showTemplates, setShowTemplates] = useState(false);
   
-  // Convert column defs to the format expected by components
-  const availableColumns = columnDefs.map(col => ({
-    field: col.field || '',
-    headerName: col.headerName,
-    type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
-  }));
+  // Convert column defs to the format expected by components - memoize to prevent re-renders
+  const availableColumns = React.useMemo(() => 
+    columnDefs.map(col => ({
+      field: col.field || '',
+      headerName: col.headerName,
+      type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
+    })),
+    [columnDefs]
+  );
 
   const selectedRule = React.useMemo(
     () => rules.find(r => r.id === selectedRuleId),

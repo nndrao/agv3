@@ -12,8 +12,8 @@ export interface Variable {
 
 export interface ColumnDefinition {
   field: string;
-  headerName: string;
-  type: string;
+  headerName?: string;
+  type?: string;
 }
 
 export interface CustomFunction {
