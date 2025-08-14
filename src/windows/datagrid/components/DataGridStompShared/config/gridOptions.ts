@@ -288,7 +288,7 @@ export const GRID_OPTIONS_CATEGORIES: GridOptionsCategory[] = [
         key: 'enableCellChangeFlash',
         label: 'Enable Cell Change Flash',
         type: 'boolean',
-        defaultValue: false,
+        defaultValue: true,  // Changed to true to enable cell flashing by default
         description: 'Flash cells when their data changes',
         category: 'editing'
       },

@@ -29,6 +29,7 @@ export const Toolbar = React.memo<ToolbarProps>(({
   onOpenColumnGroups,
   onOpenExpressionEditor,
   onOpenConditionalFormatting,
+  onOpenCalculatedColumns,
   viewInstanceId,
   profileOperation,
   profileName,
@@ -83,6 +84,7 @@ export const Toolbar = React.memo<ToolbarProps>(({
         onOpenColumnGroups={onOpenColumnGroups}
         onOpenExpressionEditor={onOpenExpressionEditor}
         onOpenConditionalFormatting={onOpenConditionalFormatting}
+        onOpenCalculatedColumns={onOpenCalculatedColumns}
         profiles={profiles}
         activeProfile={activeProfile}
         viewInstanceId={viewInstanceId}

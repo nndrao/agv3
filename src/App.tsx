@@ -10,6 +10,7 @@ import { App as ProviderStatusApp } from './windows/provider-status/App';
 import { RenameDialogApp } from './windows/rename-dialog/RenameDialogApp';
 import { DialogDemo } from '@/components/expression-editor/DialogDemo';
 import { ConditionalFormattingApp } from './windows/conditional-formatting/ConditionalFormattingApp';
+import { CalculatedColumnsApp } from './windows/calculated-columns/CalculatedColumnsApp';
 import { GridOptionsApp } from './windows/grid-options/GridOptionsApp';
 import { ColumnGroupsApp } from './windows/column-groups/ColumnGroupsApp';
 
@@ -52,6 +53,16 @@ function App() {
           element={
             <div className="h-screen w-screen">
               <ConditionalFormattingApp />
+            </div>
+          }
+        />
+
+        {/* Calculated Columns */}
+        <Route
+          path="/calculated-columns"
+          element={
+            <div className="h-screen w-screen">
+              <CalculatedColumnsApp />
             </div>
           }
         />

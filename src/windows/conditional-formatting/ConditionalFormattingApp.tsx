@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ConditionalFormattingEditorContent } from '@/windows/datagrid/components/DataGridStompShared/conditionalFormatting/ConditionalFormattingEditorContent';
 import { initializeDialog, sendDialogResponse } from '@/services/openfin/OpenFinDialogService';
@@ -30,6 +30,12 @@ export const ConditionalFormattingApp: React.FC = () => {
   const [profileName, setProfileName] = useState<string>('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
   const { toast } = useToast();
+
+  // Use ref to store the latest rules for getData callback
+  const rulesRef = useRef(rules);
+  useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -77,17 +83,11 @@ export const ConditionalFormattingApp: React.FC = () => {
                   type: col.type
                 }));
                 
-                // Only update if columns actually changed
+                // Only update if columns actually changed - use JSON comparison for deep equality
                 setAvailableColumns(prevColumns => {
-                  // Check if columns are different
-                  if (prevColumns.length !== columns.length) {
-                    return columns;
-                  }
-                  const isDifferent = columns.some((col, idx) => 
-                    col.field !== prevColumns[idx]?.field || 
-                    col.headerName !== prevColumns[idx]?.headerName
-                  );
-                  return isDifferent ? columns : prevColumns;
+                  const prevJson = JSON.stringify(prevColumns);
+                  const newJson = JSON.stringify(columns);
+                  return prevJson === newJson ? prevColumns : columns;
                 });
                 console.log('[ConditionalFormattingApp] Updated columns from IAB:', columns.length);
               }
@@ -99,7 +99,7 @@ export const ConditionalFormattingApp: React.FC = () => {
                 console.log('[ConditionalFormattingApp] Updated rules from IAB');
               }
             },
-            getData: () => ({ rules })
+            getData: () => ({ rules: rulesRef.current }) // Use ref to get latest rules
           }).catch(err => {
             // Non-critical - we already have data from customData or will use localStorage
             console.warn('[ConditionalFormattingApp] IAB initialization failed (non-critical):', err);

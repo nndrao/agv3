@@ -106,6 +106,9 @@ export function useProfileOperations({
     const columnGroupsToSave = unsavedColumnGroups || activeProfileData?.columnGroups || [];
     setColumnGroups(columnGroupsToSave);
     
+    // Preserve calculated columns from the current profile
+    const calculatedColumnsToSave = activeProfileData?.calculatedColumns || [];
+    
     const currentState: DataGridStompSharedProfile = {
       name: name || activeProfileData?.name || 'Profile',
       autoLoad: true,
@@ -123,7 +126,9 @@ export function useProfileOperations({
       // Full grid state for comprehensive persistence
       gridState: fullGridState || undefined,
       gridOptions: gridOptionsToSave,
-      columnGroups: columnGroupsToSave
+      columnGroups: columnGroupsToSave,
+      // Include calculated columns in the saved profile
+      calculatedColumns: calculatedColumnsToSave
     };
     
     try {

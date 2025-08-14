@@ -328,10 +328,14 @@ export function useProfileManagement<T extends BaseProfile>({
           log('New profile created and set as active:', newProfile.name);
         }
       } else {
-        // For updates, just update the necessary state
-        setConfig(updatedConfig);
-        setProfiles(updatedProfiles);
-        setActiveProfileData(data);
+        // For updates, find and set the updated profile
+        const updatedActiveProfile = updatedProfiles.find(p => p.versionId === activeProfile.versionId);
+        if (updatedActiveProfile) {
+          setConfig(updatedConfig);
+          setProfiles(updatedProfiles);
+          setActiveProfile(updatedActiveProfile); // This will trigger the effect with the new config
+          setActiveProfileData(data);
+        }
       }
       
       // Log the updated state

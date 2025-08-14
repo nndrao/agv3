@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { Palette, Type, Square, X, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,7 +33,8 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
   rule,
   onUpdateRule
 }) => {
-  const getInitialBorders = (): BorderStyle[] => {
+  // Memoize initial borders calculation to prevent recalculation on every render
+  const initialBorders = useMemo(() => {
     const borders: BorderStyle[] = [];
     const sides = ['Top', 'Right', 'Bottom', 'Left'];
     
@@ -54,9 +55,9 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
     });
     
     return borders;
-  };
+  }, [rule.formatting.style]);
   
-  const [appliedBorders, setAppliedBorders] = useState<BorderStyle[]>(getInitialBorders());
+  const [appliedBorders, setAppliedBorders] = useState<BorderStyle[]>(initialBorders);
   const [currentBorder, setCurrentBorder] = useState<BorderStyle>({
     side: 'Top',
     width: '1px',
@@ -64,7 +65,7 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
     color: '#374151'
   });
 
-  const updateStyle = (styleUpdates: any) => {
+  const updateStyle = useCallback((styleUpdates: any) => {
     onUpdateRule({
       ...rule,
       formatting: {
@@ -75,22 +76,22 @@ export const ShadcnFormatOptions: React.FC<ShadcnFormatOptionsProps> = ({
         }
       }
     });
-  };
+  }, [rule, onUpdateRule]);
 
-  const addBorderStyle = () => {
+  const addBorderStyle = useCallback(() => {
     const borderKey = `border${currentBorder.side}`;
     const borderValue = `${currentBorder.width} ${currentBorder.style} ${currentBorder.color}`;
     
     updateStyle({ [borderKey]: borderValue });
     
-    setAppliedBorders([...appliedBorders.filter(b => b.side !== currentBorder.side), currentBorder]);
-  };
+    setAppliedBorders(prev => [...prev.filter(b => b.side !== currentBorder.side), currentBorder]);
+  }, [currentBorder, updateStyle]);
 
-  const removeBorderStyle = (side: string) => {
+  const removeBorderStyle = useCallback((side: string) => {
     const borderKey = `border${side}`;
     updateStyle({ [borderKey]: undefined });
-    setAppliedBorders(appliedBorders.filter(b => b.side !== side));
-  };
+    setAppliedBorders(prev => prev.filter(b => b.side !== side));
+  }, [updateStyle]);
 
   const textAlign = rule.formatting.style?.textAlign || 'left';
   const opacity = rule.formatting.style?.opacity || 1;

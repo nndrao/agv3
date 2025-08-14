@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -41,25 +41,26 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
 }) => {
   const [expressionValid, setExpressionValid] = useState(true);
 
-  // Update rule property
+  // Update rule property - stable callback
   const updateRule = useCallback((updates: Partial<ConditionalRule>) => {
-    const updatedRule = { ...rule, ...updates };
-    onUpdateRule(updatedRule);
+    onUpdateRule({ ...rule, ...updates });
   }, [rule, onUpdateRule]);
 
-  // Update formatting
+  // Update formatting - stable callback
   const updateFormatting = useCallback((key: string, value: any) => {
-    updateRule({
+    onUpdateRule({
+      ...rule,
       formatting: {
         ...rule.formatting,
         [key]: value
       }
     });
-  }, [rule, updateRule]);
+  }, [rule, onUpdateRule]);
 
-  // Update style
+  // Update style - stable callback
   const updateStyle = useCallback((styleUpdates: any) => {
-    updateRule({
+    onUpdateRule({
+      ...rule,
       formatting: {
         ...rule.formatting,
         style: {
@@ -68,17 +69,18 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
         }
       }
     });
-  }, [rule, updateRule]);
+  }, [rule, onUpdateRule]);
 
-  // Update scope
+  // Update scope - stable callback
   const updateScope = useCallback((scopeUpdates: any) => {
-    updateRule({
+    onUpdateRule({
+      ...rule,
       scope: {
         ...rule.scope,
         ...scopeUpdates
       }
     });
-  }, [rule, updateRule]);
+  }, [rule, onUpdateRule]);
 
   // Handle expression change
   const handleExpressionChange = useCallback((expression: string, isValid: boolean) => {
@@ -86,14 +88,14 @@ export const RuleEditorSimplified: React.FC<RuleEditorSimplifiedProps> = ({
     updateRule({ expression });
   }, [updateRule]);
 
-  // Variables for expression editor
-  const variables = [
+  // Variables for expression editor - memoized to prevent re-renders
+  const variables = useMemo(() => [
     { name: 'value', value: null, type: 'object' as 'object', description: 'Current cell value' },
     { name: 'row', value: null, type: 'object' as 'object', description: 'Current row data' },
     { name: 'column', value: null, type: 'object' as 'object', description: 'Current column definition' },
     { name: 'rowIndex', value: 0, type: 'number' as 'number', description: 'Row index' },
     { name: 'api', value: null, type: 'object' as 'object', description: 'Grid API' }
-  ];
+  ], []);
 
   return (
     <div className="h-full flex flex-col">

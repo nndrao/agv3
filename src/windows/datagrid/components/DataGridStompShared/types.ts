@@ -7,6 +7,18 @@ export interface RowData {
   [key: string]: any;
 }
 
+// Calculated/Scratch column definition
+export interface CalculatedColumnDefinition {
+  id: string;
+  field: string;
+  headerName: string;
+  expression: string; // calculation expression using [Column] references
+  cellDataType?: 'text' | 'number' | 'boolean' | 'date' | 'dateString' | 'object';
+  pinned?: 'left' | 'right';
+  width?: number;
+  valueFormatter?: string; // optional formatter key resolved by grid context
+}
+
 // Profile interface for DataGridStompShared
 export interface DataGridStompSharedProfile extends BaseProfile {
   // Data source
@@ -38,6 +50,9 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   
   // Grid options (AG-Grid options)
   gridOptions?: Record<string, any>;
+
+  // User-defined calculated/scratch columns
+  calculatedColumns?: CalculatedColumnDefinition[];
 }
 
 // Snapshot mode types
@@ -111,6 +126,7 @@ export interface ToolbarProps {
   onOpenColumnGroups: () => void;
   onOpenExpressionEditor?: () => void;
   onOpenConditionalFormatting?: () => void;
+  onOpenCalculatedColumns?: () => void;
   viewInstanceId: string;
   profileOperation?: string;
   profileName?: string;

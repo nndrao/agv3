@@ -24,7 +24,7 @@ export interface DialogInitRequest {
 
 export interface DialogResponse {
   dialogId: string;
-  action: 'apply' | 'cancel' | 'error';
+  action: 'apply' | 'cancel' | 'close' | 'error';
   timestamp: number;
   data?: any;
   error?: string;
@@ -137,21 +137,27 @@ class OpenFinDialogService {
             if (config.onCancel) {
               config.onCancel();
             }
-            this.closeDialog(config.name);
+            // Only close if dialog is still active
+            if (this.activeDialogs.has(config.name)) {
+              this.closeDialog(config.name);
+            }
             break;
           case 'error':
             console.error(`[DialogService] Dialog error: ${response.error}`);
             if (config.onError) {
               config.onError(response.error || 'Unknown error');
             }
-            this.closeDialog(config.name);
+            // Only close if dialog is still active
+            if (this.activeDialogs.has(config.name)) {
+              this.closeDialog(config.name);
+            }
             break;
         }
       };
 
-      // Subscribe to dialog responses
+      // Subscribe to dialog responses on the parent identity
       await fin.InterApplicationBus.subscribe(
-        { uuid: fin.me.uuid, name: config.name },
+        { uuid: fin.me.uuid },
         'dialog-response',
         responseHandler
       );
@@ -178,7 +184,7 @@ class OpenFinDialogService {
       };
 
       await fin.InterApplicationBus.subscribe(
-        { uuid: fin.me.uuid, name: config.name },
+        { uuid: fin.me.uuid },
         'dialog-request-init',
         initHandler
       );
@@ -186,12 +192,12 @@ class OpenFinDialogService {
       // Cleanup function
       const cleanup = () => {
         fin.InterApplicationBus.unsubscribe(
-          { uuid: fin.me.uuid, name: config.name },
+          { uuid: fin.me.uuid },
           'dialog-response',
           responseHandler
         );
         fin.InterApplicationBus.unsubscribe(
-          { uuid: fin.me.uuid, name: config.name },
+          { uuid: fin.me.uuid },
           'dialog-request-init',
           initHandler
         );
@@ -207,7 +213,11 @@ class OpenFinDialogService {
       // Listen for window close
       dialogWindow.on('closed', () => {
         console.log(`[DialogService] Dialog closed: ${config.name}`);
-        this.closeDialog(config.name);
+        // Only try to clean up if dialog is still in our map
+        // This prevents duplicate cleanup attempts
+        if (this.activeDialogs.has(config.name)) {
+          this.closeDialog(config.name);
+        }
       });
 
     } catch (error) {
@@ -242,20 +252,36 @@ class OpenFinDialogService {
 
       // Set up handler for init data
       const initDataHandler = (data: DialogInitRequest) => {
-        if (data.dialogId !== dialogId) return;
-        
+        if (!data || data.dialogId !== dialogId) return;
         console.log(`[DialogService Child] Received init data`);
-        config.onInitialize(data.data);
+        try {
+          if (config && typeof config.onInitialize === 'function') {
+            config.onInitialize(data.data);
+          } else {
+            console.warn('[DialogService Child] onInitialize handler not provided');
+          }
+        } catch (err) {
+          console.error('[DialogService Child] onInitialize handler error:', err);
+        }
       };
 
-      // Subscribe to init data
+      // Subscribe to init data (once)
+      let initHandled = false;
+      const onceInitDataHandler = (data: DialogInitRequest) => {
+        if (initHandled) return;
+        initHandled = true;
+        initDataHandler(data);
+        // Unsubscribe after handling first init to avoid repeated re-initialization
+        fin.InterApplicationBus.unsubscribe(parentIdentity, 'dialog-init-data', onceInitDataHandler).catch(() => {});
+      };
       await fin.InterApplicationBus.subscribe(
         parentIdentity,
         'dialog-init-data',
-        initDataHandler
+        onceInitDataHandler
       );
 
       // Request init data from parent
+      // Request init data from parent (single request)
       await fin.InterApplicationBus.send(
         parentIdentity,
         'dialog-request-init',
@@ -266,7 +292,7 @@ class OpenFinDialogService {
       (window as any).__dialogContext = {
         dialogId,
         parentIdentity,
-        sendResponse: async (action: 'apply' | 'cancel' | 'error', data?: any, error?: string) => {
+        sendResponse: async (action: 'apply' | 'cancel' | 'close' | 'error', data?: any, error?: string) => {
           const response: DialogResponse = {
             dialogId,
             action,
@@ -287,8 +313,8 @@ class OpenFinDialogService {
             console.error('[DialogService Child] Failed to send response:', err);
           }
 
-          // Close window after sending response (except for errors)
-          if (action !== 'error') {
+          // Close window only for cancel/close actions (not for apply or error)
+          if (action === 'cancel' || action === 'close') {
             setTimeout(() => fin.me.close(), 100);
           }
         }
@@ -324,10 +350,19 @@ class OpenFinDialogService {
       // Run cleanup
       dialog.cleanup();
       
-      // Close window
-      await dialog.window.close(true);
+      // Try to close window if it still exists
+      try {
+        // Check if window still exists before trying to close it
+        const windowInfo = await dialog.window.getInfo();
+        if (windowInfo) {
+          await dialog.window.close(true);
+        }
+      } catch (windowError) {
+        // Window doesn't exist or already closed, which is fine
+        console.log(`[DialogService] Window already closed or doesn't exist: ${name}`);
+      }
     } catch (error) {
-      console.error(`[DialogService] Error closing dialog: ${name}`, error);
+      console.error(`[DialogService] Error during dialog cleanup: ${name}`, error);
     } finally {
       this.activeDialogs.delete(name);
     }

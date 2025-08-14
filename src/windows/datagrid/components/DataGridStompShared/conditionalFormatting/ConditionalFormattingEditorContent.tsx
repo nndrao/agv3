@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Plus, Sparkles, FileText } from 'lucide-react';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
@@ -48,52 +48,57 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
 
   const handleAddRule = useCallback(() => {
     const newRule = createNewRule();
-    setRules([...rules, newRule]);
+    setRules(prevRules => [...prevRules, newRule]);
     setSelectedRuleId(newRule.id);
     setShowTemplates(false);
-  }, [rules]);
+  }, []);
 
   const handleDeleteRule = useCallback((ruleId: string) => {
-    const newRules = rules.filter(r => r.id !== ruleId);
-    setRules(newRules);
+    setRules(prevRules => prevRules.filter(r => r.id !== ruleId));
     
-    if (selectedRuleId === ruleId) {
-      setSelectedRuleId(newRules.length > 0 ? newRules[0].id : null);
-    }
-  }, [rules, selectedRuleId]);
+    setSelectedRuleId(prevSelectedId => {
+      if (prevSelectedId === ruleId) {
+        // Will select first rule after deletion
+        return null;
+      }
+      return prevSelectedId;
+    });
+  }, []);
 
   const handleDuplicateRule = useCallback((ruleId: string) => {
-    const rule = rules.find(r => r.id === ruleId);
-    if (rule) {
-      const duplicated = duplicateRule(rule);
-      setRules([...rules, duplicated]);
-      setSelectedRuleId(duplicated.id);
-    }
-  }, [rules]);
+    setRules(prevRules => {
+      const rule = prevRules.find(r => r.id === ruleId);
+      if (rule) {
+        const duplicated = duplicateRule(rule);
+        setSelectedRuleId(duplicated.id);
+        return [...prevRules, duplicated];
+      }
+      return prevRules;
+    });
+  }, []);
 
   const handleMoveRule = useCallback((ruleId: string, direction: 'up' | 'down') => {
-    const newRules = moveRule(rules, ruleId, direction);
-    setRules(newRules);
-  }, [rules]);
+    setRules(prevRules => moveRule(prevRules, ruleId, direction));
+  }, []);
 
   const handleToggleRule = useCallback((ruleId: string) => {
-    setRules(rules.map(r => 
+    setRules(prevRules => prevRules.map(r => 
       r.id === ruleId ? { ...r, enabled: !r.enabled } : r
     ));
-  }, [rules]);
+  }, []);
 
   const handleUpdateRule = useCallback((updatedRule: ConditionalRule) => {
-    setRules(rules.map(r => 
+    setRules(prevRules => prevRules.map(r => 
       r.id === updatedRule.id ? updatedRule : r
     ));
-  }, [rules]);
+  }, []);
 
   const handleSelectTemplate = useCallback((template: ConditionalRuleTemplate) => {
     const newRule = createRuleFromTemplate(template);
-    setRules([...rules, newRule]);
+    setRules(prevRules => [...prevRules, newRule]);
     setSelectedRuleId(newRule.id);
     setShowTemplates(false);
-  }, [rules]);
+  }, []);
 
   const handleApply = useCallback(() => {
     onApply(rules);
