@@ -70,13 +70,32 @@ export function useGridOptionsManagement({
   
   // Apply grid options when profile changes
   useEffect(() => {
-    if (gridApi && activeProfileData?.gridOptions) {
-      Object.entries(activeProfileData.gridOptions).forEach(([key, value]) => {
+    if (gridApi) {
+      // First, reset to default options to prevent leaking from previous profile
+      const defaultOptions = getDefaultGridOptions();
+      
+      // Always ensure cell flashing is enabled by default
+      defaultOptions.enableCellChangeFlash = true;
+      defaultOptions.cellFlashDuration = 500;
+      defaultOptions.cellFadeDuration = 1000;
+      
+      Object.entries(defaultOptions).forEach(([key, value]) => {
         // Skip font and initial-only properties that cannot be changed after initialization
         if (key !== 'font' && !INITIAL_GRID_OPTIONS.includes(key)) {
           gridApi.setGridOption(key as any, value);
         }
       });
+      
+      // Then apply profile-specific options if they exist
+      if (activeProfileData?.gridOptions) {
+        Object.entries(activeProfileData.gridOptions).forEach(([key, value]) => {
+          // Skip font and initial-only properties that cannot be changed after initialization
+          if (key !== 'font' && !INITIAL_GRID_OPTIONS.includes(key)) {
+            gridApi.setGridOption(key as any, value);
+          }
+        });
+      }
+      
       gridApi.refreshCells({ force: true });
     }
   }, [activeProfileData?.gridOptions, gridApi]);

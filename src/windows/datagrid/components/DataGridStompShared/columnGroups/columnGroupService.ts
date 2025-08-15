@@ -3,6 +3,44 @@ import { ColDef, ColGroupDef } from 'ag-grid-community';
 
 export class ColumnGroupService {
   /**
+   * Apply column group state after a delay to ensure columnDefs are fully applied
+   * This method should be called LAST after all other grid state has been applied
+   */
+  static applyColumnGroupStateDelayed(
+    gridApi: any, 
+    groupState: Array<{ groupId: string; open: boolean }>,
+    delay: number = 500
+  ): void {
+    setTimeout(() => {
+      console.log('[🔍 COLGROUP-STATE-001] Applying column group state (delayed):', groupState);
+      
+      // Use the official AG-Grid API to set column group state
+      if (gridApi.setColumnGroupState) {
+        try {
+          gridApi.setColumnGroupState(groupState);
+          console.log('[🔍 COLGROUP-STATE-002] Applied column group state using setColumnGroupState');
+          
+          // Verify the state was applied
+          const newState = gridApi.getColumnGroupState();
+          console.log('[🔍 COLGROUP-STATE-003] Column group state after application:', newState);
+        } catch (e) {
+          console.warn('[🔍 COLGROUP-STATE-004] Error applying column group state:', e);
+        }
+      } else if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
+        // Fallback to individual group opening
+        console.log('[🔍 COLGROUP-STATE-005] Using fallback setColumnGroupOpened');
+        groupState.forEach((state: any) => {
+          try {
+            (gridApi as any).setColumnGroupOpened(state.groupId, state.open);
+          } catch (e) {
+            console.warn(`[🔍 COLGROUP-STATE-006] Could not set state for group ${state.groupId}:`, e);
+          }
+        });
+      }
+    }, delay);
+  }
+  
+  /**
    * Apply column groups to AG-Grid
    */
   static applyColumnGroups(
@@ -13,10 +51,28 @@ export class ColumnGroupService {
     gridStateManager?: any
   ): void {
     
-    // Log detailed group information removed
+    // Filter to only apply active groups
+    const activeGroups = groups.filter(g => g.isActive !== false);
+    console.log('[🔍 COLGROUP-SERVICE-001] applyColumnGroups called:', {
+      totalGroups: groups.length,
+      activeGroups: activeGroups.length,
+      groups: groups.map(g => ({ 
+        groupId: g.groupId, 
+        headerName: g.headerName, 
+        isActive: g.isActive,
+        childrenCount: g.children?.length || 0
+      }))
+    });
     
     if (!gridApi) {
-      console.error('Grid API not available');
+      console.error('[🔍 COLGROUP-SERVICE-ERROR] Grid API not available');
+      return;
+    }
+    
+    // Verify that column definitions exist
+    const currentDefs = gridApi.getColumnDefs();
+    if (!currentDefs || currentDefs.length === 0) {
+      console.warn('[🔍 COLGROUP-SERVICE-WARNING] No column definitions available yet, cannot apply column groups');
       return;
     }
 
@@ -36,7 +92,8 @@ export class ColumnGroupService {
 
 
     // Build new column definitions with groups (pass gridApi to preserve column state)
-    const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, groups, gridApi);
+    // Only use active groups
+    const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, activeGroups, gridApi);
     
     // Store the current column group state before applying new definitions
     try {
@@ -62,6 +119,13 @@ export class ColumnGroupService {
     // Apply the new column definitions to the grid
     gridApi.setGridOption('columnDefs', newColumnDefs);
     
+    // Get the initial column group state before setting up listeners
+    const initialGroupState = gridApi.getColumnGroupState ? gridApi.getColumnGroupState() : [];
+    console.log('[🔍 COLGROUP-SERVICE-008] Initial column group state after applying defs:', initialGroupState);
+    
+    // Let AG-Grid handle column group expand/collapse natively
+    // The columnGroupShow property on columns will be respected automatically
+    
     // Restore column state (widths, order, visibility) after applying column groups
     setTimeout(() => {
       if (savedColumnState && savedColumnState.length > 0) {
@@ -74,61 +138,27 @@ export class ColumnGroupService {
         
       }
       
-      // Apply column group state if available
+      // DO NOT apply column group state here - it will be applied AFTER grid state
+      // The column group state needs to be applied LAST, after all columnDefs updates
+      // Store the pending state but don't apply it yet
       setTimeout(() => {
+        console.log('[🔍 COLGROUP-SERVICE-009] Column groups applied, state will be restored later');
         
         // Check if we have pending column group state from GridStateManager
         if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
           const pendingGroupState = gridStateManager.getPendingColumnGroupState();
           if (pendingGroupState && pendingGroupState.length > 0) {
-            
-            if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
-              pendingGroupState.forEach((groupState: any) => {
-                try {
-                  (gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
-                  
-                  // After setting group state, verify column visibility is correct
-                  const columnDefs = gridApi.getColumnDefs();
-                  if (columnDefs) {
-                    columnDefs.forEach((def: any) => {
-                      if (def.groupId === groupState.groupId && def.children) {
-                        def.children.forEach((child: any) => {
-                          const columnGroupShow = child.columnGroupShow;
-                          
-                          if (columnGroupShow) {
-                            // Column visibility is handled by AG-Grid based on columnGroupShow
-                          }
-                        });
-                      }
-                    });
-                  }
-                } catch (e) {
-                  console.warn(`[🔍][COLUMN_GROUP_SERVICE] Could not set state for group ${groupState.groupId}:`, e);
-                }
-              });
-            }
-            
-            // Clear the pending state after applying
-            gridStateManager.clearPendingColumnGroupState();
+            console.log('[🔍 COLGROUP-SERVICE-010] Pending column group state exists, will be applied after grid state:', pendingGroupState);
+            // DO NOT apply or clear the pending state here
+            // It will be applied by the grid state manager AFTER all other state
           } else {
+            console.log('[🔍 COLGROUP-SERVICE-011] No pending column group state');
           }
         }
         
-        // Final verification of column visibility
-        setTimeout(() => {
-          const finalColumnState = gridApi.getColumnState();
-          const columnsWithGroupShow = finalColumnState?.filter((col: any) => {
-            const colDef = gridApi.getColumnDef(col.colId);
-            return colDef && colDef.columnGroupShow;
-          });
-          
-          if (columnsWithGroupShow && columnsWithGroupShow.length > 0) {
-            columnsWithGroupShow.forEach((col: any) => {
-              // Column group show verification
-              gridApi.getColumnDef(col.colId);
-            });
-          }
-        }, 100);
+        // Get and log the current column group state
+        const currentGroupState = gridApi.getColumnGroupState ? gridApi.getColumnGroupState() : [];
+        console.log('[🔍 COLGROUP-SERVICE-012] Current column group state:', currentGroupState);
       }, 200); // Give time for column state to be fully applied
     }, 100); // Small delay to let grid apply new column defs first
     
@@ -142,6 +172,9 @@ export class ColumnGroupService {
     
     // Refresh the grid
     gridApi.refreshCells({ force: true });
+    
+    // AG-Grid will handle initial group state and column visibility automatically
+    // based on openByDefault and columnGroupShow properties
     
     // Verify what AG-Grid actually has
     setTimeout(() => {
@@ -188,8 +221,9 @@ export class ColumnGroupService {
 
   /**
    * Build column definitions with groups
+   * This is a pure function that returns new columnDefs without side effects
    */
-  private static buildColumnDefsWithGroups(
+  static buildColumnDefsWithGroups(
     baseColumns: ColDef[],
     groups: ColumnGroupDefinition[],
     gridApi?: any
@@ -261,6 +295,14 @@ export class ColumnGroupService {
           let colDefWithGroupShow: any = { ...colDef };
           if (columnState !== undefined) {
             colDefWithGroupShow.columnGroupShow = columnState;
+            console.log('[🔍 COLGROUP-SERVICE-002] Applied columnGroupShow:', {
+              colId,
+              columnGroupShow: columnState,
+              groupId: group.groupId,
+              groupHeaderName: group.headerName
+            });
+          } else {
+            console.log('[🔍 COLGROUP-SERVICE-003] No columnGroupShow for:', colId);
           }
           groupChildren.push(colDefWithGroupShow);
         } else {
@@ -276,6 +318,18 @@ export class ColumnGroupService {
           openByDefault: group.openByDefault ?? true,
           marryChildren: group.marryChildren || false
         };
+        
+        console.log('[🔍 COLGROUP-SERVICE-004] Created column group:', {
+          groupId: colGroupDef.groupId,
+          headerName: colGroupDef.headerName,
+          openByDefault: colGroupDef.openByDefault,
+          childrenCount: groupChildren.length,
+          childrenWithGroupShow: groupChildren.filter((c: any) => c.columnGroupShow !== undefined).map((c: any) => ({
+            field: c.field || c.colId,
+            columnGroupShow: c.columnGroupShow
+          }))
+        });
+        
         finalColumnDefs.push(colGroupDef);
       } else {
         console.warn(`- Skipping empty group "${group.headerName}"`);
@@ -290,8 +344,15 @@ export class ColumnGroupService {
       }
     });
 
-    
-    // Log the structure of column groups removed
+    console.log('[🔍 COLGROUP-BUILD-FINAL] Final column definitions structure:', {
+      totalDefs: finalColumnDefs.length,
+      groups: finalColumnDefs.filter((col: any) => col.children).map((col: any) => ({
+        headerName: col.headerName,
+        groupId: col.groupId,
+        childrenCount: col.children?.length
+      })),
+      ungroupedColumns: finalColumnDefs.filter((col: any) => !col.children).length
+    });
     
     return finalColumnDefs;
   }

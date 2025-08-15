@@ -20,6 +20,8 @@ interface UseGridStateResult {
   clearPendingColumnState: () => void;
   getPendingColumnGroupState: () => any;
   clearPendingColumnGroupState: () => void;
+  applyPendingColumnGroupState: () => void;
+  gridStateManagerRef: React.MutableRefObject<GridStateManager>;
 }
 
 // Validate that GridApi is properly initialized
@@ -45,7 +47,8 @@ interface ProfileStatusCallbacks {
 export function useGridState(
   providerConfig: any,
   activeProfileData: DataGridStompSharedProfile | null,
-  profileStatusCallbacks?: ProfileStatusCallbacks
+  profileStatusCallbacks?: ProfileStatusCallbacks,
+  isSavingProfileRef?: React.MutableRefObject<boolean>
 ): UseGridStateResult {
   const gridApiRef = useRef<GridApi<RowData> | null>(null);
   const columnApiRef = useRef<any | null>(null);
@@ -212,8 +215,14 @@ export function useGridState(
     stateManagerRef.current.clearPendingColumnGroupState();
   }, []);
   
-  // Grid ready handler
+  // Apply pending column group state
+  const applyPendingColumnGroupState = useCallback(() => {
+    stateManagerRef.current.applyPendingColumnGroupState();
+  }, []);
+  
+  // Grid ready handler - simplified to just set references
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
+    console.log('[useGridState] Grid ready');
     
     gridApiRef.current = params.api;
     columnApiRef.current = (params as any).columnApi || null;
@@ -221,51 +230,12 @@ export function useGridState(
     // Set GridApi in state manager
     stateManagerRef.current.setGridApi(params.api);
     
-    // Apply configuration in the correct order when grid is ready:
-    // 1. Grid options are already applied via component props
-    // 2. Column groups need to be applied FIRST (by the column groups effect)
-    // 3. Grid state (column state, filters, sorts) is applied AFTER column groups
-    
-    // Check for pending profile first, then fall back to active profile
-    const profileToApply = pendingProfileRef.current || activeProfileData;
-    
-    if (profileToApply) {
-      
-      // Store column groups in state manager for the column groups effect
-      if (profileToApply.columnGroups) {
-        stateManagerRef.current.setColumnGroups(profileToApply.columnGroups);
-      }
-      
-      // We'll apply the grid state AFTER column groups are applied
-      // This is handled by delaying the grid state application
-      
-      // Notify that we're applying the profile if this is a pending profile
-      if (pendingProfileRef.current && profileStatusCallbacks?.onProfileApplying) {
-        profileStatusCallbacks.onProfileApplying(profileToApply.name);
-      }
-      
-      setTimeout(() => {
-        applyProfileGridState(profileToApply);
-        // Clear the pending profile after applying
-        pendingProfileRef.current = null;
-      }, 200); // Give column groups time to be applied
-    } else {
-    }
-  }, [activeProfileData, applyProfileGridState, profileStatusCallbacks]);
+    // Profile application is now handled by useProfileApplication hook in the main component
+    // No timeouts, no complex logic here
+  }, []);
   
-  // Apply profile state when it changes
-  useEffect(() => {
-    
-    if (activeProfileData) {
-      applyProfileGridState(activeProfileData);
-      
-      // If the grid isn't ready, the profile will be stored as pending
-      // and applied when the grid becomes ready
-      if (!gridApiRef.current) {
-      }
-    } else {
-    }
-  }, [activeProfileData, applyProfileGridState]);
+  // Profile application is now handled by useProfileApplication hook
+  // This effect is no longer needed
   
   // Refresh grid when column definitions change
   useEffect(() => {
@@ -295,6 +265,8 @@ export function useGridState(
     getPendingColumnState,
     clearPendingColumnState,
     getPendingColumnGroupState,
-    clearPendingColumnGroupState
+    clearPendingColumnGroupState,
+    applyPendingColumnGroupState,
+    gridStateManagerRef: stateManagerRef
   };
 }

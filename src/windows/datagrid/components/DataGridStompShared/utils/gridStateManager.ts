@@ -201,6 +201,22 @@ export class GridStateManager {
   }
   
   /**
+   * Apply pending column group state if it exists
+   * This should be called AFTER columnDefs are fully applied
+   */
+  applyPendingColumnGroupState(): void {
+    if (!this.pendingColumnGroupState || this.pendingColumnGroupState.length === 0) {
+      console.log('[🔍 GRIDSTATE-010] No pending column group state to apply');
+      return;
+    }
+    
+    console.log('[🔍 GRIDSTATE-011] Applying pending column group state:', this.pendingColumnGroupState);
+    
+    this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
+    this.pendingColumnGroupState = null;
+  }
+  
+  /**
    * Set default state for reset operations
    */
   setDefaultState(state: Partial<GridState>) {
@@ -336,8 +352,10 @@ export class GridStateManager {
       }
       
       // Store column group state for later application
+      // DO NOT apply it here - it must be applied AFTER all columnDefs are set
       if (state.columnGroupState && state.columnGroupState.length > 0) {
         this.pendingColumnGroupState = state.columnGroupState;
+        console.log('[🔍 GRIDSTATE-008] Stored pending column group state for later application:', this.pendingColumnGroupState);
       }
       
       // Store column groups for later use (they need to be applied via ColumnGroupService)
@@ -398,11 +416,9 @@ export class GridStateManager {
         this.applyGridOptions(state.gridOptions);
       }
       
-      // Apply scroll position (after a delay to let grid render)
+      // Apply scroll position immediately
       if (applyScrollPosition && state.scrollPosition) {
-        setTimeout(() => {
-          this.applyScrollPosition(state.scrollPosition!);
-        }, 100);
+        this.applyScrollPosition(state.scrollPosition!);
       }
       
       // Apply sidebar state
@@ -413,6 +429,17 @@ export class GridStateManager {
       // Refresh the grid
       if (animateChanges) {
         this.gridApi.refreshCells({ force: true });
+      }
+      
+      // Apply column group state LAST, after everything else
+      // This ensures columnDefs are fully set before applying group state
+      if (this.pendingColumnGroupState && this.pendingColumnGroupState.length > 0) {
+        console.log('[🔍 GRIDSTATE-009] Applying column group state LAST (delayed)');
+        setTimeout(() => {
+          this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
+          // Clear the pending state after applying
+          this.pendingColumnGroupState = null;
+        }, 500); // Delay to ensure columnDefs are fully applied
       }
       
       return true;
@@ -499,6 +526,18 @@ export class GridStateManager {
   private extractColumnGroupState(): Array<{ groupId: string; open: boolean }> {
     if (!this.gridApi) return [];
     
+    // Use the official AG-Grid API to get column group state
+    if (this.gridApi.getColumnGroupState) {
+      try {
+        const groupState = this.gridApi.getColumnGroupState();
+        console.log('[🔍 GRIDSTATE-001] Extracted column group state using getColumnGroupState:', groupState);
+        return groupState || [];
+      } catch (error) {
+        console.warn('[🔍 GRIDSTATE-002] Error calling getColumnGroupState:', error);
+      }
+    }
+    
+    // Fallback: try to determine group states manually
     const groups: Array<{ groupId: string; open: boolean }> = [];
     
     try {
@@ -773,8 +812,37 @@ export class GridStateManager {
     this.gridApi.applyColumnState({ state: columnState });
   }
   
-  // Note: Column group state is handled through column visibility in columnState
-  // No need for separate applyColumnGroupState method
+  private applyColumnGroupState(state: GridState): boolean {
+    if (!this.gridApi || !state.columnGroupState) return true;
+    
+    try {
+      // Use the official AG-Grid API to set column group state
+      if (this.gridApi.setColumnGroupState) {
+        console.log('[🔍 GRIDSTATE-003] Applying column group state using setColumnGroupState:', state.columnGroupState);
+        this.gridApi.setColumnGroupState(state.columnGroupState);
+        return true;
+      }
+      
+      // Fallback: use setColumnGroupOpened for each group
+      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
+        console.log('[🔍 GRIDSTATE-004] Applying column group state using setColumnGroupOpened');
+        state.columnGroupState.forEach((groupState: any) => {
+          try {
+            (this.gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
+          } catch (e) {
+            console.warn(`[🔍 GRIDSTATE-005] Could not set state for group ${groupState.groupId}:`, e);
+          }
+        });
+        return true;
+      }
+      
+      console.warn('[🔍 GRIDSTATE-006] No method available to apply column group state');
+      return false;
+    } catch (error) {
+      console.error('[🔍 GRIDSTATE-007] Error applying column group state:', error);
+      return false;
+    }
+  }
   
   private applyGroupingState(state: GridState) {
     if (!this.gridApi) return;

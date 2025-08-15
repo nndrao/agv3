@@ -46,10 +46,8 @@ export function useProfileOperations({
     profileName: '' 
   });
   
-  // Refs for tracking profile application
+  // Ref for tracking profile loading
   const isProfileLoadingRef = useRef(false);
-  const gridStateAppliedRef = useRef(false);
-  const columnGroupsAppliedRef = useRef(false);
   
   // Load profile with status indication
   const handleProfileLoad = useCallback(async (versionId: string) => {
@@ -64,19 +62,19 @@ export function useProfileOperations({
       // Show "Loading profile..." immediately
       isProfileLoadingRef.current = true;
       setProfileLoadingState({ isLoading: true, profileName: profile.name });
-      gridStateAppliedRef.current = false;
-      columnGroupsAppliedRef.current = false;
       
       try {
         await loadProfile(versionId);
-        // Profile is loaded but not yet applied to grid
-        // The actual application will happen via callbacks and column group effects
+        // Profile is loaded, clear the loading state after a short delay
+        // to allow the UI to update
+        setTimeout(() => {
+          isProfileLoadingRef.current = false;
+          setProfileLoadingState({ isLoading: false, profileName: '' });
+        }, 500);
       } catch (error) {
         console.error('[handleProfileLoad] Error loading profile:', error);
         isProfileLoadingRef.current = false;
         setProfileLoadingState({ isLoading: false, profileName: '' });
-        gridStateAppliedRef.current = false;
-        columnGroupsAppliedRef.current = false;
       }
     }
   }, [profiles, activeProfile, loadProfile]);
@@ -103,8 +101,16 @@ export function useProfileOperations({
     const gridOptionsToSave = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
     
     // Use unsaved column groups if available, otherwise use current profile column groups
+    // IMPORTANT: Preserve the isActive property when saving
     const columnGroupsToSave = unsavedColumnGroups || activeProfileData?.columnGroups || [];
-    setColumnGroups(columnGroupsToSave);
+    console.log('[🔍 SAVE-PROFILE-001] Column groups to save:', {
+      source: unsavedColumnGroups ? 'unsaved' : activeProfileData?.columnGroups ? 'profile' : 'empty',
+      count: columnGroupsToSave.length,
+      groups: JSON.stringify(columnGroupsToSave, null, 2)
+    });
+    
+    // Don't call setColumnGroups here as it may strip the isActive property
+    // The column groups will be stored directly in the profile
     
     // Preserve calculated columns from the current profile
     const calculatedColumnsToSave = activeProfileData?.calculatedColumns || [];
@@ -131,12 +137,18 @@ export function useProfileOperations({
       calculatedColumns: calculatedColumnsToSave
     };
     
+    console.log('[🔍 SAVE-PROFILE-002] Calling saveProfile with currentState:', {
+      columnGroups: currentState.columnGroups,
+      calculatedColumns: currentState.calculatedColumns?.length || 0
+    });
+    
     try {
       await saveProfile(currentState, saveAsNew, name);
+      console.log('[🔍 SAVE-PROFILE-003] saveProfile completed successfully');
       // Save completed successfully
       return true;
     } catch (error) {
-      console.error('[saveCurrentState] Error saving profile:', error);
+      console.error('[🔍 SAVE-PROFILE-004] Error saving profile:', error);
       return false;
     }
   }, [activeProfileData, extractGridState, extractFullGridState, setColumnGroups, saveProfile]);
@@ -202,21 +214,8 @@ export function useProfileOperations({
     await setActiveProfile(versionId);
   }, [setActiveProfile]);
   
-  // Update profile loading state when it completes
-  useEffect(() => {
-    const checkComplete = () => {
-      if (isProfileLoadingRef.current && 
-          gridStateAppliedRef.current && 
-          columnGroupsAppliedRef.current) {
-        isProfileLoadingRef.current = false;
-        gridStateAppliedRef.current = false;
-        columnGroupsAppliedRef.current = false;
-        setProfileLoadingState({ isLoading: false, profileName: '' });
-      }
-    };
-    
-    checkComplete();
-  }, []);
+  // Remove the effect that was checking for gridStateAppliedRef and columnGroupsAppliedRef
+  // since these refs are never actually set to true anywhere in the codebase
   
   return {
     profileLoadingState,

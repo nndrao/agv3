@@ -83,12 +83,20 @@ export function useDialogManagement({
   
   // Open Column Groups dialog
   const handleOpenColumnGroups = useCallback(async () => {
+    const groupsToPass = unsavedColumnGroups || currentColumnGroups;
+    console.log('[🔍 DIALOG-OPEN-001] Opening column groups dialog with:', {
+      hasUnsavedGroups: !!unsavedColumnGroups,
+      unsavedGroupsCount: unsavedColumnGroups?.length || 0,
+      currentGroupsCount: currentColumnGroups?.length || 0,
+      groupsToPass: groupsToPass
+    });
+    
     await dialogService.openDialog({
       name: `column-groups-${viewInstanceId}`,
       route: '/column-groups',
       data: {
         columnDefs: columnDefs,
-        currentGroups: unsavedColumnGroups || currentColumnGroups,
+        currentGroups: groupsToPass,
         profileName: activeProfileName
       },
       windowOptions: {
@@ -97,6 +105,12 @@ export function useDialogManagement({
         defaultHeight: 700
       },
       onApply: (data) => {
+        console.log('[🔍 DIALOG-APPLY-001] Column groups dialog apply callback:', {
+          hasData: !!data,
+          hasGroups: !!data?.groups,
+          groupsCount: data?.groups?.length || 0,
+          groups: data?.groups
+        });
         if (data?.groups) {
           onApplyColumnGroups(data.groups);
         }

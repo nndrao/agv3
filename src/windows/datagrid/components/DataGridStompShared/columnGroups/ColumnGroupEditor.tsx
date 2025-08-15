@@ -84,12 +84,14 @@ const extractGroupsFromDefs = (columnDefs: any[]): ColumnGroupDefinition[] => {
           headerName: colDef.headerName || 'Unnamed Group',
           children: childIds,
           openByDefault: colDef.openByDefault !== false,
-          columnStates
+          columnStates,
+          isActive: true  // Groups extracted from columnDefs are active by definition
         });
       }
     }
   });
   
+  console.log('[🔍 COLGROUP-EXTRACT-001] Extracted groups from columnDefs:', groups);
   return groups;
 };
 
@@ -139,36 +141,51 @@ const ColumnItem: React.FC<{
   );
 });
 
-// Group item component
+// Group item component with checkbox for active state
 const GroupItem: React.FC<{
   group: ColumnGroupDefinition;
   isSelected: boolean;
+  isActive: boolean;
   onSelect: () => void;
   onRemove: () => void;
-}> = React.memo(({ group, isSelected, onSelect, onRemove }) => {
+  onToggleActive: () => void;
+}> = React.memo(({ group, isSelected, isActive, onSelect, onRemove, onToggleActive }) => {
   return (
     <div
       className={cn(
-        "flex items-center justify-between p-3 rounded-md border cursor-pointer transition-colors",
+        "flex items-center gap-2 p-3 rounded-md border transition-colors",
         isSelected ? "bg-primary/10 border-primary" : "hover:bg-muted/50"
       )}
-      onClick={onSelect}
     >
-      <div className="flex-1">
-        <div className="font-medium">{group.headerName}</div>
-        <div className="text-xs text-muted-foreground">{group.children.length} columns</div>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 w-6 p-0"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
+      <input
+        type="checkbox"
+        checked={isActive}
+        onChange={onToggleActive}
+        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+        title="Apply this group to the grid"
+      />
+      <div 
+        className="flex-1 cursor-pointer flex items-center justify-between"
+        onClick={onSelect}
       >
-        <X className="h-4 w-4" />
-      </Button>
+        <div>
+          <div className="font-medium">{group.headerName}</div>
+          <div className="text-xs text-muted-foreground">
+            {group.children.length} columns {!isActive && '(not applied)'}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 });
@@ -190,9 +207,18 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   const [groupName, setGroupName] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [activeGroups, setActiveGroups] = useState<Set<string>>(new Set()); // Track which groups are active
   
   // Initialize from column definitions
   useEffect(() => {
+    console.log('[🔍 COLGROUP-EDITOR-001] Initializing with:', {
+      hasColumnDefs: !!columnDefs,
+      columnDefsCount: columnDefs?.length || 0,
+      hasCurrentGroups: !!currentGroups,
+      currentGroupsCount: currentGroups?.length || 0,
+      currentGroups: currentGroups
+    });
+    
     if (columnDefs && columnDefs.length > 0) {
       // Extract all columns
       const columns = extractColumnsFromDefs(columnDefs);
@@ -207,11 +233,40 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
       
       // Use provided current groups if available, otherwise extract from columnDefs
       if (currentGroups && currentGroups.length > 0) {
+        console.log('[🔍 COLGROUP-EDITOR-002] Setting groups from currentGroups');
         setGroups(currentGroups);
+        // Set active groups based on isActive property
+        const active = new Set<string>();
+        currentGroups.forEach(group => {
+          console.log('[🔍 COLGROUP-EDITOR-003] Group:', {
+            headerName: group.headerName,
+            isActive: group.isActive,
+            columnStates: group.columnStates,
+            children: group.children
+          });
+          if (group.isActive !== false) { // Default to active if not specified
+            active.add(group.groupId);
+          }
+          
+          // Restore column states for this group
+          if (group.columnStates) {
+            Object.entries(group.columnStates).forEach(([colId, state]) => {
+              if (state) {
+                states.set(colId, state);
+                console.log('[🔍 COLGROUP-EDITOR-005] Restored column state:', colId, '=', state);
+              }
+            });
+          }
+        });
+        setActiveGroups(active);
+        console.log('[🔍 COLGROUP-EDITOR-004] Active groups set:', Array.from(active));
       } else {
         // Extract existing groups from column definitions
         const existingGroups = extractGroupsFromDefs(columnDefs);
         setGroups(existingGroups);
+        // All extracted groups are considered active by default
+        const active = new Set<string>(existingGroups.map(g => g.groupId));
+        setActiveGroups(active);
       }
     }
   }, [columnDefs, currentGroups]);
@@ -267,6 +322,12 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
       // undefined state means no columnGroupShow attribute
     });
     
+    console.log('[🔍 COLGROUP-CREATE] Creating group with columnStates:', {
+      groupName,
+      selectedColumns: Array.from(selectedColumns),
+      columnStates
+    });
+    
     const newGroup: ColumnGroupDefinition = {
       groupId: `group_${Date.now()}`,
       headerName: groupName,
@@ -276,6 +337,8 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     };
     
     setGroups(prev => [...prev, newGroup]);
+    // Add new group to active groups by default
+    setActiveGroups(prev => new Set([...prev, newGroup.groupId]));
     setGroupName('');
     setSelectedColumns(new Set());
   }, [groupName, selectedColumns, columnOpenStates]);
@@ -284,6 +347,13 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   const handleGroupSelect = useCallback((groupId: string) => {
     const group = groups.find(g => g.groupId === groupId);
     if (!group) return;
+    
+    console.log('[🔍 COLGROUP-EDIT-SELECT] Selecting group for edit:', {
+      groupId,
+      headerName: group.headerName,
+      columnStates: group.columnStates,
+      children: group.children
+    });
     
     setSelectedGroupId(groupId);
     setGroupName(group.headerName);
@@ -295,7 +365,9 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     group.children.forEach(colId => {
       // Use the stored column state or default to 'open'
       const columnState = group.columnStates?.[colId];
-      newStates.set(colId, columnState === 'open' ? 'open' : columnState === 'closed' ? 'closed' : 'undefined');
+      const stateToSet = columnState === 'open' ? 'open' : columnState === 'closed' ? 'closed' : 'undefined';
+      newStates.set(colId, stateToSet);
+      console.log('[🔍 COLGROUP-EDIT-STATE] Set column state:', colId, '=', stateToSet, '(from:', columnState, ')');
     });
     setColumnOpenStates(newStates);
   }, [groups, columnOpenStates]);
@@ -312,6 +384,13 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
         columnStates[colId] = state === 'open' ? 'open' : 'closed';
       }
       // undefined state means no columnGroupShow attribute
+    });
+    
+    console.log('[🔍 COLGROUP-UPDATE] Updating group with columnStates:', {
+      groupId: selectedGroupId,
+      groupName,
+      selectedColumns: Array.from(selectedColumns),
+      columnStates
     });
     
     setGroups(prev => prev.map(group => {
@@ -341,9 +420,27 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     setSelectedColumns(new Set());
   }, []);
   
+  // Toggle group active state
+  const handleToggleGroupActive = useCallback((groupId: string) => {
+    setActiveGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, []);
+  
   // Remove group
   const handleRemoveGroup = useCallback((groupId: string) => {
     setGroups(prev => prev.filter(g => g.groupId !== groupId));
+    setActiveGroups(prev => {
+      const next = new Set(prev);
+      next.delete(groupId);
+      return next;
+    });
     
     // If we're editing this group, cancel edit mode
     if (selectedGroupId === groupId) {
@@ -353,9 +450,25 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   
   // Apply changes
   const handleApply = useCallback(() => {
-    onApply(groups);
+    // Mark groups with their active state before applying
+    const groupsWithActiveState = groups.map(group => ({
+      ...group,
+      isActive: activeGroups.has(group.groupId)
+    }));
+    
+    console.log('[🔍 COLGROUP-EDITOR-APPLY] Applying groups with states:', 
+      groupsWithActiveState.map(g => ({
+        groupId: g.groupId,
+        headerName: g.headerName,
+        isActive: g.isActive,
+        columnStates: g.columnStates,
+        children: g.children
+      }))
+    );
+    
+    onApply(groupsWithActiveState);
     onClose();
-  }, [groups, onApply, onClose]);
+  }, [groups, activeGroups, onApply, onClose]);
   
   // Reset all
   const handleResetAll = useCallback(() => {
@@ -378,7 +491,14 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
         {/* Left Panel - Existing Groups */}
         <div className="w-2/5 border-r flex flex-col">
           <div className="px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
-            <h3 className="font-medium">Column Groups</h3>
+            <div>
+              <h3 className="font-medium">Column Groups</h3>
+              {groups.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {activeGroups.size} of {groups.length} active
+                </p>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -402,8 +522,10 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
                       key={group.groupId}
                       group={group}
                       isSelected={selectedGroupId === group.groupId}
+                      isActive={activeGroups.has(group.groupId)}
                       onSelect={() => handleGroupSelect(group.groupId)}
                       onRemove={() => handleRemoveGroup(group.groupId)}
+                      onToggleActive={() => handleToggleGroupActive(group.groupId)}
                     />
                   ))}
                 </div>

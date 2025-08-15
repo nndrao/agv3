@@ -8,6 +8,7 @@ export interface ColumnGroupDefinition {
   openState?: 'open' | 'closed' | 'undefined'; // Group open state
   // Map of column ID to columnGroupShow value
   columnStates?: Record<string, 'open' | 'closed' | undefined>;
+  isActive?: boolean; // Whether this group is actively applied to the grid
 }
 
 export interface ColumnDefinition {

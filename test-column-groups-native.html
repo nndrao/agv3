@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Column Groups - Native AG-Grid Behavior</title>
+    <script src="https://unpkg.com/ag-grid-community/dist/ag-grid-community.noStyle.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://unpkg.com/ag-grid-community/styles/ag-theme-quartz.css">
+    <style>
+        body {
+            margin: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #myGrid {
+            height: 500px;
+            width: 100%;
+        }
+        .info {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Testing Column Groups with columnGroupShow</h1>
+    
+    <div class="info">
+        <h3>Test Setup:</h3>
+        <ul>
+            <li>Group 1: "Dimensions" - Contains Width (show: open) and Height (show: closed)</li>
+            <li>Group 2: "Details" - Contains Status (no show) and Priority (show: open)</li>
+            <li>Expected: Columns with 'open' only visible when group expanded, 'closed' only when collapsed</li>
+        </ul>
+    </div>
+
+    <div style="margin: 20px 0;">
+        <button onclick="toggleGroup('dimensions')">Toggle Dimensions Group</button>
+        <button onclick="toggleGroup('details')">Toggle Details Group</button>
+        <button onclick="getGroupState()">Get Group State</button>
+        <button onclick="checkVisibility()">Check Column Visibility</button>
+    </div>
+
+    <div id="myGrid" class="ag-theme-quartz"></div>
+
+    <div id="output" class="info" style="margin-top: 20px;">
+        <h3>Output:</h3>
+        <pre id="outputText">Click buttons to see results...</pre>
+    </div>
+
+    <script>
+        let gridApi;
+        let gridOptions;
+
+        // Test data
+        const rowData = [
+            { id: 1, width: 100, height: 200, status: 'Active', priority: 'High', value: 1000 },
+            { id: 2, width: 150, height: 250, status: 'Pending', priority: 'Low', value: 2000 },
+            { id: 3, width: 200, height: 300, status: 'Complete', priority: 'Medium', value: 3000 }
+        ];
+
+        // Column definitions with columnGroupShow
+        const columnDefs = [
+            { 
+                field: 'id', 
+                headerName: 'ID', 
+                width: 80 
+            },
+            {
+                groupId: 'dimensions',
+                headerName: 'Dimensions',
+                openByDefault: true,
+                children: [
+                    { 
+                        field: 'width', 
+                        headerName: 'Width',
+                        columnGroupShow: 'open'  // Only show when group is open
+                    },
+                    { 
+                        field: 'height', 
+                        headerName: 'Height',
+                        columnGroupShow: 'closed'  // Only show when group is closed
+                    }
+                ]
+            },
+            {
+                groupId: 'details',
+                headerName: 'Details',
+                openByDefault: false,
+                children: [
+                    { 
+                        field: 'status', 
+                        headerName: 'Status'
+                        // No columnGroupShow - always visible
+                    },
+                    { 
+                        field: 'priority', 
+                        headerName: 'Priority',
+                        columnGroupShow: 'open'  // Only show when group is open
+                    }
+                ]
+            },
+            { 
+                field: 'value', 
+                headerName: 'Value' 
+            }
+        ];
+
+        // Grid options
+        gridOptions = {
+            columnDefs: columnDefs,
+            rowData: rowData,
+            defaultColDef: {
+                flex: 1,
+                minWidth: 100,
+                resizable: true
+            },
+            onGridReady: (params) => {
+                gridApi = params.api;
+                log('Grid ready - Testing native AG-Grid columnGroupShow behavior');
+                checkVisibility();
+            },
+            onColumnGroupOpened: (event) => {
+                const group = event.columnGroup;
+                log(`Group "${group.groupId}" ${group.expanded ? 'expanded' : 'collapsed'}`);
+                setTimeout(() => checkVisibility(), 100);
+            }
+        };
+
+        // Initialize grid
+        document.addEventListener('DOMContentLoaded', () => {
+            const gridDiv = document.querySelector('#myGrid');
+            new agGrid.Grid(gridDiv, gridOptions);
+        });
+
+        // Helper functions
+        function toggleGroup(groupId) {
+            if (!gridApi) return;
+            
+            const groupState = gridApi.getColumnGroupState();
+            const group = groupState.find(g => g.groupId === groupId);
+            
+            if (group) {
+                gridApi.setColumnGroupOpened(groupId, !group.open);
+                log(`Toggled group "${groupId}" to ${!group.open ? 'open' : 'closed'}`);
+            }
+        }
+
+        function getGroupState() {
+            if (!gridApi) return;
+            
+            const state = gridApi.getColumnGroupState();
+            log('Column Group State:', JSON.stringify(state, null, 2));
+        }
+
+        function checkVisibility() {
+            if (!gridApi) return;
+            
+            const columns = gridApi.getColumns();
+            const visibility = {};
+            
+            columns.forEach(col => {
+                const colDef = col.getColDef();
+                const colId = colDef.field || colDef.colId;
+                visibility[colId] = col.isVisible();
+            });
+            
+            // Get group states
+            const groupState = gridApi.getColumnGroupState();
+            
+            log('Column Visibility Check:', {
+                groups: groupState,
+                columns: visibility,
+                expected: {
+                    dimensions_open: { width: 'visible', height: 'hidden' },
+                    dimensions_closed: { width: 'hidden', height: 'visible' },
+                    details_open: { status: 'visible', priority: 'visible' },
+                    details_closed: { status: 'visible', priority: 'hidden' }
+                }
+            });
+        }
+
+        function log(message, data) {
+            const output = document.getElementById('outputText');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let text = `[${timestamp}] ${message}`;
+            if (data) {
+                text += '\n' + (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+            }
+            
+            output.textContent = text + '\n\n' + output.textContent;
+            
+            // Limit output
+            const lines = output.textContent.split('\n');
+            if (lines.length > 50) {
+                output.textContent = lines.slice(0, 50).join('\n');
+            }
+        }
+    </script>
+</body>
+</html>
