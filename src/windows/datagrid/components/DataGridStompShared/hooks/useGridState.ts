@@ -230,9 +230,35 @@ export function useGridState(
     // Set GridApi in state manager
     stateManagerRef.current.setGridApi(params.api);
     
+    // Listen for column state changes to track when they need to be saved
+    // This helps debug column state persistence issues
+    params.api.addEventListener('columnMoved', () => {
+      if (!isSavingProfileRef?.current) {
+        console.log('[useGridState] Column moved - column state changed');
+      }
+    });
+    
+    params.api.addEventListener('columnResized', () => {
+      if (!isSavingProfileRef?.current) {
+        console.log('[useGridState] Column resized - column state changed');
+      }
+    });
+    
+    params.api.addEventListener('columnVisible', () => {
+      if (!isSavingProfileRef?.current) {
+        console.log('[useGridState] Column visibility changed - column state changed');
+      }
+    });
+    
+    params.api.addEventListener('columnPinned', () => {
+      if (!isSavingProfileRef?.current) {
+        console.log('[useGridState] Column pinned - column state changed');
+      }
+    });
+    
     // Profile application is now handled by useProfileApplication hook in the main component
     // No timeouts, no complex logic here
-  }, []);
+  }, [isSavingProfileRef]);
   
   // Profile application is now handled by useProfileApplication hook
   // This effect is no longer needed

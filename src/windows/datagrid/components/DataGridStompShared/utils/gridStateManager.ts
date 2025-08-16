@@ -809,7 +809,37 @@ export class GridStateManager {
   
   private applyColumnState(columnState: ColumnState[]) {
     if (!this.gridApi) return;
-    this.gridApi.applyColumnState({ state: columnState });
+    
+    // Use requestAnimationFrame to ensure the grid has rendered
+    requestAnimationFrame(() => {
+      // Use timeout to ensure AG-Grid has fully processed any columnDefs changes
+      setTimeout(() => {
+        console.log('[GridStateManager] Applying column state with improved timing');
+        
+        // Verify columns exist before applying state
+        const allColumns = this.gridApi!.getColumns();
+        if (allColumns && allColumns.length > 0) {
+          this.gridApi!.applyColumnState({ 
+            state: columnState,
+            applyOrder: true,
+            defaultState: { width: null }
+          });
+          console.log('[GridStateManager] Column state applied successfully');
+        } else {
+          console.warn('[GridStateManager] No columns available yet, deferring column state application');
+          // Try again after a longer delay
+          setTimeout(() => {
+            if (this.gridApi) {
+              this.gridApi.applyColumnState({ 
+                state: columnState,
+                applyOrder: true,
+                defaultState: { width: null }
+              });
+            }
+          }, 500);
+        }
+      }, 200);
+    });
   }
   
   private applyColumnGroupState(state: GridState): boolean {

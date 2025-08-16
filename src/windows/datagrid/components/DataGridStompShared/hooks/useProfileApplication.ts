@@ -84,6 +84,45 @@ export function useProfileApplication({
   }, [originalColumnDefsRef]);
   
   /**
+   * Verify column state was properly applied
+   */
+  const verifyColumnState = useCallback((expectedState: any[]) => {
+    const gridApi = gridApiRef.current;
+    if (!gridApi) return false;
+    
+    const currentState = gridApi.getColumnState();
+    if (!currentState) return false;
+    
+    // Check if key properties match
+    let matches = true;
+    expectedState.forEach(expected => {
+      const current = currentState.find((c: any) => c.colId === expected.colId);
+      if (current) {
+        // Check width persistence
+        if (expected.width && Math.abs(current.width - expected.width) > 1) {
+          console.warn(`[ProfileApplication] Column width mismatch for ${expected.colId}: expected ${expected.width}, got ${current.width}`);
+          matches = false;
+        }
+        // Check order persistence (via rowIndex)
+        if (expected.rowIndex !== undefined && current.rowIndex !== expected.rowIndex) {
+          console.warn(`[ProfileApplication] Column order mismatch for ${expected.colId}: expected index ${expected.rowIndex}, got ${current.rowIndex}`);
+          matches = false;
+        }
+        // Check visibility persistence
+        if (expected.hide !== undefined && current.hide !== expected.hide) {
+          console.warn(`[ProfileApplication] Column visibility mismatch for ${expected.colId}: expected hide=${expected.hide}, got hide=${current.hide}`);
+          matches = false;
+        }
+      } else {
+        console.warn(`[ProfileApplication] Column ${expected.colId} not found in current state`);
+        matches = false;
+      }
+    });
+    
+    return matches;
+  }, []);
+  
+  /**
    * Apply grid options from profile
    */
   const applyGridOptions = useCallback((gridOptions: Record<string, any> | undefined) => {
@@ -275,11 +314,13 @@ export function useProfileApplication({
     });
     
     // Step 6: Apply grid state (filters, sorts, column state, etc.)
+    // We need to apply column state after columnDefs are set, especially when we have column groups
     if (profile.gridState) {
       console.log('[ProfileApplication] Applying grid state');
       
+      // First apply all non-column state
       gridStateManagerRef.current.applyState(profile.gridState, {
-        applyColumnState: true,
+        applyColumnState: false, // Will apply this separately
         applyFilters: true,
         applySorting: true,
         applyGrouping: true,
@@ -290,14 +331,88 @@ export function useProfileApplication({
         applySideBar: true,
         rowIdField: providerConfig?.keyColumn || 'id'
       });
+      
+      // Now apply column state after columnDefs are fully processed
+      // Use requestAnimationFrame to ensure the grid has rendered with new columnDefs
+      if (profile.gridState.columnState && profile.gridState.columnState.length > 0) {
+        // Wait for the next animation frame, then apply column state
+        requestAnimationFrame(() => {
+          // Use another timeout to ensure AG-Grid has fully processed the columnDefs
+          setTimeout(() => {
+            console.log('[ProfileApplication] Applying column state (after animation frame):', profile.gridState?.columnState);
+            
+            // Verify columns exist before applying state
+            const allColumns = gridApi.getColumns();
+            if (allColumns && allColumns.length > 0) {
+              gridApi.applyColumnState({
+                state: profile.gridState.columnState,
+                applyOrder: true,
+                defaultState: { width: null }
+              });
+              console.log('[ProfileApplication] Column state applied successfully');
+              
+              // Verify the state was applied correctly
+              setTimeout(() => {
+                const isValid = verifyColumnState(profile.gridState.columnState);
+                if (!isValid) {
+                  console.warn('[ProfileApplication] Column state verification failed, some properties may not have been applied correctly');
+                } else {
+                  console.log('[ProfileApplication] Column state verified successfully');
+                }
+              }, 100);
+            } else {
+              console.warn('[ProfileApplication] No columns available yet, deferring column state application');
+              // Try again after a longer delay
+              setTimeout(() => {
+                gridApi.applyColumnState({
+                  state: profile.gridState.columnState,
+                  applyOrder: true,
+                  defaultState: { width: null }
+                });
+              }, 500);
+            }
+          }, 200); // Increased delay for column groups processing
+        });
+      }
     } else if (profile.columnState || profile.filterModel) {
       // Fallback to legacy properties
       console.log('[ProfileApplication] Applying legacy grid state');
       
       if (profile.columnState && profile.columnState.length > 0) {
-        gridApi.applyColumnState({
-          state: profile.columnState,
-          applyOrder: true
+        // Apply column state with proper timing for legacy format too
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            console.log('[ProfileApplication] Applying legacy column state (after animation frame):', profile.columnState);
+            
+            // Verify columns exist before applying state
+            const allColumns = gridApi.getColumns();
+            if (allColumns && allColumns.length > 0) {
+              gridApi.applyColumnState({
+                state: profile.columnState,
+                applyOrder: true
+              });
+              console.log('[ProfileApplication] Legacy column state applied successfully');
+              
+              // Verify the state was applied correctly
+              setTimeout(() => {
+                const isValid = verifyColumnState(profile.columnState);
+                if (!isValid) {
+                  console.warn('[ProfileApplication] Legacy column state verification failed, some properties may not have been applied correctly');
+                } else {
+                  console.log('[ProfileApplication] Legacy column state verified successfully');
+                }
+              }, 100);
+            } else {
+              console.warn('[ProfileApplication] No columns available yet, deferring legacy column state application');
+              // Try again after a longer delay
+              setTimeout(() => {
+                gridApi.applyColumnState({
+                  state: profile.columnState,
+                  applyOrder: true
+                });
+              }, 500);
+            }
+          }, 200);
         });
       }
       
@@ -346,7 +461,7 @@ export function useProfileApplication({
     gridApi.refreshCells({ force: true });
     
     console.log('[ProfileApplication] Profile application complete');
-  }, [resetGrid, applyGridOptions, buildColumnDefs, originalColumnDefsRef, providerConfig]);
+  }, [resetGrid, applyGridOptions, buildColumnDefs, originalColumnDefsRef, providerConfig, verifyColumnState]);
   
   return {
     applyProfile,
