@@ -431,15 +431,13 @@ export class GridStateManager {
         this.gridApi.refreshCells({ force: true });
       }
       
-      // Apply column group state LAST, after everything else
-      // This ensures columnDefs are fully set before applying group state
+      // Apply column group state if pending
+      // This is now handled synchronously in the new profile application flow
       if (this.pendingColumnGroupState && this.pendingColumnGroupState.length > 0) {
-        console.log('[🔍 GRIDSTATE-009] Applying column group state LAST (delayed)');
-        setTimeout(() => {
-          this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
-          // Clear the pending state after applying
-          this.pendingColumnGroupState = null;
-        }, 500); // Delay to ensure columnDefs are fully applied
+        console.log('[🔍 GRIDSTATE-009] Applying pending column group state');
+        this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
+        // Clear the pending state after applying
+        this.pendingColumnGroupState = null;
       }
       
       return true;
@@ -810,36 +808,17 @@ export class GridStateManager {
   private applyColumnState(columnState: ColumnState[]) {
     if (!this.gridApi) return;
     
-    // Use requestAnimationFrame to ensure the grid has rendered
-    requestAnimationFrame(() => {
-      // Use timeout to ensure AG-Grid has fully processed any columnDefs changes
-      setTimeout(() => {
-        console.log('[GridStateManager] Applying column state with improved timing');
-        
-        // Verify columns exist before applying state
-        const allColumns = this.gridApi!.getColumns();
-        if (allColumns && allColumns.length > 0) {
-          this.gridApi!.applyColumnState({ 
-            state: columnState,
-            applyOrder: true,
-            defaultState: { width: null }
-          });
-          console.log('[GridStateManager] Column state applied successfully');
-        } else {
-          console.warn('[GridStateManager] No columns available yet, deferring column state application');
-          // Try again after a longer delay
-          setTimeout(() => {
-            if (this.gridApi) {
-              this.gridApi.applyColumnState({ 
-                state: columnState,
-                applyOrder: true,
-                defaultState: { width: null }
-              });
-            }
-          }, 500);
-        }
-      }, 200);
+    console.log('[GridStateManager] Applying column state synchronously');
+    
+    // Apply column state directly without delays
+    // Trust that AG-Grid can handle it properly at this point
+    this.gridApi.applyColumnState({ 
+      state: columnState,
+      applyOrder: true,
+      defaultState: { width: null }
     });
+    
+    console.log('[GridStateManager] Column state applied');
   }
   
   private applyColumnGroupState(state: GridState): boolean {

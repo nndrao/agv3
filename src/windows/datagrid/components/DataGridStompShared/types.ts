@@ -53,6 +53,10 @@ export interface DataGridStompSharedProfile extends BaseProfile {
 
   // User-defined calculated/scratch columns
   calculatedColumns?: CalculatedColumnDefinition[];
+  
+  // Custom column styles (CSS styles per column)
+  // Key is column field/colId, value is CSS properties object
+  columnStyles?: Record<string, any>;
 }
 
 // Snapshot mode types

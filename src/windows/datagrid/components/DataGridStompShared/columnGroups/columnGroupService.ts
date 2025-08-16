@@ -3,44 +3,6 @@ import { ColDef, ColGroupDef } from 'ag-grid-community';
 
 export class ColumnGroupService {
   /**
-   * Apply column group state after a delay to ensure columnDefs are fully applied
-   * This method should be called LAST after all other grid state has been applied
-   */
-  static applyColumnGroupStateDelayed(
-    gridApi: any, 
-    groupState: Array<{ groupId: string; open: boolean }>,
-    delay: number = 500
-  ): void {
-    setTimeout(() => {
-      console.log('[🔍 COLGROUP-STATE-001] Applying column group state (delayed):', groupState);
-      
-      // Use the official AG-Grid API to set column group state
-      if (gridApi.setColumnGroupState) {
-        try {
-          gridApi.setColumnGroupState(groupState);
-          console.log('[🔍 COLGROUP-STATE-002] Applied column group state using setColumnGroupState');
-          
-          // Verify the state was applied
-          const newState = gridApi.getColumnGroupState();
-          console.log('[🔍 COLGROUP-STATE-003] Column group state after application:', newState);
-        } catch (e) {
-          console.warn('[🔍 COLGROUP-STATE-004] Error applying column group state:', e);
-        }
-      } else if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
-        // Fallback to individual group opening
-        console.log('[🔍 COLGROUP-STATE-005] Using fallback setColumnGroupOpened');
-        groupState.forEach((state: any) => {
-          try {
-            (gridApi as any).setColumnGroupOpened(state.groupId, state.open);
-          } catch (e) {
-            console.warn(`[🔍 COLGROUP-STATE-006] Could not set state for group ${state.groupId}:`, e);
-          }
-        });
-      }
-    }, delay);
-  }
-  
-  /**
    * Apply column groups to AG-Grid
    */
   static applyColumnGroups(
@@ -126,41 +88,9 @@ export class ColumnGroupService {
     // Let AG-Grid handle column group expand/collapse natively
     // The columnGroupShow property on columns will be respected automatically
     
-    // Restore column state (widths, order, visibility) after applying column groups
-    setTimeout(() => {
-      if (savedColumnState && savedColumnState.length > 0) {
-        
-        gridApi.applyColumnState({
-          state: savedColumnState,
-          applyOrder: true,
-          defaultState: { width: null }
-        });
-        
-      }
-      
-      // DO NOT apply column group state here - it will be applied AFTER grid state
-      // The column group state needs to be applied LAST, after all columnDefs updates
-      // Store the pending state but don't apply it yet
-      setTimeout(() => {
-        console.log('[🔍 COLGROUP-SERVICE-009] Column groups applied, state will be restored later');
-        
-        // Check if we have pending column group state from GridStateManager
-        if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
-          const pendingGroupState = gridStateManager.getPendingColumnGroupState();
-          if (pendingGroupState && pendingGroupState.length > 0) {
-            console.log('[🔍 COLGROUP-SERVICE-010] Pending column group state exists, will be applied after grid state:', pendingGroupState);
-            // DO NOT apply or clear the pending state here
-            // It will be applied by the grid state manager AFTER all other state
-          } else {
-            console.log('[🔍 COLGROUP-SERVICE-011] No pending column group state');
-          }
-        }
-        
-        // Get and log the current column group state
-        const currentGroupState = gridApi.getColumnGroupState ? gridApi.getColumnGroupState() : [];
-        console.log('[🔍 COLGROUP-SERVICE-012] Current column group state:', currentGroupState);
-      }, 200); // Give time for column state to be fully applied
-    }, 100); // Small delay to let grid apply new column defs first
+    // Column state and group state are now handled by the profile application flow
+    // No need for delays here - the new architecture handles this synchronously
+    console.log('[🔍 COLGROUP-SERVICE-009] Column groups applied successfully');
     
     // Force grid to redraw columns
     if (columnApi) {
