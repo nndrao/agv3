@@ -3,21 +3,23 @@ import { dialogService } from '@/services/openfin/OpenFinDialogService';
 import { useToast } from '@/hooks/use-toast';
 import { ConditionalFormattingRule as ConditionalFormattingRuleRT } from '@/utils/conditionalFormattingRuntime';
 import { CalculatedColumnDefinition } from '../types';
+import { GridColumnGroupStorage } from '../columnGroups';
 
 interface DialogManagementProps {
   viewInstanceId: string;
   activeProfileName?: string;
   columnDefs: any[];
   unsavedGridOptions: Record<string, any> | null;
-  unsavedColumnGroups: any[] | null;
+  unsavedColumnGroups: string[] | null; // Now stores group IDs
   currentGridOptions: Record<string, any>;
-  currentColumnGroups?: any[];
+  currentColumnGroups?: string[]; // Now stores group IDs
   conditionalFormattingRules: ConditionalFormattingRuleRT[];
   onApplyGridOptions: (options: Record<string, any>) => void;
-  onApplyColumnGroups: (groups: any[]) => void;
+  onApplyColumnGroups: (activeGroupIds: string[], allGroups: any[]) => void; // Updated signature
   onApplyConditionalFormatting: (rules: ConditionalFormattingRuleRT[]) => void;
   onApplyCalculatedColumns?: (columns: CalculatedColumnDefinition[]) => void;
   currentCalculatedColumns?: CalculatedColumnDefinition[];
+  gridInstanceId: string; // Required for grid-level storage
 }
 
 export function useDialogManagement({
@@ -33,7 +35,8 @@ export function useDialogManagement({
   onApplyColumnGroups,
   onApplyConditionalFormatting,
   onApplyCalculatedColumns,
-  currentCalculatedColumns
+  currentCalculatedColumns,
+  gridInstanceId
 }: DialogManagementProps) {
   const { toast } = useToast();
   
@@ -83,12 +86,16 @@ export function useDialogManagement({
   
   // Open Column Groups dialog
   const handleOpenColumnGroups = useCallback(async () => {
-    const groupsToPass = unsavedColumnGroups || currentColumnGroups;
+    // Load all available groups from grid-level storage
+    const allGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+    const activeGroupIds = unsavedColumnGroups || currentColumnGroups || [];
+    
     console.log('[🔍 DIALOG-OPEN-001] Opening column groups dialog with:', {
       hasUnsavedGroups: !!unsavedColumnGroups,
       unsavedGroupsCount: unsavedColumnGroups?.length || 0,
       currentGroupsCount: currentColumnGroups?.length || 0,
-      groupsToPass: groupsToPass
+      allGroupsCount: allGroups.length,
+      activeGroupIds: activeGroupIds
     });
     
     await dialogService.openDialog({
@@ -96,8 +103,10 @@ export function useDialogManagement({
       route: '/column-groups',
       data: {
         columnDefs: columnDefs,
-        currentGroups: groupsToPass,
-        profileName: activeProfileName
+        currentGroups: allGroups, // All available groups
+        activeGroupIds: activeGroupIds, // Currently active group IDs
+        profileName: activeProfileName,
+        gridInstanceId: gridInstanceId
       },
       windowOptions: {
         ...windowOptions,
@@ -107,16 +116,17 @@ export function useDialogManagement({
       onApply: (data) => {
         console.log('[🔍 DIALOG-APPLY-001] Column groups dialog apply callback:', {
           hasData: !!data,
-          hasGroups: !!data?.groups,
-          groupsCount: data?.groups?.length || 0,
-          groups: data?.groups
+          hasActiveGroupIds: !!data?.activeGroupIds,
+          hasAllGroups: !!data?.allGroups,
+          activeGroupIdsCount: data?.activeGroupIds?.length || 0,
+          allGroupsCount: data?.allGroups?.length || 0
         });
-        if (data?.groups) {
-          onApplyColumnGroups(data.groups);
+        if (data?.activeGroupIds && data?.allGroups) {
+          onApplyColumnGroups(data.activeGroupIds, data.allGroups);
         }
       }
     });
-  }, [columnDefs, unsavedColumnGroups, currentColumnGroups, activeProfileName, viewInstanceId, windowOptions, onApplyColumnGroups]);
+  }, [columnDefs, unsavedColumnGroups, currentColumnGroups, activeProfileName, viewInstanceId, windowOptions, onApplyColumnGroups, gridInstanceId]);
   
   // Open Conditional Formatting dialog
   const handleOpenConditionalFormatting = useCallback(async () => {

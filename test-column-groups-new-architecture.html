@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Column Groups New Architecture Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { background-color: #e7f5e7; }
+        .fail { background-color: #fce4e4; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Column Groups New Architecture Test</h1>
+    <p>This tests the new grid-level column group storage with profile-level references.</p>
+
+    <div class="test-case">
+        <h2>Test 1: Grid-Level Storage</h2>
+        <button onclick="testGridLevelStorage()">Run Test</button>
+        <pre id="test1-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: Profile-Level References</h2>
+        <button onclick="testProfileReferences()">Run Test</button>
+        <pre id="test2-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: Cross-Profile Sharing</h2>
+        <button onclick="testCrossProfileSharing()">Run Test</button>
+        <pre id="test3-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 4: Migration from Old Format</h2>
+        <button onclick="testMigration()">Run Test</button>
+        <pre id="test4-result"></pre>
+    </div>
+
+    <script>
+        const GRID_INSTANCE_ID = 'test-grid-123';
+        const STORAGE_KEY = `grid_column_groups_${GRID_INSTANCE_ID}`;
+
+        // Mock column group definitions
+        const mockGroups = [
+            {
+                groupId: 'group_basic_info',
+                headerName: 'Basic Information',
+                children: ['name', 'age', 'email'],
+                openByDefault: true,
+                columnStates: {
+                    'name': 'open',
+                    'age': 'closed',
+                    'email': undefined
+                },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                description: 'Basic user information'
+            },
+            {
+                groupId: 'group_address',
+                headerName: 'Address Details',
+                children: ['street', 'city', 'country'],
+                openByDefault: false,
+                columnStates: {
+                    'street': 'open',
+                    'city': 'open',
+                    'country': 'closed'
+                },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                description: 'User address information'
+            },
+            {
+                groupId: 'group_work',
+                headerName: 'Work Information',
+                children: ['company', 'position', 'salary'],
+                openByDefault: true,
+                columnStates: {
+                    'company': undefined,
+                    'position': 'open',
+                    'salary': 'closed'
+                },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                description: 'Employment details'
+            }
+        ];
+
+        function testGridLevelStorage() {
+            const result = document.getElementById('test1-result');
+            
+            try {
+                // Clear any existing data
+                localStorage.removeItem(STORAGE_KEY);
+                
+                // Save groups to grid-level storage
+                const config = {
+                    version: '2.0.0',
+                    groups: mockGroups,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(config, null, 2));
+                
+                // Verify storage
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                
+                let output = 'Grid-level storage test:\n\n';
+                output += `✓ Saved ${saved.groups.length} groups to grid storage\n`;
+                output += `✓ Storage key: ${STORAGE_KEY}\n`;
+                output += `✓ Version: ${saved.version}\n\n`;
+                
+                output += 'Stored groups:\n';
+                saved.groups.forEach(group => {
+                    output += `  - ${group.headerName} (${group.groupId})\n`;
+                    output += `    Children: ${group.children.join(', ')}\n`;
+                    output += `    Description: ${group.description || 'None'}\n`;
+                });
+                
+                result.textContent = output;
+                result.parentElement.classList.add('pass');
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testProfileReferences() {
+            const result = document.getElementById('test2-result');
+            
+            try {
+                // Create mock profiles with group ID references
+                const profile1 = {
+                    name: 'Profile 1',
+                    columnGroups: ['group_basic_info', 'group_work'], // Only group IDs
+                    selectedProviderId: 'provider1',
+                    autoConnect: true,
+                    sidebarVisible: false
+                };
+                
+                const profile2 = {
+                    name: 'Profile 2',
+                    columnGroups: ['group_address'], // Different group selection
+                    selectedProviderId: 'provider1',
+                    autoConnect: true,
+                    sidebarVisible: true
+                };
+                
+                // Save profiles
+                localStorage.setItem('test_profile_1', JSON.stringify(profile1));
+                localStorage.setItem('test_profile_2', JSON.stringify(profile2));
+                
+                let output = 'Profile-level references test:\n\n';
+                output += `Profile 1 active groups: ${profile1.columnGroups.join(', ')}\n`;
+                output += `Profile 2 active groups: ${profile2.columnGroups.join(', ')}\n\n`;
+                
+                // Simulate loading groups for each profile
+                const gridGroups = JSON.parse(localStorage.getItem(STORAGE_KEY)).groups;
+                
+                output += 'Profile 1 resolved groups:\n';
+                profile1.columnGroups.forEach(groupId => {
+                    const group = gridGroups.find(g => g.groupId === groupId);
+                    if (group) {
+                        output += `  ✓ ${group.headerName} (${group.children.length} columns)\n`;
+                    } else {
+                        output += `  ✗ Group not found: ${groupId}\n`;
+                    }
+                });
+                
+                output += '\nProfile 2 resolved groups:\n';
+                profile2.columnGroups.forEach(groupId => {
+                    const group = gridGroups.find(g => g.groupId === groupId);
+                    if (group) {
+                        output += `  ✓ ${group.headerName} (${group.children.length} columns)\n`;
+                    } else {
+                        output += `  ✗ Group not found: ${groupId}\n`;
+                    }
+                });
+                
+                result.textContent = output;
+                result.parentElement.classList.add('pass');
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testCrossProfileSharing() {
+            const result = document.getElementById('test3-result');
+            
+            try {
+                // Load existing profiles
+                const profile1 = JSON.parse(localStorage.getItem('test_profile_1'));
+                const profile2 = JSON.parse(localStorage.getItem('test_profile_2'));
+                const gridGroups = JSON.parse(localStorage.getItem(STORAGE_KEY)).groups;
+                
+                let output = 'Cross-profile sharing test:\n\n';
+                
+                // Show that groups are shared across profiles
+                const allReferencedGroups = new Set([...profile1.columnGroups, ...profile2.columnGroups]);
+                const availableGroups = new Set(gridGroups.map(g => g.groupId));
+                
+                output += `Total groups in grid storage: ${availableGroups.size}\n`;
+                output += `Groups referenced by profiles: ${allReferencedGroups.size}\n`;
+                output += `Unreferenced groups: ${availableGroups.size - allReferencedGroups.size}\n\n`;
+                
+                output += 'Sharing analysis:\n';
+                gridGroups.forEach(group => {
+                    const usedInProfile1 = profile1.columnGroups.includes(group.groupId);
+                    const usedInProfile2 = profile2.columnGroups.includes(group.groupId);
+                    
+                    let usage = 'Not used';
+                    if (usedInProfile1 && usedInProfile2) {
+                        usage = 'Shared by both profiles';
+                    } else if (usedInProfile1) {
+                        usage = 'Used by Profile 1 only';
+                    } else if (usedInProfile2) {
+                        usage = 'Used by Profile 2 only';
+                    }
+                    
+                    output += `  ${group.headerName}: ${usage}\n`;
+                });
+                
+                // Test adding a new profile that reuses existing groups
+                const profile3 = {
+                    name: 'Profile 3',
+                    columnGroups: ['group_basic_info', 'group_address'], // Reuses existing groups
+                    selectedProviderId: 'provider2',
+                    autoConnect: false,
+                    sidebarVisible: true
+                };
+                
+                output += '\n✓ Created Profile 3 reusing existing groups\n';
+                output += `Profile 3 groups: ${profile3.columnGroups.join(', ')}\n`;
+                output += '✓ No duplication in grid storage needed\n';
+                
+                result.textContent = output;
+                result.parentElement.classList.add('pass');
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testMigration() {
+            const result = document.getElementById('test4-result');
+            
+            try {
+                // Create old format profile (with full group objects)
+                const oldFormatProfile = {
+                    name: 'Old Format Profile',
+                    columnGroups: [
+                        {
+                            groupId: 'legacy_group_1',
+                            headerName: 'Legacy Group 1',
+                            children: ['col1', 'col2'],
+                            isActive: true,
+                            columnStates: { 'col1': 'open', 'col2': 'closed' }
+                        },
+                        {
+                            groupId: 'legacy_group_2',
+                            headerName: 'Legacy Group 2',
+                            children: ['col3', 'col4'],
+                            isActive: false,
+                            columnStates: { 'col3': 'closed', 'col4': 'open' }
+                        }
+                    ],
+                    selectedProviderId: 'provider1'
+                };
+                
+                let output = 'Migration test:\n\n';
+                output += 'Old format profile:\n';
+                output += `  Groups stored in profile: ${oldFormatProfile.columnGroups.length}\n`;
+                output += `  Group objects size: ${JSON.stringify(oldFormatProfile.columnGroups).length} chars\n\n`;
+                
+                // Simulate migration
+                const migratedGroups = [];
+                const activeGroupIds = [];
+                
+                oldFormatProfile.columnGroups.forEach(oldGroup => {
+                    // Convert to new format
+                    const newGroup = {
+                        groupId: oldGroup.groupId,
+                        headerName: oldGroup.headerName,
+                        children: oldGroup.children,
+                        openByDefault: true,
+                        columnStates: oldGroup.columnStates,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        description: 'Migrated from profile-based storage'
+                    };
+                    
+                    migratedGroups.push(newGroup);
+                    
+                    // Only add to active list if it was active in old format
+                    if (oldGroup.isActive !== false) {
+                        activeGroupIds.push(oldGroup.groupId);
+                    }
+                });
+                
+                // Save migrated groups to grid storage
+                const existingConfig = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                existingConfig.groups.push(...migratedGroups);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(existingConfig));
+                
+                // Update profile to new format
+                const newFormatProfile = {
+                    ...oldFormatProfile,
+                    columnGroups: activeGroupIds // Now just IDs
+                };
+                
+                output += 'After migration:\n';
+                output += `  Groups in grid storage: ${existingConfig.groups.length}\n`;
+                output += `  Active groups in profile: ${newFormatProfile.columnGroups.length}\n`;
+                output += `  Profile groups size: ${JSON.stringify(newFormatProfile.columnGroups).length} chars\n\n`;
+                
+                output += 'Migration results:\n';
+                output += `  ✓ Migrated ${migratedGroups.length} groups to grid storage\n`;
+                output += `  ✓ Profile now stores ${activeGroupIds.length} group IDs\n`;
+                output += `  ✓ Inactive groups preserved but not applied\n`;
+                output += `  ✓ Storage size reduced by ${JSON.stringify(oldFormatProfile.columnGroups).length - JSON.stringify(newFormatProfile.columnGroups).length} chars\n`;
+                
+                result.textContent = output;
+                result.parentElement.classList.add('pass');
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        // Clean up on page load
+        window.addEventListener('load', () => {
+            // Clean up test data
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem('test_profile_1');
+            localStorage.removeItem('test_profile_2');
+        });
+    </script>
+</body>
+</html>

@@ -8,7 +8,9 @@ import '@/index.css';
 interface ColumnGroupsData {
   columnDefs: any[];
   currentGroups?: any[];
+  activeGroupIds?: string[];
   profileName?: string;
+  gridInstanceId?: string;
 }
 
 /**
@@ -57,6 +59,7 @@ export const ColumnGroupsApp: React.FC = () => {
               { field: 'date', headerName: 'Date' }
             ],
             currentGroups: [],
+            activeGroupIds: [],
             profileName: 'Development'
           });
           setIsLoading(false);
@@ -70,19 +73,25 @@ export const ColumnGroupsApp: React.FC = () => {
     initialize();
   }, []);
 
-  const handleApply = async (groups: any[]) => {
+  const handleApply = async (activeGroupIds: string[], allGroups: any[]) => {
     try {
-      console.log('[ColumnGroupsApp] Applying column groups:', groups);
+      console.log('[ColumnGroupsApp] Applying column groups:', {
+        activeGroupIds,
+        allGroups: allGroups.length
+      });
       
-      // Send response to parent
-      await sendDialogResponse('apply', { groups });
+      // Send response to parent with new format
+      await sendDialogResponse('apply', { 
+        activeGroupIds,
+        allGroups 
+      });
       
     } catch (error) {
       console.error('[ColumnGroupsApp] Failed to apply groups:', error);
       
       // If not in OpenFin, just log
       if (typeof fin === 'undefined') {
-        console.log('[ColumnGroupsApp] Would send groups:', groups);
+        console.log('[ColumnGroupsApp] Would send:', { activeGroupIds, allGroups });
         window.close();
       }
     }
@@ -133,6 +142,7 @@ export const ColumnGroupsApp: React.FC = () => {
           columnApi={null} // Not needed in standalone mode
           columnDefs={initialData.columnDefs}
           currentGroups={initialData.currentGroups}
+          activeGroupIds={initialData.activeGroupIds || []}
           onApply={handleApply}
           onClose={handleClose}
         />

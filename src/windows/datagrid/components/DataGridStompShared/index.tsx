@@ -279,7 +279,8 @@ const DataGridStompSharedComponent = () => {
     extractGridState,
     extractFullGridState,
     setColumnGroups,
-    checkProfileApplicationComplete
+    checkProfileApplicationComplete,
+    gridInstanceId
   });
   
   // ========== Connection Management Hook ==========
@@ -316,7 +317,8 @@ const DataGridStompSharedComponent = () => {
     isProfileLoadingRef,
     checkProfileApplicationComplete,
     setColumnGroupsApplied,
-    isSavingProfileRef
+    isSavingProfileRef,
+    gridInstanceId
   });
   
   // ========== Conditional Formatting Handler ==========
@@ -407,7 +409,8 @@ const DataGridStompSharedComponent = () => {
     onApplyColumnGroups: handleApplyColumnGroups,
     onApplyConditionalFormatting: handleApplyConditionalFormatting,
     onApplyCalculatedColumns: handleApplyCalculatedColumns,
-    currentCalculatedColumns: activeProfileData?.calculatedColumns
+    currentCalculatedColumns: activeProfileData?.calculatedColumns,
+    gridInstanceId
   });
   
   // ========== IAB Management Hook ==========

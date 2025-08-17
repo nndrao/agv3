@@ -30,7 +30,7 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   filterModel?: any;
   sortModel?: any;
   groupModel?: any;
-  columnGroups?: any[]; // Column group definitions
+  columnGroups?: string[]; // Active column group IDs (references to grid-level groups)
   
   // Full grid state - comprehensive state management
   gridState?: GridStateType;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -85,7 +85,8 @@ const extractGroupsFromDefs = (columnDefs: any[]): ColumnGroupDefinition[] => {
           children: childIds,
           openByDefault: colDef.openByDefault !== false,
           columnStates,
-          isActive: true  // Groups extracted from columnDefs are active by definition
+          createdAt: Date.now(),
+          updatedAt: Date.now()
         });
       }
     }
@@ -172,6 +173,9 @@ const GroupItem: React.FC<{
           <div className="font-medium">{group.headerName}</div>
           <div className="text-xs text-muted-foreground">
             {group.children.length} columns {!isActive && '(not applied)'}
+            {group.description && (
+              <div className="text-xs text-muted-foreground mt-1">{group.description}</div>
+            )}
           </div>
         </div>
         <Button
@@ -196,6 +200,7 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   columnApi: _columnApi,
   columnDefs,
   currentGroups,
+  activeGroupIds = [],
   onApply,
   onClose
 }) => {
@@ -207,69 +212,67 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   const [groupName, setGroupName] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [activeGroups, setActiveGroups] = useState<Set<string>>(new Set()); // Track which groups are active
+  const [activeGroups, setActiveGroups] = useState<Set<string>>(new Set(activeGroupIds)); // Track which groups are active
   
-  // Initialize from column definitions
+  // Memoize extracted columns to prevent re-computation
+  const extractedColumns = useMemo(() => {
+    if (!columnDefs || columnDefs.length === 0) return [];
+    return extractColumnsFromDefs(columnDefs);
+  }, [columnDefs]);
+  
+  // Memoize extracted groups from column definitions
+  const extractedGroups = useMemo(() => {
+    if (!columnDefs || columnDefs.length === 0) return [];
+    return extractGroupsFromDefs(columnDefs);
+  }, [columnDefs]);
+  
+  // Initialize state from props - run only once
   useEffect(() => {
-    console.log('[🔍 COLGROUP-EDITOR-001] Initializing with:', {
-      hasColumnDefs: !!columnDefs,
-      columnDefsCount: columnDefs?.length || 0,
-      hasCurrentGroups: !!currentGroups,
-      currentGroupsCount: currentGroups?.length || 0,
-      currentGroups: currentGroups
+    console.log('[🔍 COLGROUP-EDITOR-001] Initial setup');
+    
+    // Set columns
+    setAllColumns(extractedColumns);
+    
+    // Initialize all columns with 'open' state
+    const states = new Map<string, 'open' | 'closed' | 'undefined'>();
+    extractedColumns.forEach(col => {
+      states.set(col.colId, 'open');
     });
     
-    if (columnDefs && columnDefs.length > 0) {
-      // Extract all columns
-      const columns = extractColumnsFromDefs(columnDefs);
-      setAllColumns(columns);
-      
-      // Initialize all columns with 'open' state
-      const states = new Map<string, 'open' | 'closed' | 'undefined'>();
-      columns.forEach(col => {
-        states.set(col.colId, 'open');
-      });
-      setColumnOpenStates(states);
-      
-      // Use provided current groups if available, otherwise extract from columnDefs
-      if (currentGroups && currentGroups.length > 0) {
-        console.log('[🔍 COLGROUP-EDITOR-002] Setting groups from currentGroups');
-        setGroups(currentGroups);
-        // Set active groups based on isActive property
-        const active = new Set<string>();
-        currentGroups.forEach(group => {
-          console.log('[🔍 COLGROUP-EDITOR-003] Group:', {
-            headerName: group.headerName,
-            isActive: group.isActive,
-            columnStates: group.columnStates,
-            children: group.children
+    // Use provided current groups or fallback to extracted groups
+    const groupsToUse = currentGroups && currentGroups.length > 0 ? currentGroups : extractedGroups;
+    setGroups([...groupsToUse]);
+    
+    // Restore column states for active groups
+    if (currentGroups && currentGroups.length > 0) {
+      currentGroups.forEach(group => {
+        if (activeGroupIds.includes(group.groupId) && group.columnStates) {
+          Object.entries(group.columnStates).forEach(([colId, state]) => {
+            if (state) {
+              states.set(colId, state);
+            }
           });
-          if (group.isActive !== false) { // Default to active if not specified
-            active.add(group.groupId);
-          }
-          
-          // Restore column states for this group
-          if (group.columnStates) {
-            Object.entries(group.columnStates).forEach(([colId, state]) => {
-              if (state) {
-                states.set(colId, state);
-                console.log('[🔍 COLGROUP-EDITOR-005] Restored column state:', colId, '=', state);
-              }
-            });
-          }
-        });
-        setActiveGroups(active);
-        console.log('[🔍 COLGROUP-EDITOR-004] Active groups set:', Array.from(active));
-      } else {
-        // Extract existing groups from column definitions
-        const existingGroups = extractGroupsFromDefs(columnDefs);
-        setGroups(existingGroups);
-        // All extracted groups are considered active by default
-        const active = new Set<string>(existingGroups.map(g => g.groupId));
-        setActiveGroups(active);
-      }
+        }
+      });
     }
-  }, [columnDefs, currentGroups]);
+    
+    setColumnOpenStates(states);
+    setActiveGroups(new Set(activeGroupIds));
+    
+    console.log('[🔍 COLGROUP-EDITOR-002] Initialization complete');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+  
+  // Handle prop changes after initialization
+  useEffect(() => {
+    if (currentGroups && currentGroups.length > 0) {
+      setGroups([...currentGroups]);
+    }
+  }, [currentGroups]);
+  
+  useEffect(() => {
+    setActiveGroups(new Set(activeGroupIds));
+  }, [activeGroupIds]);
   
   // Get available columns (not in any group or in the currently selected group for editing)
   const availableColumns = useMemo(() => {
@@ -329,11 +332,13 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
     });
     
     const newGroup: ColumnGroupDefinition = {
-      groupId: `group_${Date.now()}`,
+      groupId: `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       headerName: groupName,
       children: Array.from(selectedColumns),
       openByDefault: false, // Default to collapsed to see columnGroupShow effect
-      columnStates
+      columnStates,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
     
     setGroups(prev => [...prev, newGroup]);
@@ -400,7 +405,8 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
           headerName: groupName,
           children: Array.from(selectedColumns),
           openByDefault: false, // Default to collapsed to see columnGroupShow effect
-          columnStates
+          columnStates,
+          updatedAt: Date.now()
         };
         
         return updatedGroup;
@@ -450,23 +456,19 @@ export const ColumnGroupEditorContent: React.FC<ColumnGroupEditorContentProps> =
   
   // Apply changes
   const handleApply = useCallback(() => {
-    // Mark groups with their active state before applying
-    const groupsWithActiveState = groups.map(group => ({
-      ...group,
-      isActive: activeGroups.has(group.groupId)
-    }));
+    const activeGroupIdsList = Array.from(activeGroups);
     
-    console.log('[🔍 COLGROUP-EDITOR-APPLY] Applying groups with states:', 
-      groupsWithActiveState.map(g => ({
+    console.log('[🔍 COLGROUP-EDITOR-APPLY] Applying column groups:', {
+      totalGroups: groups.length,
+      activeGroupIds: activeGroupIdsList,
+      allGroups: groups.map(g => ({
         groupId: g.groupId,
         headerName: g.headerName,
-        isActive: g.isActive,
-        columnStates: g.columnStates,
         children: g.children
       }))
-    );
+    });
     
-    onApply(groupsWithActiveState);
+    onApply(activeGroupIdsList, groups);
     onClose();
   }, [groups, activeGroups, onApply, onClose]);
   
@@ -642,6 +644,7 @@ export const ColumnGroupEditor: React.FC<ColumnGroupEditorProps> = ({
           columnApi={columnApi}
           columnDefs={columnDefs}
           currentGroups={undefined} // Will be provided by parent component
+          activeGroupIds={[]} // Will be provided by parent component
           onApply={onApply}
           onClose={() => onOpenChange(false)}
         />

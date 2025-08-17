@@ -1,23 +1,24 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { GridApi } from 'ag-grid-community';
-import { ColumnGroupService } from '../columnGroups/columnGroupService';
+import { ColumnGroupService, GridColumnGroupStorage } from '../columnGroups';
 import { useToast } from '@/hooks/use-toast';
 
 interface ColumnGroupManagementProps {
   gridApi: GridApi | null;
   columnApi: any;
   columnDefs: any[];
-  activeProfileData: { columnGroups?: any[] } | null;
-  unsavedColumnGroups: any[] | null;
-  setUnsavedColumnGroups: (groups: any[] | null) => void;
-  getColumnGroups: () => any[];
-  setColumnGroups: (groups: any[]) => void;
+  activeProfileData: { columnGroups?: string[] } | null; // Now stores group IDs
+  unsavedColumnGroups: string[] | null; // Now stores group IDs
+  setUnsavedColumnGroups: (groupIds: string[] | null) => void;
+  getColumnGroups: () => string[]; // Returns active group IDs
+  setColumnGroups: (groupIds: string[]) => void; // Sets active group IDs
   getPendingColumnState: () => any;
   clearPendingColumnState: () => void;
   isProfileLoadingRef: React.MutableRefObject<boolean>;
   checkProfileApplicationComplete: () => void;
   setColumnGroupsApplied?: (applied: boolean) => void;
   isSavingProfileRef?: React.MutableRefObject<boolean>;
+  gridInstanceId: string; // Required for grid-level storage
 }
 
 export function useColumnGroupManagement({
@@ -34,13 +35,17 @@ export function useColumnGroupManagement({
   isProfileLoadingRef,
   checkProfileApplicationComplete,
   setColumnGroupsApplied,
-  isSavingProfileRef
+  isSavingProfileRef,
+  gridInstanceId
 }: ColumnGroupManagementProps) {
   const { toast } = useToast();
   
   // Handle column groups apply - store as unsaved and apply to current view only
-  const handleApplyColumnGroups = useCallback((groups: any[]) => {
-    console.log('[🔍 COLGROUP-APPLY-001] handleApplyColumnGroups called with:', JSON.stringify(groups, null, 2));
+  const handleApplyColumnGroups = useCallback((activeGroupIds: string[], allGroups: any[]) => {
+    console.log('[🔍 COLGROUP-APPLY-001] handleApplyColumnGroups called with:', {
+      activeGroupIds,
+      allGroupsCount: allGroups.length
+    });
     
     if (!gridApi) {
       console.error('[🔍 COLGROUP-APPLY-002] GridAPI not available');
@@ -53,24 +58,28 @@ export function useColumnGroupManagement({
     }
     
     try {
-      // Store unsaved column groups
-      console.log('[🔍 COLGROUP-APPLY-003] Setting unsaved column groups');
-      setUnsavedColumnGroups(groups);
+      // Save all groups to grid-level storage
+      console.log('[🔍 COLGROUP-APPLY-003] Saving groups to grid-level storage');
+      allGroups.forEach(group => {
+        GridColumnGroupStorage.saveColumnGroup(gridInstanceId, group);
+      });
+      
+      // Store unsaved active group IDs
+      console.log('[🔍 COLGROUP-APPLY-004] Setting unsaved active group IDs');
+      setUnsavedColumnGroups(activeGroupIds);
       
       // Apply column groups immediately to the current view (without saving to profile)
       // Get fresh copy of base columns to avoid mutations
       const baseColumns = JSON.parse(JSON.stringify(columnDefs));
       
-      // Filter to only active groups
-      const activeGroups = groups.filter(g => g.isActive !== false);
-      
-      if (activeGroups.length > 0) {
-        console.log('[🔍 COLGROUP-APPLY-004] Building and applying column groups to current view');
+      if (activeGroupIds.length > 0) {
+        console.log('[🔍 COLGROUP-APPLY-005] Building and applying column groups to current view');
         
-        // Build column definitions with groups
+        // Build column definitions with groups using grid-level storage
         const newColumnDefs = ColumnGroupService.buildColumnDefsWithGroups(
           baseColumns,
-          activeGroups,
+          activeGroupIds,
+          gridInstanceId,
           gridApi
         );
         
@@ -80,7 +89,7 @@ export function useColumnGroupManagement({
         // AG-Grid will handle column group expand/collapse and visibility natively
         // The columnGroupShow property will be respected automatically
       } else {
-        console.log('[🔍 COLGROUP-APPLY-005] No active groups, resetting to base columns');
+        console.log('[🔍 COLGROUP-APPLY-006] No active groups, resetting to base columns');
         gridApi.setGridOption('columnDefs', baseColumns);
       }
       
@@ -89,7 +98,7 @@ export function useColumnGroupManagement({
       
       toast({
         title: "Column Groups Applied",
-        description: `${groups.length} column group(s) have been applied`
+        description: `${activeGroupIds.length} column group(s) have been applied`
       });
     } catch (error) {
       console.error('[ColumnGroupManagement] Error applying column groups:', error);
@@ -99,7 +108,7 @@ export function useColumnGroupManagement({
         variant: "destructive"
       });
     }
-  }, [gridApi, columnApi, columnDefs, toast, getPendingColumnState, clearPendingColumnState, setUnsavedColumnGroups]);
+  }, [gridApi, columnApi, columnDefs, toast, getPendingColumnState, clearPendingColumnState, setUnsavedColumnGroups, gridInstanceId]);
   
   // Column group application is now handled by useProfileApplication hook
   // This effect has been removed to prevent duplicate application and timing issues

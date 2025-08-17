@@ -14,8 +14,8 @@ interface UseGridStateResult {
   extractGridState: () => Partial<GridState>;
   extractFullGridState: () => GridState | null;
   resetGridState: () => void;
-  setColumnGroups: (groups: any[]) => void;
-  getColumnGroups: () => any[];
+  setColumnGroups: (groupIds: string[]) => void;
+  getColumnGroups: () => string[];
   getPendingColumnState: () => any;
   clearPendingColumnState: () => void;
   gridStateManagerRef: React.MutableRefObject<GridStateManager>;
@@ -71,10 +71,10 @@ export function useGridState(
       return;
     }
     
-    // Store column groups even if grid is not ready yet
+    // Store active column group IDs even if grid is not ready yet
     // They will be applied when the grid becomes ready
     if (profile.columnGroups && !gridApiRef.current) {
-      stateManagerRef.current.setColumnGroups(profile.columnGroups);
+      stateManagerRef.current.setActiveColumnGroupIds(profile.columnGroups);
     }
     
     if (!gridApiRef.current || !validateGridApi(gridApiRef.current)) {
@@ -87,17 +87,17 @@ export function useGridState(
     }
     
     try {
-      // Set column groups in state manager if available
+      // Set active column group IDs in state manager if available
       if (profile.columnGroups) {
-        stateManagerRef.current.setColumnGroups(profile.columnGroups);
+        stateManagerRef.current.setActiveColumnGroupIds(profile.columnGroups);
       }
       
       // If profile contains full grid state, use it
       if (profile.gridState) {
         
-        // If gridState has column groups, use those; otherwise use profile.columnGroups
-        if (!profile.gridState.columnGroups && profile.columnGroups) {
-          profile.gridState.columnGroups = profile.columnGroups;
+        // If gridState has active column group IDs, use those; otherwise use profile.columnGroups
+        if (!profile.gridState.activeColumnGroupIds && profile.columnGroups) {
+          profile.gridState.activeColumnGroupIds = profile.columnGroups;
         }
         
         
@@ -115,12 +115,12 @@ export function useGridState(
         });
         
         
-        // After applying state, check if we have column groups to apply
-        const storedGroups = stateManagerRef.current.getColumnGroups();
+        // After applying state, check if we have active column group IDs to apply
+        const storedGroupIds = stateManagerRef.current.getActiveColumnGroupIds();
         
         // Return indication that column groups need to be applied
         // This will be handled by the column groups effect in the main component
-        if (storedGroups && storedGroups.length > 0) {
+        if (storedGroupIds && storedGroupIds.length > 0) {
         }
       } else {
         // Fallback to legacy properties
@@ -182,14 +182,14 @@ export function useGridState(
     stateManagerRef.current.resetToDefault();
   }, []);
   
-  // Set column groups in state manager
-  const setColumnGroups = useCallback((groups: any[]) => {
-    stateManagerRef.current.setColumnGroups(groups);
+  // Set active column group IDs in state manager
+  const setColumnGroups = useCallback((groupIds: string[]) => {
+    stateManagerRef.current.setActiveColumnGroupIds(groupIds);
   }, []);
   
-  // Get column groups from state manager
+  // Get active column group IDs from state manager
   const getColumnGroups = useCallback(() => {
-    return stateManagerRef.current.getColumnGroups();
+    return stateManagerRef.current.getActiveColumnGroupIds();
   }, []);
   
   // Get pending column state from state manager

@@ -25,7 +25,7 @@ export interface GridState {
   columnState: ColumnState[];
   columnGroupState?: Array<{ groupId: string; open: boolean }>; // Track group expansion
   columnDefs?: ColDef[];
-  columnGroups?: any[]; // Full column group definitions
+  activeColumnGroupIds?: string[]; // Active column group IDs (references to grid-level groups)
   
   // Data filtering and sorting
   filterModel: FilterModel;
@@ -149,7 +149,7 @@ export interface ApplyStateOptions {
 export class GridStateManager {
   private gridApi: GridApi | null = null;
   private defaultState: Partial<GridState> = {};
-  private columnGroups: any[] = [];
+  private activeColumnGroupIds: string[] = [];
   private pendingColumnState: ColumnState[] | null = null;
   private pendingColumnGroupState: Array<{ groupId: string; open: boolean }> | null = null;
   
@@ -167,17 +167,17 @@ export class GridStateManager {
   }
   
   /**
-   * Set column groups for state extraction
+   * Set active column group IDs for state extraction
    */
-  setColumnGroups(groups: any[]) {
-    this.columnGroups = groups || [];
+  setActiveColumnGroupIds(groupIds: string[]) {
+    this.activeColumnGroupIds = groupIds || [];
   }
   
   /**
-   * Get column groups
+   * Get active column group IDs
    */
-  getColumnGroups(): any[] {
-    return this.columnGroups;
+  getActiveColumnGroupIds(): string[] {
+    return this.activeColumnGroupIds;
   }
   
   setPendingColumnState(columnState: ColumnState[]): void {
@@ -261,10 +261,9 @@ export class GridStateManager {
         state.columnDefs = this.gridApi.getColumnDefs() || undefined;
       }
       
-      // Include column groups if they exist
-      if (this.columnGroups && this.columnGroups.length > 0) {
-        state.columnGroups = this.columnGroups;
-      } else {
+      // Include active column group IDs if they exist
+      if (this.activeColumnGroupIds && this.activeColumnGroupIds.length > 0) {
+        state.activeColumnGroupIds = this.activeColumnGroupIds;
       }
       
       // Include pinned rows if they exist
@@ -329,10 +328,10 @@ export class GridStateManager {
         this.applyColumnState(state.columnState);
       }
       
-      // Store column groups for reference (they are applied via ColumnGroupService in profile application)
-      if (state.columnGroups && state.columnGroups.length > 0) {
-        this.columnGroups = state.columnGroups;
-        console.log('[GridStateManager] Stored column groups for reference');
+      // Store active column group IDs for reference (they are applied via ColumnGroupService in profile application)
+      if (state.activeColumnGroupIds && state.activeColumnGroupIds.length > 0) {
+        this.activeColumnGroupIds = state.activeColumnGroupIds;
+        console.log('[GridStateManager] Stored active column group IDs for reference');
       }
       
       // Apply filters

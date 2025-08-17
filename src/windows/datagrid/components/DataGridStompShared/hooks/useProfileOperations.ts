@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { DataGridStompSharedProfile } from '../types';
+import { ColumnGroupService } from '../columnGroups';
 
 interface ProfileOperationsProps {
   profiles: any[];
@@ -14,8 +15,9 @@ interface ProfileOperationsProps {
   importProfile: (data: string) => Promise<void>;
   extractGridState: () => any;
   extractFullGridState: () => any;
-  setColumnGroups: (groups: any[]) => void;
+  setColumnGroups: (groupIds: string[]) => void; // Now handles group IDs
   checkProfileApplicationComplete: () => void;
+  gridInstanceId: string; // Required for migration
 }
 
 interface ProfileLoadingState {
@@ -36,7 +38,8 @@ export function useProfileOperations({
   extractGridState,
   extractFullGridState,
   setColumnGroups,
-  checkProfileApplicationComplete
+  checkProfileApplicationComplete,
+  gridInstanceId
 }: ProfileOperationsProps) {
   const { toast } = useToast();
   
@@ -100,17 +103,37 @@ export function useProfileOperations({
     // Use unsaved grid options if available, otherwise use current profile options
     const gridOptionsToSave = unsavedGridOptions || activeProfileData?.gridOptions || getDefaultGridOptions();
     
-    // Use unsaved column groups if available, otherwise use current profile column groups
-    // IMPORTANT: Preserve the isActive property when saving
-    const columnGroupsToSave = unsavedColumnGroups || activeProfileData?.columnGroups || [];
-    console.log('[🔍 SAVE-PROFILE-001] Column groups to save:', {
-      source: unsavedColumnGroups ? 'unsaved' : activeProfileData?.columnGroups ? 'profile' : 'empty',
-      count: columnGroupsToSave.length,
-      groups: JSON.stringify(columnGroupsToSave, null, 2)
-    });
+    // Handle column groups - migrate old format if needed
+    let columnGroupsToSave: string[] = [];
     
-    // Don't call setColumnGroups here as it may strip the isActive property
-    // The column groups will be stored directly in the profile
+    if (unsavedColumnGroups) {
+      // Use unsaved column group IDs
+      columnGroupsToSave = unsavedColumnGroups;
+      console.log('[🔍 SAVE-PROFILE-001] Using unsaved column group IDs:', columnGroupsToSave);
+    } else if (activeProfileData?.columnGroups) {
+      // Check if we have old format (array of objects) or new format (array of strings)
+      if (Array.isArray(activeProfileData.columnGroups) && activeProfileData.columnGroups.length > 0) {
+        const firstItem = activeProfileData.columnGroups[0];
+        if (typeof firstItem === 'string') {
+          // New format - already group IDs
+          columnGroupsToSave = activeProfileData.columnGroups as string[];
+          console.log('[🔍 SAVE-PROFILE-002] Using existing column group IDs:', columnGroupsToSave);
+        } else {
+          // Old format - migrate to grid-level storage and get IDs
+          console.log('[🔍 SAVE-PROFILE-003] Migrating old column group format to grid-level storage');
+          columnGroupsToSave = ColumnGroupService.migrateProfileColumnGroups(
+            gridInstanceId,
+            activeProfileData.columnGroups as any[]
+          );
+          console.log('[🔍 SAVE-PROFILE-004] Migration complete, active group IDs:', columnGroupsToSave);
+        }
+      }
+    }
+    
+    console.log('[🔍 SAVE-PROFILE-005] Final column groups to save:', {
+      count: columnGroupsToSave.length,
+      groupIds: columnGroupsToSave
+    });
     
     // Preserve calculated columns from the current profile
     const calculatedColumnsToSave = activeProfileData?.calculatedColumns || [];

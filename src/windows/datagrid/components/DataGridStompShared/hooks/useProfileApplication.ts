@@ -91,20 +91,18 @@ export function useProfileApplication({
 
   const applyColumnGroups = useCallback((
     columnDefs: ColDef[],
-    columnGroups: any[] | undefined
+    activeGroupIds: string[] | undefined
   ): ColDef[] => {
-    if (!columnGroups?.length) return columnDefs;
+    if (!activeGroupIds?.length) return columnDefs;
     
-    const activeGroups = columnGroups.filter(g => g.isActive !== false);
-    if (!activeGroups.length) return columnDefs;
-    
-    gridStateManagerRef.current.setColumnGroups(columnGroups);
+    gridStateManagerRef.current.setActiveColumnGroupIds(activeGroupIds);
     return ColumnGroupService.buildColumnDefsWithGroups(
       columnDefs,
-      activeGroups,
+      activeGroupIds,
+      gridInstanceId,
       gridApiRef.current
     );
-  }, []);
+  }, [gridInstanceId]);
 
   const applyConditionalFormatting = useCallback((columnDefs: ColDef[]): ColDef[] => {
     const formattedDefs = applyConditionalFormattingToColumns(
