@@ -14,9 +14,6 @@ interface ColumnGroupManagementProps {
   setColumnGroups: (groups: any[]) => void;
   getPendingColumnState: () => any;
   clearPendingColumnState: () => void;
-  getPendingColumnGroupState: () => any;
-  clearPendingColumnGroupState: () => void;
-  applyPendingColumnGroupState: (delay?: number) => void;
   isProfileLoadingRef: React.MutableRefObject<boolean>;
   checkProfileApplicationComplete: () => void;
   setColumnGroupsApplied?: (applied: boolean) => void;
@@ -34,9 +31,6 @@ export function useColumnGroupManagement({
   setColumnGroups,
   getPendingColumnState,
   clearPendingColumnState,
-  getPendingColumnGroupState,
-  clearPendingColumnGroupState,
-  applyPendingColumnGroupState,
   isProfileLoadingRef,
   checkProfileApplicationComplete,
   setColumnGroupsApplied,
@@ -105,8 +99,7 @@ export function useColumnGroupManagement({
         variant: "destructive"
       });
     }
-  }, [gridApi, columnApi, columnDefs, toast, getPendingColumnState, clearPendingColumnState, 
-      getPendingColumnGroupState, clearPendingColumnGroupState, setUnsavedColumnGroups]);
+  }, [gridApi, columnApi, columnDefs, toast, getPendingColumnState, clearPendingColumnState, setUnsavedColumnGroups]);
   
   // Column group application is now handled by useProfileApplication hook
   // This effect has been removed to prevent duplicate application and timing issues

@@ -18,9 +18,6 @@ interface UseGridStateResult {
   getColumnGroups: () => any[];
   getPendingColumnState: () => any;
   clearPendingColumnState: () => void;
-  getPendingColumnGroupState: () => any;
-  clearPendingColumnGroupState: () => void;
-  applyPendingColumnGroupState: () => void;
   gridStateManagerRef: React.MutableRefObject<GridStateManager>;
 }
 
@@ -205,20 +202,7 @@ export function useGridState(
     stateManagerRef.current.clearPendingColumnState();
   }, []);
   
-  // Get pending column group state
-  const getPendingColumnGroupState = useCallback(() => {
-    return stateManagerRef.current.getPendingColumnGroupState();
-  }, []);
-  
-  // Clear pending column group state
-  const clearPendingColumnGroupState = useCallback(() => {
-    stateManagerRef.current.clearPendingColumnGroupState();
-  }, []);
-  
-  // Apply pending column group state
-  const applyPendingColumnGroupState = useCallback(() => {
-    stateManagerRef.current.applyPendingColumnGroupState();
-  }, []);
+  // Removed pending column group state methods - now handled in profile application
   
   // Grid ready handler - simplified to just set references
   const onGridReady = useCallback((params: GridReadyEvent<RowData>) => {
@@ -264,9 +248,6 @@ export function useGridState(
     getColumnGroups,
     getPendingColumnState,
     clearPendingColumnState,
-    getPendingColumnGroupState,
-    clearPendingColumnGroupState,
-    applyPendingColumnGroupState,
     gridStateManagerRef: stateManagerRef
   };
 }

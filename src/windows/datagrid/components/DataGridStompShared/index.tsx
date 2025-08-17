@@ -10,7 +10,7 @@ import { debugStorage } from "@/utils/storageDebug";
 import { getViewInstanceId } from "@/utils/viewUtils";
 import { ConditionalFormattingRule as ConditionalFormattingRuleRT } from '@/utils/conditionalFormattingRuntime';
 
-// Import all hooks - modularized business logic
+
 import {
   useSharedWorkerConnection,
   useSnapshotData,
@@ -27,12 +27,12 @@ import {
 } from './hooks';
 import { useProfileApplication } from './hooks/useProfileApplication';
 
-// Import components
+
 import { Toolbar } from './components/Toolbar';
 import { BusyIndicator } from './components/BusyIndicator';
 import { DataGrid } from './components/DataGrid';
 
-// Import types and config
+
 import { DataGridStompSharedProfile, CalculatedColumnDefinition } from './types';
 import { DEFAULT_COL_DEF, getStatusBarConfig } from './config/gridConfig';
 import { DEFAULT_PROFILE } from './config/profileDefaults';
@@ -70,26 +70,21 @@ const DataGridStompSharedComponent = () => {
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(false);
   const [showColumnSettings, setShowColumnSettings] = useState<boolean>(false);
-  // Removed local state - using profileData directly from hook to avoid sync issues
-  // const [activeProfileData, setActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
+
   const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalFormattingRuleRT[]>(() => loadConditionalFormattingRules());
   const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   const [columnGroupsApplied, setColumnGroupsApplied] = useState(false);
   
-  // ========== Refs ==========
   const isInitialMount = useRef(true);
   const viewInstanceId = useMemo(() => getViewInstanceId(), []);
-  const originalColumnDefsRef = useRef<any[]>([]);  // Store original column defs from provider
+  const originalColumnDefsRef = useRef<any[]>([]);
   
-  // ========== Custom Hooks - Core Functionality ==========
   const { providerConfig, columnDefs: baseColumnDefs } = useProviderConfig(selectedProviderId);
   
-  // Store original column definitions from provider when they load or provider changes
   useEffect(() => {
     if (baseColumnDefs && baseColumnDefs.length > 0) {
       console.log('[DataGridStompShared] Storing original column definitions from provider');
-      // Deep clone to preserve original state, ensure cell flashing is enabled
       originalColumnDefsRef.current = JSON.parse(JSON.stringify(
         baseColumnDefs.map(col => ({
           ...col,
@@ -97,22 +92,17 @@ const DataGridStompSharedComponent = () => {
         }))
       ));
     }
-  }, [baseColumnDefs, selectedProviderId]);  // Update when provider changes
+  }, [baseColumnDefs, selectedProviderId]);
   
-  // ========== Conditional Formatting Rules ==========
   const gridInstanceId = useMemo(() => `grid-${viewInstanceId}`, [viewInstanceId]);
   
-  // Initialize conditional formatting for this grid instance
   useEffect(() => {
     initializeConditionalFormatting(gridInstanceId, conditionalFormattingRules);
     
-    // Cleanup on unmount
     return () => {
       cleanupConditionalFormatting(gridInstanceId);
     };
   }, [gridInstanceId, conditionalFormattingRules]);
-  
-  // Reload rules when they change in storage
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'conditionalFormattingRules' && e.newValue) {
@@ -130,32 +120,18 @@ const DataGridStompSharedComponent = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [gridInstanceId]);
 
-  // Temporary state for activeProfileData until the hook is properly initialized
   const [tempActiveProfileData, setTempActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
-  
-  // Column definitions are now built in the centralized applyProfile function
-  // We just pass the base column defs to the DataGrid and let AG-Grid handle them
-  // The actual column structure (with groups, calculated columns, etc.) is applied via setGridOption
-  
-  // Get row class rules for row-level formatting
   const rowClassRules = useMemo(() => {
     return getRowClassRules(conditionalFormattingRules, gridInstanceId);
   }, [conditionalFormattingRules, gridInstanceId]);
   
-  // UI state management - doesn't depend on activeProfileData or gridApiRef
   const { currentViewTitle, saveViewTitle } = useViewTitle(viewInstanceId);
   const { isDarkMode, className, setTheme } = useThemeSync();
   
-  // ========== Profile Application Complete Helper ==========
   const checkProfileApplicationComplete = useCallback(() => {
-    // This function is called by profile operations hook
-    // to check if profile loading is complete
   }, []);
   
-  // Create a ref to hold the profile change handler
   const profileChangeHandlerRef = useRef<((profile: DataGridStompSharedProfile) => void) | null>(null);
-  
-  // Profile management hook
   const {
     profiles,
     activeProfile,
@@ -174,7 +150,6 @@ const DataGridStompSharedComponent = () => {
     componentType: COMPONENT_TYPE,
     defaultProfile: DEFAULT_PROFILE,
     onProfileChange: (profile) => {
-      // Call the handler if it's been set
       if (profileChangeHandlerRef.current) {
         profileChangeHandlerRef.current(profile);
       }
@@ -193,7 +168,6 @@ const DataGridStompSharedComponent = () => {
     setTempActiveProfileData(activeProfileData);
   }, [activeProfileData]);
   
-  // Grid state management with all grid-related operations
   const { 
     gridApi, 
     columnApi, 
@@ -207,13 +181,8 @@ const DataGridStompSharedComponent = () => {
     getColumnGroups,
     getPendingColumnState,
     clearPendingColumnState,
-    getPendingColumnGroupState,
-    clearPendingColumnGroupState,
-    applyPendingColumnGroupState,
     gridStateManagerRef
   } = useGridState(providerConfig, activeProfileData, null, isSavingProfileRef);
-  
-  // Grid options management
   const {
     unsavedGridOptions,
     handleApplyGridOptions,
@@ -222,11 +191,8 @@ const DataGridStompSharedComponent = () => {
     gridTheme
   } = useGridOptionsManagement({ gridApi, activeProfileData });
   
-  // Connection management - depends on gridApiRef
   const { connectionState, workerClient, connect, disconnect } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
   const { snapshotData, handleSnapshotData, handleRealtimeUpdate, resetSnapshot, requestSnapshot } = useSnapshotData(gridApiRef);
-  
-  // Profile application - centralized deterministic application of all settings
   const { applyProfile } = useProfileApplication({
     gridApiRef,
     originalColumnDefsRef,
@@ -236,37 +202,57 @@ const DataGridStompSharedComponent = () => {
     gridInstanceId
   });
   
-  // Track if we've applied the initial profile
   const initialProfileAppliedRef = useRef(false);
-  
-  // Wrap onGridReady to apply profile when grid is ready
+  const currentProfileNameRef = useRef<string | null>(null);
+  const pendingProfileSwitchRef = useRef<boolean>(false);
   const onGridReady = useCallback((params: any) => {
-    // Call base onGridReady to set references
     onGridReadyBase(params);
     
     console.log('[DataGridStompShared] Grid ready, checking profile:', {
       hasActiveProfileData: !!activeProfileData,
       profileName: activeProfileData?.name,
-      initialProfileApplied: initialProfileAppliedRef.current
+      initialProfileApplied: initialProfileAppliedRef.current,
+      hasPendingSwitch: pendingProfileSwitchRef.current,
+      currentProfileName: currentProfileNameRef.current
     });
     
-    // Apply active profile when grid is ready (initial load)
-    if (activeProfileData && !initialProfileAppliedRef.current) {
-      console.log('[DataGridStompShared] Grid ready - applying initial profile:', {
+    if (activeProfileData) {
+      const hasPendingSwitch = pendingProfileSwitchRef.current;
+      const isInitialApplication = !initialProfileAppliedRef.current;
+      
+      console.log('[DataGridStompShared] Grid ready - applying profile:', {
         profileName: activeProfileData.name,
         hasColumnGroups: !!activeProfileData.columnGroups,
         columnGroupsCount: activeProfileData.columnGroups?.length || 0,
-        columnGroups: activeProfileData.columnGroups
+        isInitialApplication,
+        hasPendingSwitch,
+        currentProfileName: currentProfileNameRef.current
       });
-      applyProfile(activeProfileData, false); // false = not a profile switch
+      
+      const shouldTreatAsSwitch = hasPendingSwitch || 
+                                 (initialProfileAppliedRef.current && 
+                                  currentProfileNameRef.current !== null &&
+                                  currentProfileNameRef.current !== activeProfileData.name);
+      
+      console.log('[DataGridStompShared] Grid ready - profile switch decision:', {
+        shouldTreatAsSwitch,
+        hasPendingSwitch,
+        isInitialApplication,
+        currentProfileName: currentProfileNameRef.current,
+        newProfileName: activeProfileData.name,
+        reason: hasPendingSwitch ? 'pending switch' : 
+                (initialProfileAppliedRef.current && currentProfileNameRef.current !== activeProfileData.name) ? 'profile name change' : 'initial load'
+      });
+      
+      applyProfile(activeProfileData, shouldTreatAsSwitch);
       initialProfileAppliedRef.current = true;
-    } else if (!activeProfileData) {
+      currentProfileNameRef.current = activeProfileData.name;
+      pendingProfileSwitchRef.current = false;
+    } else {
       console.log('[DataGridStompShared] Grid ready - no active profile yet, will apply when profile loads');
     }
   }, [onGridReadyBase, activeProfileData, applyProfile]);
   
-  // ========== Profile Change Handler ==========
-  // Now that we have all the required functions, set up the profile change handler
   useEffect(() => {
     profileChangeHandlerRef.current = (profile: DataGridStompSharedProfile) => {
       console.log('[🔍 PROFILE-CHANGE-001] Profile change handler triggered', {
@@ -275,32 +261,30 @@ const DataGridStompSharedComponent = () => {
         columnGroupsCount: profile.columnGroups?.length || 0
       });
       
-      // Determine if this is a profile switch vs initial load
       const isInitialLoad = !initialProfileAppliedRef.current;
-      // A profile switch is when we have a grid and either:
-      // 1. It's not the initial load, OR
-      // 2. We've already applied a profile (even if it's the initial one)
-      const isProfileSwitch = !!gridApi && initialProfileAppliedRef.current;
+      const isActualProfileChange = currentProfileNameRef.current !== null && 
+                                   currentProfileNameRef.current !== profile.name;
+      const isProfileSwitch = !!gridApi && (isActualProfileChange || initialProfileAppliedRef.current);
       
       console.log('[🔍 PROFILE-CHANGE-002] Profile application context:', {
         isInitialLoad,
         isProfileSwitch,
+        isActualProfileChange,
         hasGridApi: !!gridApi,
-        initialProfileApplied: initialProfileAppliedRef.current
+        initialProfileApplied: initialProfileAppliedRef.current,
+        currentProfileName: currentProfileNameRef.current,
+        newProfileName: profile.name
       });
       
-      // Clear unsaved changes when switching profiles
       if (isProfileSwitch) {
         clearUnsavedOptions();
         setUnsavedColumnGroups(null);
         console.log('[🔍 PROFILE-CHANGE-003] Cleared unsaved changes for profile switch');
       }
       
-      // Apply UI settings
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
       
-      // On initial mount, set provider ID
       if (isInitialMount.current) {
         console.log('[🔍 PROFILE-CHANGE-004] Initial mount - setting provider ID');
         if (profile.selectedProviderId) {
@@ -308,31 +292,56 @@ const DataGridStompSharedComponent = () => {
         }
       }
       
-      // Apply profile using centralized function
       if (gridApi) {
-        // Only apply if we haven't already applied the initial profile
         if (isInitialLoad && !initialProfileAppliedRef.current) {
           console.log('[🔍 PROFILE-CHANGE-005] Applying initial profile after grid ready');
           applyProfile(profile, false);
           initialProfileAppliedRef.current = true;
+          currentProfileNameRef.current = profile.name;
         } else if (isProfileSwitch) {
           console.log('[🔍 PROFILE-CHANGE-006] Applying profile for profile switch');
           applyProfile(profile, true);
+          currentProfileNameRef.current = profile.name;
         } else {
           console.log('[🔍 PROFILE-CHANGE-007] Skipping profile application - not initial load and not a switch');
         }
         
-        // Mark initial mount complete after first profile application
         if (isInitialMount.current) {
           isInitialMount.current = false;
         }
       } else {
         console.log('[🔍 PROFILE-CHANGE-008] Grid not ready - profile will be applied in onGridReady');
+        if (isActualProfileChange) {
+          pendingProfileSwitchRef.current = true;
+          console.log('[🔍 PROFILE-CHANGE-009] Marked pending profile switch for when grid is ready');
+        }
+        currentProfileNameRef.current = profile.name;
       }
       
       console.log('[DataGridStompShared] Profile change handler complete');
     };
   }, [applyProfile, clearUnsavedOptions, gridApi]);
+  
+  // When grid becomes ready, check if we need to apply a pending profile change
+  useEffect(() => {
+    if (gridApi && activeProfileData && pendingProfileSwitchRef.current) {
+      console.log('[DataGridStompShared] Grid became ready with pending profile switch - applying now', {
+        currentProfileName: currentProfileNameRef.current,
+        newProfileName: activeProfileData.name,
+        pendingSwitch: pendingProfileSwitchRef.current
+      });
+      
+      console.log('[DataGridStompShared] Applying pending profile switch:', {
+        from: currentProfileNameRef.current,
+        to: activeProfileData.name,
+        pendingSwitch: pendingProfileSwitchRef.current
+      });
+      
+      applyProfile(activeProfileData, true);
+      currentProfileNameRef.current = activeProfileData.name;
+      pendingProfileSwitchRef.current = false;
+    }
+  }, [gridApi, activeProfileData, applyProfile]);
   
   // ========== Profile Operations Hook ==========
   const {
@@ -391,9 +400,6 @@ const DataGridStompSharedComponent = () => {
     setColumnGroups,
     getPendingColumnState,
     clearPendingColumnState,
-    getPendingColumnGroupState,
-    clearPendingColumnGroupState,
-    applyPendingColumnGroupState,
     isProfileLoadingRef,
     checkProfileApplicationComplete,
     setColumnGroupsApplied,

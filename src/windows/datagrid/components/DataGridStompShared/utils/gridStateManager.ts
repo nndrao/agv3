@@ -192,29 +192,7 @@ export class GridStateManager {
     this.pendingColumnState = null;
   }
   
-  getPendingColumnGroupState(): Array<{ groupId: string; open: boolean }> | null {
-    return this.pendingColumnGroupState;
-  }
-  
-  clearPendingColumnGroupState(): void {
-    this.pendingColumnGroupState = null;
-  }
-  
-  /**
-   * Apply pending column group state if it exists
-   * This should be called AFTER columnDefs are fully applied
-   */
-  applyPendingColumnGroupState(): void {
-    if (!this.pendingColumnGroupState || this.pendingColumnGroupState.length === 0) {
-      console.log('[🔍 GRIDSTATE-010] No pending column group state to apply');
-      return;
-    }
-    
-    console.log('[🔍 GRIDSTATE-011] Applying pending column group state:', this.pendingColumnGroupState);
-    
-    this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
-    this.pendingColumnGroupState = null;
-  }
+  // Removed pending column group state methods - now handled properly in profile application
   
   /**
    * Set default state for reset operations
@@ -312,12 +290,12 @@ export class GridStateManager {
   }
   
   /**
-   * Apply grid state
+   * Apply grid state with proper sequencing (no delays)
    */
   applyState(state: GridState, options: ApplyStateOptions = {}): boolean {
     
     if (!this.gridApi || !state) {
-      console.warn('[🔍][GRID_STATE_APPLY] Cannot apply state - GridApi or state not available');
+      console.warn('[GridStateManager] Cannot apply state - GridApi or state not available');
       return false;
     }
     
@@ -337,28 +315,29 @@ export class GridStateManager {
       animateChanges = false
     } = options;
     
+    console.log('[GridStateManager] Applying grid state with options:', {
+      applyColumnState,
+      applyFilters,
+      applyGrouping,
+      applyPagination
+    });
     
     try {
-      // Apply column state directly - timing is now handled by profile application
+      // Apply column state immediately (no delays)
       if (applyColumnState && state.columnState) {
+        console.log('[GridStateManager] Applying column state');
         this.applyColumnState(state.columnState);
       }
       
-      // Store column group state for later application
-      // DO NOT apply it here - it must be applied AFTER all columnDefs are set
-      if (state.columnGroupState && state.columnGroupState.length > 0) {
-        this.pendingColumnGroupState = state.columnGroupState;
-        console.log('[🔍 GRIDSTATE-008] Stored pending column group state for later application:', this.pendingColumnGroupState);
-      }
-      
-      // Store column groups for later use (they need to be applied via ColumnGroupService)
+      // Store column groups for reference (they are applied via ColumnGroupService in profile application)
       if (state.columnGroups && state.columnGroups.length > 0) {
         this.columnGroups = state.columnGroups;
-      } else {
+        console.log('[GridStateManager] Stored column groups for reference');
       }
       
       // Apply filters
       if (applyFilters && state.filterModel) {
+        console.log('[GridStateManager] Applying filter model');
         this.gridApi.setFilterModel(state.filterModel);
         
         if (state.quickFilter) {
@@ -366,11 +345,8 @@ export class GridStateManager {
         }
       }
       
-      // Apply sorting
-      // In AG-Grid v31+, sorting is part of column state, not a separate model
-      // The sorting will be applied when we apply column state above
+      // Apply sorting (handled via column state in AG-Grid v33+)
       if (applySorting && state.sortModel) {
-        // Sort model is already applied via column state
         console.debug('[GridStateManager] Sort model applied via column state');
       }
       
@@ -409,7 +385,7 @@ export class GridStateManager {
         this.applyGridOptions(state.gridOptions);
       }
       
-      // Apply scroll position immediately
+      // Apply scroll position
       if (applyScrollPosition && state.scrollPosition) {
         this.applyScrollPosition(state.scrollPosition!);
       }
@@ -419,22 +395,12 @@ export class GridStateManager {
         this.applySideBarState(state.sideBarState);
       }
       
-      // Refresh the grid
+      // Refresh the grid if requested
       if (animateChanges) {
         this.gridApi.refreshCells({ force: true });
       }
       
-      // Apply column group state LAST, after everything else
-      // This ensures columnDefs are fully set before applying group state
-      if (this.pendingColumnGroupState && this.pendingColumnGroupState.length > 0) {
-        console.log('[🔍 GRIDSTATE-009] Applying column group state LAST (delayed)');
-        setTimeout(() => {
-          this.applyColumnGroupState({ columnGroupState: this.pendingColumnGroupState } as GridState);
-          // Clear the pending state after applying
-          this.pendingColumnGroupState = null;
-        }, 500); // Delay to ensure columnDefs are fully applied
-      }
-      
+      console.log('[GridStateManager] Grid state applied successfully');
       return true;
     } catch (error) {
       console.error('[GridStateManager] Error applying state:', error);

@@ -22,14 +22,15 @@ interface UseProfileApplicationProps {
 /**
  * Hook that provides a centralized, deterministic way to apply profile settings to AG-Grid
  * 
- * Order of operations:
- * 1. Reset grid (if switching profiles)
- * 2. Apply grid options
- * 3. Build column definitions (base + calculated + conditional formatting)
- * 4. Apply column groups
- * 5. Set final columnDefs to grid
- * 6. Apply grid state (filters, sorts, column state)
- * 7. Apply column group expansion state
+ * CORRECT Order of operations (AG-Grid v33+ best practices):
+ * 1. Reset AG-Grid's all states (using v33+ APIs)
+ * 2. Apply columnDefs from data provider to grid
+ * 3. Apply grid options from selected profile settings
+ * 4. Apply calculated columns to columnDefs
+ * 5. Apply column groups to columnDefs
+ * 6. Apply column styles and settings (future)
+ * 7. Apply conditional formatting rules to columnDefs
+ * 8. Apply all grid states (column state FIRST, then column group state)
  */
 export function useProfileApplication({
   gridApiRef,
@@ -40,147 +41,269 @@ export function useProfileApplication({
   gridInstanceId
 }: UseProfileApplicationProps) {
   
-  /**
-   * Reset grid to clean state
-   */
-  const resetGrid = useCallback(() => {
+  const lastAppliedProfileRef = useRef<string | null>(null);
+  const resetGridCompletely = useCallback(() => {
     const gridApi = gridApiRef.current;
     if (!gridApi) return;
     
-    console.log('[ProfileApplication] Resetting grid to clean state');
+    console.log('[ProfileApplication] Resetting grid to clean state (AG-Grid v33+ method)');
     
-    // 1. Clear all filters
+    gridApi.resetColumnState();
     gridApi.setFilterModel(null);
+    gridApi.setGridOption('quickFilterText', '');
+    gridApi.deselectAll();
     
-    // 2. Clear all sorts
-    gridApi.applyColumnState({
-      defaultState: { sort: null }
-    });
+    if (typeof (gridApi as any).setRowGroupColumns === 'function') {
+      (gridApi as any).setRowGroupColumns([]);
+    }
     
-    // 3. Reset to original column definitions - deep copy to avoid mutations
+    if (typeof (gridApi as any).setPivotMode === 'function') {
+      (gridApi as any).setPivotMode(false);
+    }
+    
+    if (gridApi.paginationGoToFirstPage) {
+      gridApi.paginationGoToFirstPage();
+    }
+    
+    if (gridApi.setColumnGroupState) {
+      try {
+        gridApi.setColumnGroupState([]);
+      } catch (error) {
+        console.debug('[ProfileApplication] Could not clear column group state:', error);
+      }
+    }
+    
     const resetColumnDefs = JSON.parse(JSON.stringify(originalColumnDefsRef.current)).map((col: any) => ({
       ...col,
       enableCellChangeFlash: true
     }));
     gridApi.setGridOption('columnDefs', resetColumnDefs);
     
-    // 4. Clear any pinned columns
-    gridApi.applyColumnState({
-      defaultState: { pinned: null }
-    });
-    
-    // 5. Clear row selection
-    gridApi.deselectAll();
-    
-    // 6. Reset key grid options to defaults
+    gridStateManagerRef.current.setColumnGroups([]);
     const defaultOptions = getDefaultGridOptions();
     Object.entries(defaultOptions).forEach(([key, value]) => {
       if (!INITIAL_GRID_OPTIONS.includes(key)) {
-        gridApi.setGridOption(key as any, value);
+        try {
+          gridApi.setGridOption(key as any, value);
+        } catch (error) {
+          console.debug(`[ProfileApplication] Could not reset option ${key}:`, error);
+        }
       }
     });
     
-    console.log('[ProfileApplication] Grid reset complete');
-  }, [originalColumnDefsRef]);
+    console.log('[ProfileApplication] Complete grid reset finished');
+  }, [originalColumnDefsRef, gridStateManagerRef]);
   
-  /**
-   * Apply grid options from profile
-   */
-  const applyGridOptions = useCallback((gridOptions: Record<string, any> | undefined) => {
+  const applyGridOptionsFromProfile = useCallback((gridOptions: Record<string, any> | undefined) => {
     const gridApi = gridApiRef.current;
     if (!gridApi) return;
     
-    console.log('[ProfileApplication] Applying grid options');
+    console.log('[ProfileApplication] Step 3: Applying grid options from profile');
     
-    // Start with defaults
     const defaultOptions = getDefaultGridOptions();
     
-    // Always ensure cell flashing is enabled
     defaultOptions.enableCellChangeFlash = true;
     defaultOptions.cellFlashDuration = 500;
     defaultOptions.cellFadeDuration = 1000;
     
-    // Apply defaults first
-    Object.entries(defaultOptions).forEach(([key, value]) => {
-      if (!INITIAL_GRID_OPTIONS.includes(key)) {
-        gridApi.setGridOption(key as any, value);
+    const finalOptions = { ...defaultOptions, ...gridOptions };
+    Object.entries(finalOptions).forEach(([key, value]) => {
+      if (!INITIAL_GRID_OPTIONS.includes(key) && value !== undefined) {
+        try {
+          gridApi.setGridOption(key as any, value);
+        } catch (error) {
+          console.debug(`[ProfileApplication] Could not set grid option ${key}:`, error);
+        }
       }
     });
     
-    // Then apply profile-specific options
-    if (gridOptions) {
-      Object.entries(gridOptions).forEach(([key, value]) => {
-        if (!INITIAL_GRID_OPTIONS.includes(key)) {
-          gridApi.setGridOption(key as any, value);
-        }
-      });
-    }
-    
-    console.log('[ProfileApplication] Grid options applied');
+    console.log('[ProfileApplication] Grid options applied successfully');
   }, []);
   
   /**
-   * Build column definitions with calculated columns and conditional formatting
+   * Apply calculated columns to column definitions (Step 4)
    */
-  const buildColumnDefs = useCallback((
+  const applyCalculatedColumns = useCallback((
     baseColumnDefs: ColDef[],
     calculatedColumns: CalculatedColumnDefinition[] | undefined
   ): ColDef[] => {
-    console.log('[ProfileApplication] Building column definitions');
+    console.log('[ProfileApplication] Step 4: Applying calculated columns');
     
-    // Start with base columns with conditional formatting
-    let defs = applyConditionalFormattingToColumns(
-      baseColumnDefs,
+    if (!calculatedColumns || calculatedColumns.length === 0) {
+      console.log('[ProfileApplication] No calculated columns to apply');
+      return baseColumnDefs;
+    }
+    
+    console.log('[ProfileApplication] Adding calculated columns:', calculatedColumns.length);
+    
+    const calcColDefs = calculatedColumns.map(col => {
+      const valueGetter = (params: any) => {
+        try {
+          const expr = (col.expression || '').replace(/\[([^\]]+)\]/g, 'params.data.$1');
+          const fn = new Function('params', `try { const data = params.data; const value = undefined; return (${expr}); } catch(e){ return undefined; }`);
+          return fn(params);
+        } catch {
+          return undefined;
+        }
+      };
+      
+      const def: any = {
+        field: col.field,
+        headerName: col.headerName || col.field,
+        valueGetter,
+        cellDataType: col.cellDataType || 'text',
+        pinned: col.pinned,
+        width: col.width,
+        enableCellChangeFlash: true
+      };
+      
+      if (col.valueFormatter) {
+        def.valueFormatter = col.valueFormatter;
+      }
+      
+      return def;
+    });
+    
+    const result = [...baseColumnDefs, ...calcColDefs];
+    console.log('[ProfileApplication] Calculated columns applied, total columns:', result.length);
+    return result;
+  }, []);
+
+  /**
+   * Apply column groups to column definitions (Step 5)
+   */
+  const applyColumnGroups = useCallback((
+    columnDefs: ColDef[],
+    columnGroups: any[] | undefined
+  ): ColDef[] => {
+    console.log('[ProfileApplication] Step 5: Applying column groups');
+    
+    if (!columnGroups || columnGroups.length === 0) {
+      console.log('[ProfileApplication] No column groups to apply');
+      return columnDefs;
+    }
+    
+    const activeGroups = columnGroups.filter(g => g.isActive !== false);
+    console.log('[ProfileApplication] Active column groups:', activeGroups.length, 'of', columnGroups.length);
+    
+    if (activeGroups.length === 0) {
+      console.log('[ProfileApplication] No active column groups');
+      return columnDefs;
+    }
+    
+    gridStateManagerRef.current.setColumnGroups(columnGroups);
+    const groupedColumnDefs = ColumnGroupService.buildColumnDefsWithGroups(
+      columnDefs,
+      activeGroups,
+      gridApiRef.current
+    );
+    
+    console.log('[ProfileApplication] Column groups applied:', {
+      before: columnDefs.length,
+      after: groupedColumnDefs.length,
+      hasGroups: groupedColumnDefs.some((col: any) => col.children)
+    });
+    
+    return groupedColumnDefs;
+  }, []);
+
+  /**
+   * Apply conditional formatting to column definitions (Step 7)
+   */
+  const applyConditionalFormatting = useCallback((columnDefs: ColDef[]): ColDef[] => {
+    console.log('[ProfileApplication] Step 7: Applying conditional formatting');
+    
+    const formattedDefs = applyConditionalFormattingToColumns(
+      columnDefs,
       conditionalFormattingRules,
       gridInstanceId
     );
     
-    // Ensure cell flashing is enabled
-    defs = defs.map(col => ({
+    const finalDefs = formattedDefs.map(col => ({
       ...col,
       enableCellChangeFlash: true
     }));
     
-    // Add calculated columns
-    if (calculatedColumns && calculatedColumns.length > 0) {
-      console.log('[ProfileApplication] Adding calculated columns:', calculatedColumns.length);
-      
-      const calcColDefs = calculatedColumns.map(col => {
-        const valueGetter = (params: any) => {
-          try {
-            // Convert [Field] to params.data.Field
-            const expr = (col.expression || '').replace(/\[([^\]]+)\]/g, 'params.data.$1');
-            // eslint-disable-next-line no-new-func
-            const fn = new Function('params', `try { const data = params.data; const value = undefined; return (${expr}); } catch(e){ return undefined; }`);
-            return fn(params);
-          } catch {
-            return undefined;
-          }
-        };
-        
-        const def: any = {
-          field: col.field,
-          headerName: col.headerName || col.field,
-          valueGetter,
-          cellDataType: col.cellDataType || 'text',
-          pinned: col.pinned,
-          width: col.width,
-          enableCellChangeFlash: true
-        };
-        
-        if (col.valueFormatter) {
-          def.valueFormatter = col.valueFormatter;
-        }
-        
-        return def;
+    console.log('[ProfileApplication] Conditional formatting applied');
+    return finalDefs;
+  }, [conditionalFormattingRules, gridInstanceId]);
+
+  /**
+   * Apply all grid states in correct order (Step 8)
+   */
+  const applyAllGridStates = useCallback((profile: DataGridStompSharedProfile) => {
+    const gridApi = gridApiRef.current;
+    if (!gridApi) return;
+    
+    console.log('[ProfileApplication] Step 8: Applying all grid states in correct order');
+    
+    const columnState = profile.gridState?.columnState || profile.columnState;
+    if (columnState && columnState.length > 0) {
+      console.log('[ProfileApplication] Step 8a: Applying column state');
+      gridApi.applyColumnState({
+        state: columnState,
+        applyOrder: true
       });
-      
-      defs = [...defs, ...calcColDefs];
+      console.log('[ProfileApplication] Column state applied successfully');
     }
     
-    console.log('[ProfileApplication] Column definitions built:', defs.length, 'columns');
-    return defs;
-  }, [conditionalFormattingRules, gridInstanceId]);
+    const columnGroupState = profile.gridState?.columnGroupState;
+    if (columnGroupState && columnGroupState.length > 0) {
+      console.log('[ProfileApplication] Step 8b: Applying column group expansion state');
+      if (gridApi.setColumnGroupState) {
+        gridApi.setColumnGroupState(columnGroupState);
+        console.log('[ProfileApplication] Column group state applied using setColumnGroupState');
+      } else if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
+        columnGroupState.forEach((state: any) => {
+          try {
+            (gridApi as any).setColumnGroupOpened(state.groupId, state.open);
+          } catch (e) {
+            console.warn(`[ProfileApplication] Could not set group state for ${state.groupId}:`, e);
+          }
+        });
+        console.log('[ProfileApplication] Column group state applied using fallback method');
+      }
+    } else if (profile.columnGroups) {
+      const defaultGroupState = profile.columnGroups
+        .filter(g => g.isActive !== false)
+        .map(g => ({
+          groupId: g.groupId,
+          open: g.openByDefault ?? true
+        }));
+      
+      if (defaultGroupState.length > 0) {
+        console.log('[ProfileApplication] Applying default column group state');
+        if (gridApi.setColumnGroupState) {
+          gridApi.setColumnGroupState(defaultGroupState);
+        }
+      }
+    }
+    
+    const filterModel = profile.gridState?.filterModel || profile.filterModel;
+    if (filterModel && Object.keys(filterModel).length > 0) {
+      console.log('[ProfileApplication] Step 8c: Applying filter model');
+      gridApi.setFilterModel(filterModel);
+    }
+    if (profile.gridState) {
+      console.log('[ProfileApplication] Step 8d: Applying remaining grid states');
+      gridStateManagerRef.current.applyState(profile.gridState, {
+        applyColumnState: false, // Already applied above
+        applyFilters: false, // Already applied above
+        applySorting: false, // Applied via column state
+        applyGrouping: true,
+        applyPagination: true,
+        applySelection: true,
+        applyExpansion: true,
+        applyPinning: true,
+        applyGridOptions: false, // Already applied in step 3
+        applyScrollPosition: true,
+        applySideBar: true,
+        rowIdField: providerConfig?.keyColumn || 'id'
+      });
+    }
+    
+    console.log('[ProfileApplication] All grid states applied successfully');
+  }, [providerConfig]);
   
   /**
    * Main function to apply profile to grid
@@ -195,76 +318,71 @@ export function useProfileApplication({
       return;
     }
     
-    console.log('[ProfileApplication] Starting profile application:', {
+    // Detect if this is actually a different profile
+    const isActualProfileChange = lastAppliedProfileRef.current !== null && 
+                                 lastAppliedProfileRef.current !== profile.name;
+    
+    console.log('[ProfileApplication] Starting profile application with CORRECT 8-step order:', {
       profileName: profile.name,
+      lastAppliedProfile: lastAppliedProfileRef.current,
       isProfileSwitch,
+      isActualProfileChange,
       hasColumnGroups: !!profile.columnGroups,
       hasCalculatedColumns: !!profile.calculatedColumns,
       hasGridState: !!profile.gridState
     });
     
-    // Step 1: Reset grid if switching profiles
-    if (isProfileSwitch) {
-      resetGrid();
-    }
-    
-    // Step 2: Apply grid options
-    applyGridOptions(profile.gridOptions);
-    
-    // Step 3: Build column definitions - make a deep copy to avoid modifying the original
-    const baseColumnDefs = JSON.parse(JSON.stringify(originalColumnDefsRef.current));
-    let columnDefs = buildColumnDefs(baseColumnDefs, profile.calculatedColumns);
-    
-    // Step 4: Apply column groups (modifies columnDefs)
-    if (profile.columnGroups && profile.columnGroups.length > 0) {
-      console.log('[ProfileApplication] Column groups found in profile:', profile.columnGroups);
-      
-      // Store column groups in grid state manager for later retrieval
-      gridStateManagerRef.current.setColumnGroups(profile.columnGroups);
-      
-      // Filter to only active groups
-      const activeGroups = profile.columnGroups.filter(g => g.isActive !== false);
-      console.log('[ProfileApplication] Active column groups:', activeGroups);
-      
-      if (activeGroups.length > 0) {
-        console.log('[ProfileApplication] Building columnDefs with groups, current columns:', columnDefs.length);
-        
-        // Use ColumnGroupService to build columnDefs with groups
-        const newColumnDefs = ColumnGroupService.buildColumnDefsWithGroups(
-          columnDefs,
-          activeGroups,
-          gridApi
-        );
-        
-        console.log('[ProfileApplication] Column defs after applying groups:', {
-          before: columnDefs.length,
-          after: newColumnDefs.length,
-          hasGroups: newColumnDefs.some((col: any) => col.children)
-        });
-        
-        columnDefs = newColumnDefs;
-      } else {
-        console.log('[ProfileApplication] No active column groups to apply');
-      }
+    // STEP 1: Reset AG-Grid's all states (using v33+ APIs)
+    // Always reset when switching profiles OR when it's an actual profile change
+    if (isProfileSwitch || isActualProfileChange) {
+      console.log('[ProfileApplication] Profile switch/change detected - performing complete reset');
+      resetGridCompletely();
     } else {
-      console.log('[ProfileApplication] No column groups in profile');
+      console.log('[ProfileApplication] Initial profile load - minimal reset');
+      // Even for initial load, ensure we start with clean column definitions
+      const resetColumnDefs = JSON.parse(JSON.stringify(originalColumnDefsRef.current)).map((col: any) => ({
+        ...col,
+        enableCellChangeFlash: true
+      }));
+      gridApi.setGridOption('columnDefs', resetColumnDefs);
     }
     
-    // Step 5: Set final columnDefs to grid (single update)
-    console.log('[ProfileApplication] Setting final column definitions to grid:', {
-      totalDefs: columnDefs.length,
-      hasGroups: columnDefs.some((col: any) => col.children),
-      groups: columnDefs.filter((col: any) => col.children).map((col: any) => ({
-        headerName: col.headerName,
-        groupId: col.groupId,
-        childrenCount: col.children?.length
-      }))
-    });
-    gridApi.setGridOption('columnDefs', columnDefs);
+    // STEP 2: Apply columnDefs from data provider to grid
+    console.log('[ProfileApplication] Step 2: Applying base column definitions from provider');
+    const baseColumnDefs = JSON.parse(JSON.stringify(originalColumnDefsRef.current)).map((col: any) => ({
+      ...col,
+      enableCellChangeFlash: true
+    }));
+    gridApi.setGridOption('columnDefs', baseColumnDefs);
     
-    // Verify what was actually set
+    // STEP 3: Apply grid options from selected profile settings
+    applyGridOptionsFromProfile(profile.gridOptions);
+    
+    // STEP 4: Apply calculated columns to columnDefs
+    const defsWithCalculated = applyCalculatedColumns(baseColumnDefs, profile.calculatedColumns);
+    if (defsWithCalculated !== baseColumnDefs) {
+      gridApi.setGridOption('columnDefs', defsWithCalculated);
+    }
+    
+    // STEP 5: Apply column groups to columnDefs
+    const groupedColumnDefs = applyColumnGroups(defsWithCalculated, profile.columnGroups);
+    if (groupedColumnDefs !== defsWithCalculated) {
+      gridApi.setGridOption('columnDefs', groupedColumnDefs);
+    }
+    
+    // STEP 6: Apply column styles and settings (future implementation)
+    // TODO: Implement column styles application
+    console.log('[ProfileApplication] Step 6: Column styles (not yet implemented)');
+    
+    // STEP 7: Apply conditional formatting rules to columnDefs
+    const finalColumnDefs = applyConditionalFormatting(groupedColumnDefs);
+    if (finalColumnDefs !== groupedColumnDefs) {
+      gridApi.setGridOption('columnDefs', finalColumnDefs);
+    }
+    
+    // Verify final column definitions
     const verifyDefs = gridApi.getColumnDefs();
-    console.log('[ProfileApplication] Verification - column defs after setting:', {
+    console.log('[ProfileApplication] Final column definitions verification:', {
       totalDefs: verifyDefs?.length,
       hasGroups: verifyDefs?.some((col: any) => col.children),
       groups: verifyDefs?.filter((col: any) => col.children).map((col: any) => ({
@@ -274,105 +392,20 @@ export function useProfileApplication({
       }))
     });
     
-    // Step 6: Apply grid state (filters, sorts, but NOT column state yet if we have column groups)
-    const hasColumnGroups = profile.columnGroups && profile.columnGroups.length > 0;
+    // STEP 8: Apply all grid states (column state FIRST, then column group state)
+    applyAllGridStates(profile);
     
-    if (profile.gridState) {
-      console.log('[ProfileApplication] Applying grid state (column state deferred if groups exist)');
-      
-      gridStateManagerRef.current.applyState(profile.gridState, {
-        applyColumnState: !hasColumnGroups, // Don't apply column state yet if we have groups
-        applyFilters: true,
-        applySorting: true,
-        applyGrouping: true,
-        applyPagination: true,
-        applySelection: true,
-        applyExpansion: true,
-        applyGridOptions: false, // Already applied in step 2
-        applySideBar: true,
-        rowIdField: providerConfig?.keyColumn || 'id'
-      });
-    } else if (profile.columnState || profile.filterModel) {
-      // Fallback to legacy properties (only apply column state if no groups)
-      console.log('[ProfileApplication] Applying legacy grid state');
-      
-      if (!hasColumnGroups && profile.columnState && profile.columnState.length > 0) {
-        gridApi.applyColumnState({
-          state: profile.columnState,
-          applyOrder: true
-        });
-      }
-      
-      if (profile.filterModel && Object.keys(profile.filterModel).length > 0) {
-        gridApi.setFilterModel(profile.filterModel);
-      }
-    }
-    
-    // Step 7: Apply column group expansion state FIRST (before column state)
-    if (profile.gridState?.columnGroupState || profile.columnGroups) {
-      console.log('[ProfileApplication] Applying column group expansion state');
-      
-      let groupState = profile.gridState?.columnGroupState;
-      
-      // If no saved group state, create default from column groups
-      if (!groupState && profile.columnGroups) {
-        groupState = profile.columnGroups
-          .filter(g => g.isActive !== false)
-          .map(g => ({
-            groupId: g.groupId,
-            open: g.openByDefault ?? true
-          }));
-      }
-      
-      if (groupState && groupState.length > 0) {
-        // Apply group state directly (no delay)
-        if (gridApi.setColumnGroupState) {
-          gridApi.setColumnGroupState(groupState);
-          console.log('[ProfileApplication] Applied column group state:', groupState);
-        } else {
-          // Fallback to individual group opening
-          groupState.forEach((state: any) => {
-            if (typeof (gridApi as any).setColumnGroupOpened === 'function') {
-              (gridApi as any).setColumnGroupOpened(state.groupId, state.open);
-            }
-          });
-          console.log('[ProfileApplication] Applied column group state via fallback method');
-        }
-      }
-      
-      // AG-Grid will handle column visibility based on columnGroupShow property automatically
-      // No need for manual visibility control or event listeners
-    }
-    
-    // Step 8: Apply column state AFTER column groups are set (if we have column groups)
-    if (hasColumnGroups && (profile.gridState?.columnState || profile.columnState)) {
-      console.log('[ProfileApplication] Applying column state after column groups');
-      
-      const columnState = profile.gridState?.columnState || profile.columnState;
-      
-      if (columnState && columnState.length > 0) {
-        // Apply column state with a small delay to ensure column groups are fully processed
-        setTimeout(() => {
-          gridApi.applyColumnState({
-            state: columnState,
-            applyOrder: true,
-            defaultState: { width: null }
-          });
-          console.log('[ProfileApplication] Column state applied:', {
-            stateCount: columnState.length
-          });
-        }, 100);
-      }
-    }
-    
-    // Final refresh
+    // Final refresh to ensure all changes are visible
     gridApi.refreshCells({ force: true });
     
-    console.log('[ProfileApplication] Profile application complete');
-  }, [resetGrid, applyGridOptions, buildColumnDefs, originalColumnDefsRef, providerConfig]);
+    // Update the last applied profile reference
+    lastAppliedProfileRef.current = profile.name;
+    
+    console.log('[ProfileApplication] Profile application complete - all 8 steps executed in correct order');
+  }, [resetGridCompletely, applyGridOptionsFromProfile, applyCalculatedColumns, applyColumnGroups, applyConditionalFormatting, applyAllGridStates, originalColumnDefsRef]);
   
   return {
     applyProfile,
-    resetGrid
+    resetGrid: resetGridCompletely
   };
 }
