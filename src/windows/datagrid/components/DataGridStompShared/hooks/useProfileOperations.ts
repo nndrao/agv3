@@ -18,6 +18,7 @@ interface ProfileOperationsProps {
   setColumnGroups: (groupIds: string[]) => void; // Now handles group IDs
   checkProfileApplicationComplete: () => void;
   gridInstanceId: string; // Required for migration
+  gridApiRef: React.MutableRefObject<any>; // Required for column group state saving
 }
 
 interface ProfileLoadingState {
@@ -39,7 +40,8 @@ export function useProfileOperations({
   extractFullGridState,
   setColumnGroups,
   checkProfileApplicationComplete,
-  gridInstanceId
+  gridInstanceId,
+  gridApiRef
 }: ProfileOperationsProps) {
   const { toast } = useToast();
   
@@ -96,6 +98,11 @@ export function useProfileOperations({
   ) => {
     // Extract full grid state for comprehensive persistence
     const fullGridState = extractFullGridState();
+    
+    // Save current column group state before extracting grid state
+    if (unsavedColumnGroups && unsavedColumnGroups.length > 0 && gridApiRef.current) {
+      ColumnGroupService.saveColumnGroupState(gridInstanceId, gridApiRef.current, unsavedColumnGroups);
+    }
     
     // Extract legacy grid state for backward compatibility
     const { columnState, filterModel, sortModel } = extractGridState();

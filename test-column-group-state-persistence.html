@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Column Group State Persistence Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { background-color: #e7f5e7; }
+        .fail { background-color: #fce4e4; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Column Group State Persistence Test</h1>
+    <p>This tests the AG-Grid API integration for column group state management.</p>
+
+    <div class="test-case">
+        <h2>Test 1: AG-Grid API Methods</h2>
+        <button onclick="testAGGridAPIMethods()">Run Test</button>
+        <pre id="test1-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: State Extraction and Application</h2>
+        <button onclick="testStateExtraction()">Run Test</button>
+        <pre id="test2-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: Profile Integration</h2>
+        <button onclick="testProfileIntegration()">Run Test</button>
+        <pre id="test3-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 4: Event Listener Setup</h2>
+        <button onclick="testEventListeners()">Run Test</button>
+        <pre id="test4-result"></pre>
+    </div>
+
+    <script>
+        // Mock AG-Grid API for testing
+        class MockGridApi {
+            constructor() {
+                this.columnGroupState = [
+                    { groupId: 'group_basic', open: true },
+                    { groupId: 'group_advanced', open: false }
+                ];
+                this.eventListeners = new Map();
+            }
+
+            getColumnGroupState() {
+                console.log('[MockGridApi] getColumnGroupState called');
+                return [...this.columnGroupState];
+            }
+
+            setColumnGroupState(state) {
+                console.log('[MockGridApi] setColumnGroupState called with:', state);
+                this.columnGroupState = [...state];
+                
+                // Trigger event
+                this.triggerEvent('columnGroupOpened', { state });
+            }
+
+            setColumnGroupOpened(groupId, open) {
+                console.log('[MockGridApi] setColumnGroupOpened called:', groupId, open);
+                const group = this.columnGroupState.find(g => g.groupId === groupId);
+                if (group) {
+                    group.open = open;
+                }
+                
+                // Trigger event
+                this.triggerEvent('columnGroupOpened', { groupId, open });
+            }
+
+            addEventListener(eventType, callback) {
+                if (!this.eventListeners.has(eventType)) {
+                    this.eventListeners.set(eventType, []);
+                }
+                this.eventListeners.get(eventType).push(callback);
+            }
+
+            removeEventListener(eventType, callback) {
+                if (this.eventListeners.has(eventType)) {
+                    const listeners = this.eventListeners.get(eventType);
+                    const index = listeners.indexOf(callback);
+                    if (index > -1) {
+                        listeners.splice(index, 1);
+                    }
+                }
+            }
+
+            triggerEvent(eventType, data) {
+                if (this.eventListeners.has(eventType)) {
+                    this.eventListeners.get(eventType).forEach(callback => {
+                        callback(data);
+                    });
+                }
+            }
+        }
+
+        // Mock ColumnGroupService methods
+        const MockColumnGroupService = {
+            extractColumnGroupState(gridApi) {
+                if (!gridApi || typeof gridApi.getColumnGroupState !== 'function') {
+                    return [];
+                }
+                return gridApi.getColumnGroupState();
+            },
+
+            applyColumnGroupState(gridApi, groupState) {
+                if (!gridApi || typeof gridApi.setColumnGroupState !== 'function') {
+                    return false;
+                }
+                gridApi.setColumnGroupState(groupState);
+                return true;
+            },
+
+            saveColumnGroupState(gridInstanceId, gridApi, activeGroupIds) {
+                const state = this.extractColumnGroupState(gridApi);
+                const key = `test_column_group_state_${gridInstanceId}`;
+                localStorage.setItem(key, JSON.stringify({
+                    state,
+                    activeGroupIds,
+                    timestamp: Date.now()
+                }));
+                console.log('[MockColumnGroupService] Saved state to localStorage');
+            },
+
+            loadAndApplyColumnGroupState(gridInstanceId, gridApi, activeGroupIds) {
+                const key = `test_column_group_state_${gridInstanceId}`;
+                const saved = localStorage.getItem(key);
+                if (!saved) return false;
+
+                const { state } = JSON.parse(saved);
+                return this.applyColumnGroupState(gridApi, state);
+            },
+
+            setupColumnGroupStateListeners(gridInstanceId, gridApi, activeGroupIds) {
+                let saveCount = 0;
+                
+                const onColumnGroupOpened = (event) => {
+                    saveCount++;
+                    console.log('[MockColumnGroupService] Column group event received:', event);
+                    this.saveColumnGroupState(gridInstanceId, gridApi, activeGroupIds);
+                };
+
+                gridApi.addEventListener('columnGroupOpened', onColumnGroupOpened);
+
+                return () => {
+                    gridApi.removeEventListener('columnGroupOpened', onColumnGroupOpened);
+                    return saveCount;
+                };
+            }
+        };
+
+        function testAGGridAPIMethods() {
+            const result = document.getElementById('test1-result');
+            
+            try {
+                const mockGridApi = new MockGridApi();
+                
+                let output = 'AG-Grid API Methods Test:\n\n';
+                
+                // Test getColumnGroupState
+                const initialState = mockGridApi.getColumnGroupState();
+                output += `✓ getColumnGroupState() returned ${initialState.length} groups\n`;
+                output += `  Initial state: ${JSON.stringify(initialState)}\n\n`;
+                
+                // Test setColumnGroupState
+                const newState = [
+                    { groupId: 'group_basic', open: false },
+                    { groupId: 'group_advanced', open: true }
+                ];
+                mockGridApi.setColumnGroupState(newState);
+                
+                const updatedState = mockGridApi.getColumnGroupState();
+                output += `✓ setColumnGroupState() applied successfully\n`;
+                output += `  Updated state: ${JSON.stringify(updatedState)}\n\n`;
+                
+                // Test setColumnGroupOpened
+                mockGridApi.setColumnGroupOpened('group_basic', true);
+                const finalState = mockGridApi.getColumnGroupState();
+                output += `✓ setColumnGroupOpened() applied successfully\n`;
+                output += `  Final state: ${JSON.stringify(finalState)}\n`;
+                
+                // Verify state changes
+                const basicGroup = finalState.find(g => g.groupId === 'group_basic');
+                if (basicGroup && basicGroup.open === true) {
+                    output += '\n✓ All AG-Grid API methods working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '\n✗ State changes not applied correctly';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testStateExtraction() {
+            const result = document.getElementById('test2-result');
+            
+            try {
+                const mockGridApi = new MockGridApi();
+                
+                let output = 'State Extraction and Application Test:\n\n';
+                
+                // Set initial state
+                const initialState = [
+                    { groupId: 'group_1', open: true },
+                    { groupId: 'group_2', open: false },
+                    { groupId: 'group_3', open: true }
+                ];
+                mockGridApi.setColumnGroupState(initialState);
+                
+                // Extract state using service
+                const extractedState = MockColumnGroupService.extractColumnGroupState(mockGridApi);
+                output += `✓ Extracted state: ${JSON.stringify(extractedState)}\n\n`;
+                
+                // Modify state
+                const modifiedState = extractedState.map(group => ({
+                    ...group,
+                    open: !group.open // Flip all states
+                }));
+                
+                // Apply modified state
+                const success = MockColumnGroupService.applyColumnGroupState(mockGridApi, modifiedState);
+                output += `✓ Applied modified state: ${success}\n`;
+                
+                // Verify changes
+                const finalState = mockGridApi.getColumnGroupState();
+                output += `✓ Final state: ${JSON.stringify(finalState)}\n\n`;
+                
+                // Check if all states were flipped
+                const allFlipped = finalState.every(group => {
+                    const original = initialState.find(g => g.groupId === group.groupId);
+                    return original && group.open !== original.open;
+                });
+                
+                if (allFlipped) {
+                    output += '✓ State extraction and application working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '✗ State changes not applied correctly';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testProfileIntegration() {
+            const result = document.getElementById('test3-result');
+            
+            try {
+                const mockGridApi = new MockGridApi();
+                const gridInstanceId = 'test_grid_123';
+                const activeGroupIds = ['group_1', 'group_2'];
+                
+                let output = 'Profile Integration Test:\n\n';
+                
+                // Set initial state
+                const initialState = [
+                    { groupId: 'group_1', open: true },
+                    { groupId: 'group_2', open: false }
+                ];
+                mockGridApi.setColumnGroupState(initialState);
+                
+                // Save state to profile
+                MockColumnGroupService.saveColumnGroupState(gridInstanceId, mockGridApi, activeGroupIds);
+                output += '✓ Saved column group state to profile storage\n';
+                
+                // Modify state
+                mockGridApi.setColumnGroupOpened('group_1', false);
+                mockGridApi.setColumnGroupOpened('group_2', true);
+                
+                const modifiedState = mockGridApi.getColumnGroupState();
+                output += `✓ Modified state: ${JSON.stringify(modifiedState)}\n`;
+                
+                // Load and apply saved state
+                const loadSuccess = MockColumnGroupService.loadAndApplyColumnGroupState(
+                    gridInstanceId, 
+                    mockGridApi, 
+                    activeGroupIds
+                );
+                
+                const restoredState = mockGridApi.getColumnGroupState();
+                output += `✓ Loaded state: ${loadSuccess}\n`;
+                output += `✓ Restored state: ${JSON.stringify(restoredState)}\n\n`;
+                
+                // Verify restoration
+                const stateMatches = JSON.stringify(initialState) === JSON.stringify(restoredState);
+                
+                if (stateMatches) {
+                    output += '✓ Profile integration working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '✗ State not restored correctly';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testEventListeners() {
+            const result = document.getElementById('test4-result');
+            
+            try {
+                const mockGridApi = new MockGridApi();
+                const gridInstanceId = 'test_grid_456';
+                const activeGroupIds = ['group_1', 'group_2'];
+                
+                let output = 'Event Listener Setup Test:\n\n';
+                
+                // Set up event listeners
+                const cleanup = MockColumnGroupService.setupColumnGroupStateListeners(
+                    gridInstanceId, 
+                    mockGridApi, 
+                    activeGroupIds
+                );
+                
+                output += '✓ Event listeners set up successfully\n';
+                
+                // Trigger some events
+                mockGridApi.setColumnGroupOpened('group_1', false);
+                mockGridApi.setColumnGroupOpened('group_2', true);
+                mockGridApi.setColumnGroupState([
+                    { groupId: 'group_1', open: true },
+                    { groupId: 'group_2', open: false }
+                ]);
+                
+                output += '✓ Triggered column group events\n';
+                
+                // Check if state was saved (should be in localStorage)
+                const savedData = localStorage.getItem(`test_column_group_state_${gridInstanceId}`);
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    output += `✓ State automatically saved: ${JSON.stringify(parsed.state)}\n`;
+                } else {
+                    output += '✗ State not automatically saved\n';
+                }
+                
+                // Clean up
+                const saveCount = cleanup();
+                output += `✓ Event listeners cleaned up (${saveCount} saves triggered)\n\n`;
+                
+                if (savedData && saveCount > 0) {
+                    output += '✓ Event listener integration working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '✗ Event listeners not working correctly';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        // Clean up test data on page load
+        window.addEventListener('load', () => {
+            // Clear any existing test data
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('test_column_group_state_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

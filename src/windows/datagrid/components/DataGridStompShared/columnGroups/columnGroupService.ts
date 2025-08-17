@@ -495,4 +495,212 @@ export class ColumnGroupService {
   ): string[] {
     return GridColumnGroupStorage.migrateFromProfileGroups(gridInstanceId, profileColumnGroups);
   }
+
+  /**
+   * Extract column group state from AG-Grid using native API
+   * Returns the current open/closed state of all column groups
+   */
+  static extractColumnGroupState(gridApi: any): Array<{ groupId: string; open: boolean }> {
+    if (!gridApi) {
+      console.warn('[ColumnGroupService] Grid API not available for state extraction');
+      return [];
+    }
+
+    try {
+      // Use AG-Grid's native getColumnGroupState API
+      if (typeof gridApi.getColumnGroupState === 'function') {
+        const groupState = gridApi.getColumnGroupState();
+        console.log('[🔍 COLGROUP-EXTRACT-STATE] Extracted column group state using AG-Grid API:', groupState);
+        return groupState || [];
+      } else {
+        console.warn('[ColumnGroupService] getColumnGroupState not available on grid API');
+        return [];
+      }
+    } catch (error) {
+      console.error('[ColumnGroupService] Error extracting column group state:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Apply column group state to AG-Grid using native API
+   * Sets the open/closed state of column groups
+   */
+  static applyColumnGroupState(
+    gridApi: any, 
+    groupState: Array<{ groupId: string; open: boolean }>
+  ): boolean {
+    if (!gridApi) {
+      console.warn('[ColumnGroupService] Grid API not available for state application');
+      return false;
+    }
+
+    if (!groupState || groupState.length === 0) {
+      console.log('[ColumnGroupService] No column group state to apply');
+      return true;
+    }
+
+    try {
+      console.log('[🔍 COLGROUP-APPLY-STATE] Applying column group state using AG-Grid API:', groupState);
+      
+      // Use AG-Grid's native setColumnGroupState API
+      if (typeof gridApi.setColumnGroupState === 'function') {
+        gridApi.setColumnGroupState(groupState);
+        
+        // Verify the state was applied
+        const newState = gridApi.getColumnGroupState();
+        console.log('[🔍 COLGROUP-APPLY-STATE-VERIFY] Column group state after application:', newState);
+        
+        return true;
+      } else {
+        console.warn('[ColumnGroupService] setColumnGroupState not available, using fallback');
+        
+        // Fallback to individual group operations
+        if (typeof gridApi.setColumnGroupOpened === 'function') {
+          groupState.forEach(state => {
+            try {
+              gridApi.setColumnGroupOpened(state.groupId, state.open);
+            } catch (e) {
+              console.warn(`[ColumnGroupService] Could not set state for group ${state.groupId}:`, e);
+            }
+          });
+          return true;
+        } else {
+          console.error('[ColumnGroupService] No column group state methods available on grid API');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('[ColumnGroupService] Error applying column group state:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Save column group state to grid-level storage
+   * Combines group definitions with their current open/closed state
+   */
+  static saveColumnGroupState(
+    gridInstanceId: string,
+    gridApi: any,
+    activeGroupIds: string[]
+  ): void {
+    try {
+      // Extract current column group state from AG-Grid
+      const groupState = this.extractColumnGroupState(gridApi);
+      
+      // Load existing groups from storage
+      const existingGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+      
+      // Update groups with current state
+      const updatedGroups = existingGroups.map(group => {
+        const currentState = groupState.find(state => state.groupId === group.groupId);
+        return {
+          ...group,
+          openByDefault: currentState ? currentState.open : group.openByDefault,
+          updatedAt: Date.now()
+        };
+      });
+      
+      // Save updated groups back to storage
+      GridColumnGroupStorage.saveColumnGroups(gridInstanceId, updatedGroups);
+      
+      console.log('[🔍 COLGROUP-SAVE-STATE] Saved column group state to storage:', {
+        groupCount: updatedGroups.length,
+        stateCount: groupState.length
+      });
+    } catch (error) {
+      console.error('[ColumnGroupService] Error saving column group state:', error);
+    }
+  }
+
+  /**
+   * Load and apply column group state from grid-level storage
+   * Restores both group definitions and their open/closed state
+   */
+  static loadAndApplyColumnGroupState(
+    gridInstanceId: string,
+    gridApi: any,
+    activeGroupIds: string[]
+  ): boolean {
+    try {
+      // Load groups from storage
+      const allGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+      const activeGroups = allGroups.filter(group => activeGroupIds.includes(group.groupId));
+      
+      if (activeGroups.length === 0) {
+        console.log('[ColumnGroupService] No active groups to restore state for');
+        return true;
+      }
+      
+      // Build group state array from stored openByDefault values
+      const groupState = activeGroups.map(group => ({
+        groupId: group.groupId,
+        open: group.openByDefault ?? true
+      }));
+      
+      // Apply the state using AG-Grid API
+      const success = this.applyColumnGroupState(gridApi, groupState);
+      
+      console.log('[🔍 COLGROUP-LOAD-STATE] Loaded and applied column group state:', {
+        success,
+        groupCount: activeGroups.length,
+        groupState
+      });
+      
+      return success;
+    } catch (error) {
+      console.error('[ColumnGroupService] Error loading and applying column group state:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Set up event listeners to automatically save column group state changes
+   * This should be called after column groups are applied to the grid
+   */
+  static setupColumnGroupStateListeners(
+    gridInstanceId: string,
+    gridApi: any,
+    activeGroupIds: string[]
+  ): () => void {
+    if (!gridApi) {
+      console.warn('[ColumnGroupService] Grid API not available for setting up listeners');
+      return () => {};
+    }
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const saveStateDebounced = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      debounceTimer = setTimeout(() => {
+        this.saveColumnGroupState(gridInstanceId, gridApi, activeGroupIds);
+      }, 500); // Debounce to avoid excessive saves
+    };
+
+    // Listen for column group opened/closed events
+    const onColumnGroupOpened = (event: any) => {
+      console.log('[🔍 COLGROUP-EVENT] Column group opened/closed:', event);
+      saveStateDebounced();
+    };
+
+    // Add event listener
+    if (typeof gridApi.addEventListener === 'function') {
+      gridApi.addEventListener('columnGroupOpened', onColumnGroupOpened);
+    }
+
+    // Return cleanup function
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      if (typeof gridApi.removeEventListener === 'function') {
+        gridApi.removeEventListener('columnGroupOpened', onColumnGroupOpened);
+      }
+    };
+  }
 }

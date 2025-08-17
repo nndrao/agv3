@@ -280,7 +280,8 @@ const DataGridStompSharedComponent = () => {
     extractFullGridState,
     setColumnGroups,
     checkProfileApplicationComplete,
-    gridInstanceId
+    gridInstanceId,
+    gridApiRef
   });
   
   // ========== Connection Management Hook ==========

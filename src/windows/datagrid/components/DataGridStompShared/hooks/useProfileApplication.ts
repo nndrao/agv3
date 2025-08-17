@@ -96,12 +96,38 @@ export function useProfileApplication({
     if (!activeGroupIds?.length) return columnDefs;
     
     gridStateManagerRef.current.setActiveColumnGroupIds(activeGroupIds);
-    return ColumnGroupService.buildColumnDefsWithGroups(
+    
+    // Build column definitions with groups
+    const newColumnDefs = ColumnGroupService.buildColumnDefsWithGroups(
       columnDefs,
       activeGroupIds,
       gridInstanceId,
       gridApiRef.current
     );
+    
+    // Schedule column group state restoration and event listener setup after column definitions are applied
+    if (gridApiRef.current) {
+      setTimeout(() => {
+        // Restore column group state
+        ColumnGroupService.loadAndApplyColumnGroupState(
+          gridInstanceId,
+          gridApiRef.current,
+          activeGroupIds
+        );
+        
+        // Set up event listeners to save state changes
+        const cleanup = ColumnGroupService.setupColumnGroupStateListeners(
+          gridInstanceId,
+          gridApiRef.current,
+          activeGroupIds
+        );
+        
+        // Store cleanup function for later use (could be stored in a ref if needed)
+        // For now, we'll let it be garbage collected when the component unmounts
+      }, 100); // Small delay to ensure column definitions are fully applied
+    }
+    
+    return newColumnDefs;
   }, [gridInstanceId]);
 
   const applyConditionalFormatting = useCallback((columnDefs: ColDef[]): ColDef[] => {

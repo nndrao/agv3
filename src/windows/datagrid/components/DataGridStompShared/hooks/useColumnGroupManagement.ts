@@ -96,6 +96,15 @@ export function useColumnGroupManagement({
       // Force a grid refresh to ensure the changes are visible
       gridApi.refreshCells({ force: true });
       
+      // Schedule column group state restoration after a short delay
+      setTimeout(() => {
+        ColumnGroupService.loadAndApplyColumnGroupState(
+          gridInstanceId,
+          gridApi,
+          activeGroupIds
+        );
+      }, 200);
+      
       toast({
         title: "Column Groups Applied",
         description: `${activeGroupIds.length} column group(s) have been applied`

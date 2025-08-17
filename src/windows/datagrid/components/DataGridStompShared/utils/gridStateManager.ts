@@ -369,6 +369,12 @@ export class GridStateManager {
         this.applyExpansionState(state.expandedGroups);
       }
       
+      // Apply column group state
+      if (state.columnGroupState && state.columnGroupState.length > 0) {
+        console.log('[GridStateManager] Applying column group state');
+        this.applyColumnGroupState(state);
+      }
+      
       // Apply pinning
       if (applyPinning) {
         if (state.pinnedTopRowData && typeof (this.gridApi as any).setPinnedTopRowData === 'function') {
@@ -484,81 +490,20 @@ export class GridStateManager {
   private extractColumnGroupState(): Array<{ groupId: string; open: boolean }> {
     if (!this.gridApi) return [];
     
-    // Use the official AG-Grid API to get column group state
-    if (this.gridApi.getColumnGroupState) {
-      try {
-        const groupState = this.gridApi.getColumnGroupState();
-        console.log('[🔍 GRIDSTATE-001] Extracted column group state using getColumnGroupState:', groupState);
-        return groupState || [];
-      } catch (error) {
-        console.warn('[🔍 GRIDSTATE-002] Error calling getColumnGroupState:', error);
-      }
-    }
-    
-    // Fallback: try to determine group states manually
-    const groups: Array<{ groupId: string; open: boolean }> = [];
-    
     try {
-      // Check for setColumnGroupOpened method to determine group states
-      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
-        const columnDefs = this.gridApi.getColumnDefs();
-        if (columnDefs) {
-          const extractGroups = (defs: any[]) => {
-            defs.forEach((def: any) => {
-              if (def.children && def.groupId) {
-                // Determine if group is open or collapsed based on column visibility
-                let isOpen = true;
-                
-                // Analyze columns to determine group state:
-                // If columns with columnGroupShow:'open' are hidden -> group is collapsed
-                // If columns with columnGroupShow:'closed' are visible -> group is collapsed
-                let hasOpenColumns = false;
-                let hasClosedColumns = false;
-                let openColumnsHidden = false;
-                let closedColumnsVisible = false;
-                
-                def.children.forEach((child: any) => {
-                  const colState = this.gridApi!.getColumnState()?.find((s: any) => 
-                    s.colId === (child.colId || child.field)
-                  );
-                  
-                  if (child.columnGroupShow === 'open') {
-                    hasOpenColumns = true;
-                    if (colState && colState.hide === true) {
-                      openColumnsHidden = true;
-                    }
-                  } else if (child.columnGroupShow === 'closed') {
-                    hasClosedColumns = true;
-                    if (colState && colState.hide === false) {
-                      closedColumnsVisible = true;
-                    }
-                  }
-                  // Columns with undefined columnGroupShow are always visible
-                });
-                
-                // Determine group state based on column visibility patterns
-                if (hasOpenColumns && openColumnsHidden) {
-                  isOpen = false; // Group is collapsed (open columns are hidden)
-                } else if (hasClosedColumns && closedColumnsVisible) {
-                  isOpen = false; // Group is collapsed (closed columns are visible)
-                }
-                
-                groups.push({
-                  groupId: def.groupId,
-                  open: isOpen
-                });
-                
-              }
-            });
-          };
-          extractGroups(columnDefs);
-        }
+      // Use the official AG-Grid API to get column group state
+      if (typeof this.gridApi.getColumnGroupState === 'function') {
+        const groupState = this.gridApi.getColumnGroupState();
+        console.log('[🔍 GRIDSTATE-001] Extracted column group state using AG-Grid API:', groupState);
+        return groupState || [];
+      } else {
+        console.warn('[🔍 GRIDSTATE-002] getColumnGroupState not available on grid API');
+        return [];
       }
     } catch (error) {
-      console.warn('[🔍][COLUMN_GROUP_STATE_EXTRACT] Error extracting column group state:', error);
+      console.error('[🔍 GRIDSTATE-003] Error extracting column group state:', error);
+      return [];
     }
-    
-    return groups;
   }
   
   private extractSortModel(): SortModel {
@@ -774,30 +719,37 @@ export class GridStateManager {
     if (!this.gridApi || !state.columnGroupState) return true;
     
     try {
+      console.log('[🔍 GRIDSTATE-004] Applying column group state using AG-Grid API:', state.columnGroupState);
+      
       // Use the official AG-Grid API to set column group state
-      if (this.gridApi.setColumnGroupState) {
-        console.log('[🔍 GRIDSTATE-003] Applying column group state using setColumnGroupState:', state.columnGroupState);
+      if (typeof this.gridApi.setColumnGroupState === 'function') {
         this.gridApi.setColumnGroupState(state.columnGroupState);
+        
+        // Verify the state was applied
+        const newState = this.gridApi.getColumnGroupState();
+        console.log('[🔍 GRIDSTATE-005] Column group state after application:', newState);
+        
         return true;
+      } else {
+        console.warn('[🔍 GRIDSTATE-006] setColumnGroupState not available, using fallback');
+        
+        // Fallback: use setColumnGroupOpened for each group
+        if (typeof this.gridApi.setColumnGroupOpened === 'function') {
+          state.columnGroupState.forEach((groupState: any) => {
+            try {
+              this.gridApi.setColumnGroupOpened(groupState.groupId, groupState.open);
+            } catch (e) {
+              console.warn(`[🔍 GRIDSTATE-007] Could not set state for group ${groupState.groupId}:`, e);
+            }
+          });
+          return true;
+        } else {
+          console.error('[🔍 GRIDSTATE-008] No column group state methods available on grid API');
+          return false;
+        }
       }
-      
-      // Fallback: use setColumnGroupOpened for each group
-      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
-        console.log('[🔍 GRIDSTATE-004] Applying column group state using setColumnGroupOpened');
-        state.columnGroupState.forEach((groupState: any) => {
-          try {
-            (this.gridApi as any).setColumnGroupOpened(groupState.groupId, groupState.open);
-          } catch (e) {
-            console.warn(`[🔍 GRIDSTATE-005] Could not set state for group ${groupState.groupId}:`, e);
-          }
-        });
-        return true;
-      }
-      
-      console.warn('[🔍 GRIDSTATE-006] No method available to apply column group state');
-      return false;
     } catch (error) {
-      console.error('[🔍 GRIDSTATE-007] Error applying column group state:', error);
+      console.error('[🔍 GRIDSTATE-009] Error applying column group state:', error);
       return false;
     }
   }
