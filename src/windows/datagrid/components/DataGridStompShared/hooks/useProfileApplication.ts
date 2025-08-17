@@ -274,12 +274,14 @@ export function useProfileApplication({
       }))
     });
     
-    // Step 6: Apply grid state (filters, sorts, column state, etc.)
+    // Step 6: Apply grid state (filters, sorts, but NOT column state yet if we have column groups)
+    const hasColumnGroups = profile.columnGroups && profile.columnGroups.length > 0;
+    
     if (profile.gridState) {
-      console.log('[ProfileApplication] Applying grid state');
+      console.log('[ProfileApplication] Applying grid state (column state deferred if groups exist)');
       
       gridStateManagerRef.current.applyState(profile.gridState, {
-        applyColumnState: true,
+        applyColumnState: !hasColumnGroups, // Don't apply column state yet if we have groups
         applyFilters: true,
         applySorting: true,
         applyGrouping: true,
@@ -291,10 +293,10 @@ export function useProfileApplication({
         rowIdField: providerConfig?.keyColumn || 'id'
       });
     } else if (profile.columnState || profile.filterModel) {
-      // Fallback to legacy properties
+      // Fallback to legacy properties (only apply column state if no groups)
       console.log('[ProfileApplication] Applying legacy grid state');
       
-      if (profile.columnState && profile.columnState.length > 0) {
+      if (!hasColumnGroups && profile.columnState && profile.columnState.length > 0) {
         gridApi.applyColumnState({
           state: profile.columnState,
           applyOrder: true
@@ -306,7 +308,7 @@ export function useProfileApplication({
       }
     }
     
-    // Step 7: Apply column group expansion state
+    // Step 7: Apply column group expansion state FIRST (before column state)
     if (profile.gridState?.columnGroupState || profile.columnGroups) {
       console.log('[ProfileApplication] Applying column group expansion state');
       
@@ -340,6 +342,27 @@ export function useProfileApplication({
       
       // AG-Grid will handle column visibility based on columnGroupShow property automatically
       // No need for manual visibility control or event listeners
+    }
+    
+    // Step 8: Apply column state AFTER column groups are set (if we have column groups)
+    if (hasColumnGroups && (profile.gridState?.columnState || profile.columnState)) {
+      console.log('[ProfileApplication] Applying column state after column groups');
+      
+      const columnState = profile.gridState?.columnState || profile.columnState;
+      
+      if (columnState && columnState.length > 0) {
+        // Apply column state with a small delay to ensure column groups are fully processed
+        setTimeout(() => {
+          gridApi.applyColumnState({
+            state: columnState,
+            applyOrder: true,
+            defaultState: { width: null }
+          });
+          console.log('[ProfileApplication] Column state applied:', {
+            stateCount: columnState.length
+          });
+        }, 100);
+      }
     }
     
     // Final refresh

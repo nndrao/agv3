@@ -116,16 +116,24 @@ export function useProfileManagement<T extends BaseProfile>({
         previousId: previousProfileIdRef.current,
         currentId: activeProfile.versionId,
         isSwitch: isProfileSwitch,
+        isSaving: isSavingProfileRef.current,
         hasColumnGroups: !!profileData.columnGroups,
         columnGroupsCount: profileData.columnGroups?.length || 0
       });
       
       if (isProfileSwitch) {
         console.log('[🔍 PROFILE-EFFECT-002] Profile switch detected - calling onProfileChange');
-        onProfileChange(profileData);
+        // Don't call onProfileChange if we're currently saving
+        if (!isSavingProfileRef.current) {
+          onProfileChange(profileData);
+        } else {
+          console.log('[🔍 PROFILE-EFFECT-002b] Delaying onProfileChange until save completes');
+        }
         previousProfileIdRef.current = activeProfile.versionId;
       } else {
         console.log('[🔍 PROFILE-EFFECT-003] Same profile updated - skipping onProfileChange');
+        // Still update the ref to track current profile
+        previousProfileIdRef.current = activeProfile.versionId;
       }
       
       // Always update the active profile data
@@ -402,6 +410,7 @@ export function useProfileManagement<T extends BaseProfile>({
     } finally {
       setIsSaving(false);
       isSavingProfileRef.current = false;
+      console.log('[🔍 PROFILE-SAVE-003] Save complete, isSavingProfileRef reset to false');
     }
   };
 
@@ -409,7 +418,13 @@ export function useProfileManagement<T extends BaseProfile>({
     const profile = profiles.find(p => p.versionId === versionId);
     if (!profile || !config) return;
 
-    log('Loading profile:', versionId);
+    console.log('[🔍 LOAD-PROFILE-001] Loading profile:', {
+      versionId,
+      profileName: profile.name,
+      currentActiveId: activeProfile?.versionId,
+      previousTrackedId: previousProfileIdRef.current,
+      isSavingProfile: isSavingProfileRef.current
+    });
 
     try {
       // Update active setting
@@ -424,6 +439,8 @@ export function useProfileManagement<T extends BaseProfile>({
       setConfig(updatedConfig);
       setActiveProfile(profile);
       setActiveProfileData(profile.config as T);
+      
+      console.log('[🔍 LOAD-PROFILE-002] Profile loaded and state updated');
 
       // Don't show toast here - the status indicator handles this
     } catch (err) {

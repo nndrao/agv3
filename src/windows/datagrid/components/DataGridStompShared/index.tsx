@@ -277,7 +277,10 @@ const DataGridStompSharedComponent = () => {
       
       // Determine if this is a profile switch vs initial load
       const isInitialLoad = !initialProfileAppliedRef.current;
-      const isProfileSwitch = !isInitialLoad && !!gridApi;
+      // A profile switch is when we have a grid and either:
+      // 1. It's not the initial load, OR
+      // 2. We've already applied a profile (even if it's the initial one)
+      const isProfileSwitch = !!gridApi && initialProfileAppliedRef.current;
       
       console.log('[🔍 PROFILE-CHANGE-002] Profile application context:', {
         isInitialLoad,
@@ -316,7 +319,7 @@ const DataGridStompSharedComponent = () => {
           console.log('[🔍 PROFILE-CHANGE-006] Applying profile for profile switch');
           applyProfile(profile, true);
         } else {
-          console.log('[🔍 PROFILE-CHANGE-007] Skipping profile application - already applied');
+          console.log('[🔍 PROFILE-CHANGE-007] Skipping profile application - not initial load and not a switch');
         }
         
         // Mark initial mount complete after first profile application

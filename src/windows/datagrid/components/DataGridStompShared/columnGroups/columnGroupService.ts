@@ -42,6 +42,7 @@ export class ColumnGroupService {
   
   /**
    * Apply column groups to AG-Grid
+   * Returns the saved column state that should be applied after groups are set
    */
   static applyColumnGroups(
     gridApi: any,
@@ -49,7 +50,7 @@ export class ColumnGroupService {
     groups: ColumnGroupDefinition[],
     originalColumnDefs?: ColDef[],
     gridStateManager?: any
-  ): void {
+  ): any[] | null {
     
     // Filter to only apply active groups
     const activeGroups = groups.filter(g => g.isActive !== false);
@@ -126,41 +127,11 @@ export class ColumnGroupService {
     // Let AG-Grid handle column group expand/collapse natively
     // The columnGroupShow property on columns will be respected automatically
     
-    // Restore column state (widths, order, visibility) after applying column groups
-    setTimeout(() => {
-      if (savedColumnState && savedColumnState.length > 0) {
-        
-        gridApi.applyColumnState({
-          state: savedColumnState,
-          applyOrder: true,
-          defaultState: { width: null }
-        });
-        
-      }
-      
-      // DO NOT apply column group state here - it will be applied AFTER grid state
-      // The column group state needs to be applied LAST, after all columnDefs updates
-      // Store the pending state but don't apply it yet
-      setTimeout(() => {
-        console.log('[🔍 COLGROUP-SERVICE-009] Column groups applied, state will be restored later');
-        
-        // Check if we have pending column group state from GridStateManager
-        if (gridStateManager && typeof gridStateManager.getPendingColumnGroupState === 'function') {
-          const pendingGroupState = gridStateManager.getPendingColumnGroupState();
-          if (pendingGroupState && pendingGroupState.length > 0) {
-            console.log('[🔍 COLGROUP-SERVICE-010] Pending column group state exists, will be applied after grid state:', pendingGroupState);
-            // DO NOT apply or clear the pending state here
-            // It will be applied by the grid state manager AFTER all other state
-          } else {
-            console.log('[🔍 COLGROUP-SERVICE-011] No pending column group state');
-          }
-        }
-        
-        // Get and log the current column group state
-        const currentGroupState = gridApi.getColumnGroupState ? gridApi.getColumnGroupState() : [];
-        console.log('[🔍 COLGROUP-SERVICE-012] Current column group state:', currentGroupState);
-      }, 200); // Give time for column state to be fully applied
-    }, 100); // Small delay to let grid apply new column defs first
+    // Return the saved column state to be applied by the caller after groups are fully set
+    console.log('[🔍 COLGROUP-SERVICE-009] Returning saved column state for later application:', {
+      hasColumnState: !!savedColumnState,
+      columnStateCount: savedColumnState?.length || 0
+    });
     
     // Force grid to redraw columns
     if (columnApi) {
@@ -176,22 +147,8 @@ export class ColumnGroupService {
     // AG-Grid will handle initial group state and column visibility automatically
     // based on openByDefault and columnGroupShow properties
     
-    // Verify what AG-Grid actually has
-    setTimeout(() => {
-      gridApi.getColumnDefs();
-      
-      // Test column group expansion behavior
-      if (columnApi) {
-        try {
-          // Try to get column group states
-          const columnGroupStates = columnApi.getColumnGroupState?.();
-          if (columnGroupStates) {
-          }
-        } catch (e) {
-        }
-      }
-    }, 100);
-    
+    // Return the saved column state to be applied after column groups are fully configured
+    return savedColumnState;
   }
 
   /**

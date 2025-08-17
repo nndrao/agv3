@@ -339,16 +339,9 @@ export class GridStateManager {
     
     
     try {
-      // Apply column state (but delay if we have column groups to apply first)
-      const hasColumnGroups = state.columnGroups && state.columnGroups.length > 0;
-      
+      // Apply column state directly - timing is now handled by profile application
       if (applyColumnState && state.columnState) {
-        if (hasColumnGroups) {
-          // Store column state to be applied later by ColumnGroupService
-          this.setPendingColumnState(state.columnState);
-        } else {
-          this.applyColumnState(state.columnState);
-        }
+        this.applyColumnState(state.columnState);
       }
       
       // Store column group state for later application
