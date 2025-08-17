@@ -19,23 +19,31 @@ interface ConditionalFormattingData {
     headerName?: string;
     type?: string;
   }>;
-  currentRules?: ConditionalRule[];
+  currentRules?: ConditionalRule[]; // All available rules (grid-level)
+  activeRuleIds?: string[]; // Currently active rule IDs (profile-level)
   profileName?: string;
+  gridInstanceId?: string;
 }
 
 export const ConditionalFormattingApp: React.FC = () => {
-  const [rules, setRules] = useState<ConditionalRule[]>([]);
+  const [rules, setRules] = useState<ConditionalRule[]>([]); // All available rules
+  const [selectedRuleIds, setSelectedRuleIds] = useState<string[]>([]); // Currently selected rule IDs
   const [availableColumns, setAvailableColumns] = useState<ColumnInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profileName, setProfileName] = useState<string>('');
+  const [gridInstanceId, setGridInstanceId] = useState<string>('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
   const { toast } = useToast();
 
-  // Use ref to store the latest rules for getData callback
+  // Use refs to store the latest data for getData callback
   const rulesRef = useRef(rules);
+  const selectedRuleIdsRef = useRef(selectedRuleIds);
   useEffect(() => {
     rulesRef.current = rules;
   }, [rules]);
+  useEffect(() => {
+    selectedRuleIdsRef.current = selectedRuleIds;
+  }, [selectedRuleIds]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -92,14 +100,19 @@ export const ConditionalFormattingApp: React.FC = () => {
                 console.log('[ConditionalFormattingApp] Updated columns from IAB:', columns.length);
               }
               
-              // Update rules if we don't have data yet or if this is newer
+              // Update rules and selection if we don't have data yet or if this is newer
               if (!dialogData || dataSource === 'localStorage') {
                 setRules(data.currentRules || []);
+                setSelectedRuleIds(data.activeRuleIds || []);
                 setProfileName(data.profileName || '');
-                console.log('[ConditionalFormattingApp] Updated rules from IAB');
+                setGridInstanceId(data.gridInstanceId || '');
+                console.log('[ConditionalFormattingApp] Updated rules and selection from IAB');
               }
             },
-            getData: () => ({ rules: rulesRef.current }) // Use ref to get latest rules
+            getData: () => ({ 
+              activeRuleIds: selectedRuleIdsRef.current, 
+              allRules: rulesRef.current 
+            }) // Return both selected IDs and all rules
           }).catch(err => {
             // Non-critical - we already have data from customData or will use localStorage
             console.warn('[ConditionalFormattingApp] IAB initialization failed (non-critical):', err);
@@ -146,11 +159,14 @@ export const ConditionalFormattingApp: React.FC = () => {
         
         setAvailableColumns(columns);
         setRules(dialogData.currentRules || []);
+        setSelectedRuleIds(dialogData.activeRuleIds || []);
         setProfileName(dialogData.profileName || '');
+        setGridInstanceId(dialogData.gridInstanceId || '');
         
         console.log(`[ConditionalFormattingApp] Initialized with ${dataSource} data:`, {
           columns: columns.length,
-          rules: (dialogData.currentRules || []).length
+          rules: (dialogData.currentRules || []).length,
+          selectedRules: (dialogData.activeRuleIds || []).length
         });
       } else {
         // No data available - use defaults
@@ -174,19 +190,26 @@ export const ConditionalFormattingApp: React.FC = () => {
     initialize();
   }, []); // Remove toast from dependencies to prevent re-initialization
 
-  const handleApply = async (updatedRules?: ConditionalRule[]) => {
+  const handleApply = async (selectedIds?: string[], allRules?: ConditionalRule[]) => {
     try {
-      const rulesToApply = updatedRules || rules;
+      const ruleIdsToApply = selectedIds || selectedRuleIds;
+      const rulesToStore = allRules || rules;
       
-      console.log('[ConditionalFormattingApp] Applying rules:', rulesToApply);
+      console.log('[ConditionalFormattingApp] Applying rules:', {
+        selectedIds: ruleIdsToApply,
+        totalRules: rulesToStore.length
+      });
       
-      // Send response to parent
-      await sendDialogResponse('apply', { rules: rulesToApply });
+      // Send response to parent with new format
+      await sendDialogResponse('apply', { 
+        activeRuleIds: ruleIdsToApply,
+        allRules: rulesToStore 
+      });
       
       // Show success message
       toast({
         title: 'Rules Applied',
-        description: `${rulesToApply.filter(r => r.enabled).length} active rule(s) applied to the grid`,
+        description: `${ruleIdsToApply.length} rule(s) applied to the grid`,
         variant: 'default'
       });
       
@@ -195,10 +218,13 @@ export const ConditionalFormattingApp: React.FC = () => {
       
       // If not in OpenFin, just log and close
       if (typeof fin === 'undefined') {
-        console.log('[ConditionalFormattingApp] Would send rules:', rulesToApply);
+        console.log('[ConditionalFormattingApp] Would send rules:', {
+          activeRuleIds: ruleIdsToApply,
+          allRules: rulesToStore
+        });
         toast({
           title: 'Rules Configured',
-          description: `${rulesToApply.length} rule(s) configured (dev mode)`,
+          description: `${ruleIdsToApply.length} rule(s) configured (dev mode)`,
           variant: 'default'
         });
         setTimeout(() => window.close(), 1000);
@@ -246,12 +272,15 @@ export const ConditionalFormattingApp: React.FC = () => {
               type: col.type
             }))}
             currentRules={rules}
-            onApply={(updatedRules) => {
-              setRules(updatedRules);
-              handleApply(updatedRules);
+            selectedRuleIds={selectedRuleIds}
+            onApply={(selectedIds, allRules) => {
+              setRules(allRules);
+              setSelectedRuleIds(selectedIds);
+              handleApply(selectedIds, allRules);
             }}
             onClose={handleClose}
             profileName={profileName}
+            gridInstanceId={gridInstanceId}
           />
         </div>
         <Toaster />

@@ -4,6 +4,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ConditionalFormattingRule as ConditionalFormattingRuleRT } from '@/utils/conditionalFormattingRuntime';
 import { CalculatedColumnDefinition } from '../types';
 import { GridColumnGroupStorage } from '../columnGroups';
+import { GridConditionalFormattingStorage } from '../conditionalFormatting';
+import { GridCalculatedColumnsStorage } from '../calculatedColumns';
 
 interface DialogManagementProps {
   viewInstanceId: string;
@@ -16,9 +18,9 @@ interface DialogManagementProps {
   conditionalFormattingRules: ConditionalFormattingRuleRT[];
   onApplyGridOptions: (options: Record<string, any>) => void;
   onApplyColumnGroups: (activeGroupIds: string[], allGroups: any[]) => void; // Updated signature
-  onApplyConditionalFormatting: (rules: ConditionalFormattingRuleRT[]) => void;
-  onApplyCalculatedColumns?: (columns: CalculatedColumnDefinition[]) => void;
-  currentCalculatedColumns?: CalculatedColumnDefinition[];
+  onApplyConditionalFormatting: (activeRuleIds: string[], allRules: ConditionalFormattingRuleRT[]) => void; // Updated signature
+  onApplyCalculatedColumns?: (activeColumnIds: string[], allColumns: CalculatedColumnDefinition[]) => void; // Updated signature
+  currentCalculatedColumns?: string[]; // Now stores column IDs
   gridInstanceId: string; // Required for grid-level storage
 }
 
@@ -130,6 +132,10 @@ export function useDialogManagement({
   
   // Open Conditional Formatting dialog
   const handleOpenConditionalFormatting = useCallback(async () => {
+    // Load all available rules from grid-level storage
+    const allRules = GridConditionalFormattingStorage.loadRules(gridInstanceId);
+    const activeRuleIds = conditionalFormattingRules.map(rule => rule.id);
+    
     await dialogService.openDialog({
       name: `conditional-formatting-${viewInstanceId}`,
       route: '/conditional-formatting',
@@ -139,8 +145,10 @@ export function useDialogManagement({
           headerName: col.headerName,
           type: col.type
         })),
-        currentRules: conditionalFormattingRules,
-        profileName: activeProfileName
+        currentRules: allRules, // All available rules
+        activeRuleIds: activeRuleIds, // Currently active rule IDs
+        profileName: activeProfileName,
+        gridInstanceId: gridInstanceId
       },
       windowOptions: {
         ...windowOptions,
@@ -149,18 +157,30 @@ export function useDialogManagement({
       },
       onApply: (data) => {
         console.log('[useDialogManagement] Conditional formatting onApply called with data:', data);
-        if (data?.rules) {
-          console.log('[useDialogManagement] Applying conditional formatting rules:', data.rules);
-          onApplyConditionalFormatting(data.rules);
+        if (data?.activeRuleIds && data?.allRules) {
+          console.log('[useDialogManagement] Applying conditional formatting:', {
+            activeRuleIds: data.activeRuleIds,
+            allRulesCount: data.allRules.length
+          });
+          onApplyConditionalFormatting(data.activeRuleIds, data.allRules);
         } else {
-          console.warn('[useDialogManagement] No rules found in data:', data);
+          console.warn('[useDialogManagement] Invalid conditional formatting data:', data);
         }
       }
     });
-  }, [columnDefs, conditionalFormattingRules, activeProfileName, viewInstanceId, windowOptions, onApplyConditionalFormatting]);
+  }, [columnDefs, conditionalFormattingRules, activeProfileName, viewInstanceId, windowOptions, onApplyConditionalFormatting, gridInstanceId]);
 
   // Open Calculated Columns dialog
   const handleOpenCalculatedColumns = useCallback(async () => {
+    if (!onApplyCalculatedColumns) {
+      console.warn('[useDialogManagement] onApplyCalculatedColumns not provided');
+      return;
+    }
+    
+    // Load all available columns from grid-level storage
+    const allColumns = GridCalculatedColumnsStorage.loadColumns(gridInstanceId);
+    const activeColumnIds = currentCalculatedColumns || [];
+    
     await dialogService.openDialog({
       name: `calculated-columns-${viewInstanceId}`,
       route: '/calculated-columns',
@@ -170,8 +190,10 @@ export function useDialogManagement({
           headerName: col.headerName,
           type: col.type
         })),
+        currentColumns: allColumns, // All available columns
+        activeColumnIds: activeColumnIds, // Currently active column IDs
         profileName: activeProfileName,
-        calculatedColumns: currentCalculatedColumns || []
+        gridInstanceId: gridInstanceId
       },
       windowOptions: {
         ...windowOptions,
@@ -179,12 +201,19 @@ export function useDialogManagement({
         defaultHeight: 800
       },
       onApply: (data) => {
-        if (data?.calculatedColumns && onApplyCalculatedColumns) {
-          onApplyCalculatedColumns(data.calculatedColumns);
+        console.log('[useDialogManagement] Calculated columns onApply called with data:', data);
+        if (data?.activeColumnIds && data?.allColumns) {
+          console.log('[useDialogManagement] Applying calculated columns:', {
+            activeColumnIds: data.activeColumnIds,
+            allColumnsCount: data.allColumns.length
+          });
+          onApplyCalculatedColumns(data.activeColumnIds, data.allColumns);
+        } else {
+          console.warn('[useDialogManagement] Invalid calculated columns data:', data);
         }
       }
     });
-  }, [columnDefs, activeProfileName, viewInstanceId, windowOptions, onApplyCalculatedColumns, currentCalculatedColumns]);
+  }, [columnDefs, currentCalculatedColumns, activeProfileName, viewInstanceId, windowOptions, onApplyCalculatedColumns, gridInstanceId]);
   
   // Open Rename View dialog
   const handleOpenRenameDialog = useCallback(async () => {

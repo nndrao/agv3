@@ -8,7 +8,7 @@ import { ExpressionEditorDialogControlled } from '@/components/expression-editor
 import { WindowManager } from "@/services/window/windowManager";
 import { debugStorage } from "@/utils/storageDebug";
 import { getViewInstanceId } from "@/utils/viewUtils";
-import { ConditionalFormattingRule as ConditionalFormattingRuleRT } from '@/utils/conditionalFormattingRuntime';
+
 
 
 import {
@@ -44,8 +44,11 @@ import {
   applyConditionalFormattingToColumns,
   getRowClassRules,
   cleanupConditionalFormatting,
-  initializeConditionalFormatting
+  initializeConditionalFormatting,
+  ConditionalFormattingRule as ConditionalFormattingRuleRT
 } from '@/utils/conditionalFormattingRuntime';
+import { GridConditionalFormattingStorage } from './conditionalFormatting';
+import { GridCalculatedColumnsStorage } from './calculatedColumns';
 
 // Import styles
 import "@/index.css";
@@ -71,7 +74,11 @@ const DataGridStompSharedComponent = () => {
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(false);
   const [showColumnSettings, setShowColumnSettings] = useState<boolean>(false);
 
-  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalFormattingRuleRT[]>(() => loadConditionalFormattingRules());
+  // Initialize conditional formatting rules from global storage (will be updated when profile loads)
+  const [conditionalFormattingRules, setConditionalFormattingRules] = useState<ConditionalFormattingRuleRT[]>(() => {
+    // Start with global storage for backward compatibility
+    return loadConditionalFormattingRules();
+  });
   const [unsavedColumnGroups, setUnsavedColumnGroups] = useState<any[] | null>(null);
   const [stylesLoaded, setStylesLoaded] = useState(false);
   const [columnGroupsApplied, setColumnGroupsApplied] = useState(false);
@@ -103,6 +110,26 @@ const DataGridStompSharedComponent = () => {
       cleanupConditionalFormatting(gridInstanceId);
     };
   }, [gridInstanceId, conditionalFormattingRules]);
+
+  // Migration effect - migrate global conditional formatting rules to grid-level storage
+  useEffect(() => {
+    const migrateGlobalRules = () => {
+      try {
+        const globalRules = loadConditionalFormattingRules();
+        if (globalRules.length > 0) {
+          console.log('[DataGridStompShared] Migrating conditional formatting rules to grid-level storage');
+          GridConditionalFormattingStorage.migrateFromGlobalRules(gridInstanceId, globalRules);
+        }
+      } catch (error) {
+        console.error('[DataGridStompShared] Global rules migration error:', error);
+      }
+    };
+
+    // Run once when component mounts
+    migrateGlobalRules();
+  }, [gridInstanceId]);
+
+
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'conditionalFormattingRules' && e.newValue) {
@@ -167,6 +194,59 @@ const DataGridStompSharedComponent = () => {
     });
     setTempActiveProfileData(activeProfileData);
   }, [activeProfileData]);
+
+  // Update conditional formatting rules when profile changes
+  useEffect(() => {
+    if (activeProfileData?.conditionalFormattingRules) {
+      // Load active rules from grid-level storage based on profile IDs
+      const activeRules = GridConditionalFormattingStorage.getRules(gridInstanceId, activeProfileData.conditionalFormattingRules);
+      setConditionalFormattingRules(activeRules);
+      console.log('[DataGridStompShared] Updated conditional formatting rules from profile:', activeRules.length);
+    }
+  }, [activeProfileData?.conditionalFormattingRules, gridInstanceId]);
+
+  // Profile-specific migration effect - runs when activeProfileData is available
+  useEffect(() => {
+    if (!activeProfileData) return;
+
+    const migrateProfileData = async () => {
+      try {
+        let needsProfileUpdate = false;
+        const updatedProfile = { ...activeProfileData };
+
+        // Migrate calculated columns from profile-level storage if they're objects (old format)
+        if (activeProfileData.calculatedColumns && Array.isArray(activeProfileData.calculatedColumns) && activeProfileData.calculatedColumns.length > 0) {
+          const firstItem = activeProfileData.calculatedColumns[0];
+          if (typeof firstItem === 'object' && firstItem !== null) {
+            console.log('[DataGridStompShared] Migrating calculated columns to grid-level storage');
+            const migratedColumnIds = GridCalculatedColumnsStorage.migrateFromProfileColumns(
+              gridInstanceId, 
+              activeProfileData.calculatedColumns as any[]
+            );
+            updatedProfile.calculatedColumns = migratedColumnIds;
+            needsProfileUpdate = true;
+          }
+        }
+
+        // If we migrated global rules and profile has no rule references, add them
+        const allGridRules = GridConditionalFormattingStorage.loadRules(gridInstanceId);
+        if (allGridRules.length > 0 && (!activeProfileData.conditionalFormattingRules || activeProfileData.conditionalFormattingRules.length === 0)) {
+          console.log('[DataGridStompShared] Adding migrated rules to profile');
+          updatedProfile.conditionalFormattingRules = allGridRules.map(rule => rule.id);
+          needsProfileUpdate = true;
+        }
+
+        // Save profile if we made changes
+        if (needsProfileUpdate) {
+          await saveProfile(updatedProfile, false, updatedProfile.name);
+        }
+      } catch (error) {
+        console.error('[DataGridStompShared] Profile migration error:', error);
+      }
+    };
+
+    migrateProfileData();
+  }, [activeProfileData?.name, gridInstanceId, saveProfile]); // Only run when profile name changes (new profile loaded)
   
   const { 
     gridApi, 
@@ -363,60 +443,127 @@ const DataGridStompSharedComponent = () => {
   });
   
   // ========== Conditional Formatting Handler ==========
-  const handleApplyConditionalFormatting = useCallback((rules: ConditionalFormattingRuleRT[]) => {
-    console.log('[DataGridStompShared] handleApplyConditionalFormatting called with rules:', rules);
-    console.log('[DataGridStompShared] Rule details:', JSON.stringify(rules, null, 2));
-    
-    // Save rules to localStorage using the utility function
-    saveConditionalFormattingRules(rules);
-    console.log('[DataGridStompShared] Rules saved to localStorage');
-    
-    // Verify what was saved
-    const savedRules = localStorage.getItem('conditionalFormattingRules');
-    console.log('[DataGridStompShared] Verified saved rules:', savedRules ? JSON.parse(savedRules) : null);
-    
-    // Update local state
-    setConditionalFormattingRules(rules);
-    console.log('[DataGridStompShared] Local state updated');
-    
-    // Re-initialize formatting with new rules
-    initializeConditionalFormatting(gridInstanceId, rules);
-    console.log('[DataGridStompShared] Conditional formatting re-initialized for grid:', gridInstanceId);
-    
-    // Force grid refresh to apply new formatting
-    if (gridApi) {
-      console.log('[DataGridStompShared] Refreshing grid cells');
-      gridApi.refreshCells({ force: true });
-    } else {
-      console.warn('[DataGridStompShared] Grid API not available, cannot refresh cells');
-    }
-    
-    toast({
-      title: "Conditional Formatting Applied",
-      description: `${rules.length} rule(s) have been applied to the grid`
+  const handleApplyConditionalFormatting = useCallback(async (activeRuleIds: string[], allRules: ConditionalFormattingRuleRT[]) => {
+    console.log('[DataGridStompShared] handleApplyConditionalFormatting called with:', {
+      activeRuleIds,
+      allRulesCount: allRules.length
     });
-  }, [gridInstanceId, gridApi, toast]);
-
-  // ========== Calculated Columns Handler ==========
-  const handleApplyCalculatedColumns = useCallback(async (cols: CalculatedColumnDefinition[]) => {
-    console.log('[DataGridStompShared] handleApplyCalculatedColumns called with columns:', cols);
     
     if (!activeProfileData) {
-      toast({ title: 'No Active Profile', description: 'Select a profile before saving calculated columns', variant: 'destructive' });
+      console.error('[DataGridStompShared] No active profile data available');
       return;
     }
+
+    try {
+      // Save all rules to grid-level storage
+      allRules.forEach(rule => {
+        GridConditionalFormattingStorage.saveRule(gridInstanceId, rule);
+      });
+      console.log('[DataGridStompShared] All rules saved to grid-level storage');
+
+      // Get active rules for application
+      const activeRules = GridConditionalFormattingStorage.getRules(gridInstanceId, activeRuleIds);
+      console.log('[DataGridStompShared] Retrieved active rules:', activeRules.length);
+
+      // Update the profile with the active rule IDs
+      const updated: DataGridStompSharedProfile = { 
+        ...activeProfileData, 
+        conditionalFormattingRules: activeRuleIds
+      };
+
+      // Save the profile
+      await saveProfile(updated, false, updated.name);
+      console.log('[DataGridStompShared] Profile updated with conditional formatting rule IDs');
+
+      // Update local state for immediate application
+      setConditionalFormattingRules(activeRules);
+      
+      // Re-initialize formatting with active rules
+      initializeConditionalFormatting(gridInstanceId, activeRules);
+      console.log('[DataGridStompShared] Conditional formatting re-initialized for grid:', gridInstanceId);
+      
+      // Update temp state to trigger profile application (includes column def updates)
+      setTempActiveProfileData(updated);
+      
+      // Apply the profile immediately to ensure column definitions are updated
+      if (gridApi) {
+        console.log('[DataGridStompShared] Applying profile to update column definitions with formatting');
+        applyProfile(updated);
+        
+        // Force grid refresh to apply new formatting immediately
+        setTimeout(() => {
+          console.log('[DataGridStompShared] Refreshing grid cells to show conditional formatting');
+          gridApi.refreshCells({ force: true });
+          // Also refresh headers in case row-level formatting affects them
+          gridApi.refreshHeader();
+        }, 10);
+      }
+      
+      toast({
+        title: "Conditional Formatting Applied",
+        description: `${activeRules.length} rule(s) have been applied to the grid`
+      });
+    } catch (error) {
+      console.error('[DataGridStompShared] Error applying conditional formatting:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply conditional formatting rules",
+        variant: "destructive"
+      });
+    }
+  }, [activeProfileData, saveProfile, gridInstanceId, gridApi, toast]);
+
+  // ========== Calculated Columns Handler ==========
+  const handleApplyCalculatedColumns = useCallback(async (activeColumnIds: string[], allColumns: CalculatedColumnDefinition[]) => {
+    console.log('[DataGridStompShared] handleApplyCalculatedColumns called with:', {
+      activeColumnIds,
+      allColumnsCount: allColumns.length
+    });
     
-    const updated: DataGridStompSharedProfile = { ...activeProfileData, calculatedColumns: cols };
-    console.log('[DataGridStompShared] Saving profile with calculated columns:', updated);
-    
-    await saveProfile(updated, false, updated.name);
-    
-    // Force update tempActiveProfileData immediately to apply columns to grid
-    console.log('[DataGridStompShared] Updating tempActiveProfileData with calculated columns');
-    setTempActiveProfileData(updated);
-    
-    toast({ title: 'Calculated Columns Saved', description: `${cols.length} column(s) saved to profile` });
-  }, [activeProfileData, saveProfile, toast]);
+    if (!activeProfileData) {
+      console.error('[DataGridStompShared] No active profile data available');
+      toast({ 
+        title: 'No Active Profile', 
+        description: 'Select a profile before saving calculated columns', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    try {
+      // Save all columns to grid-level storage
+      allColumns.forEach(column => {
+        GridCalculatedColumnsStorage.saveColumn(gridInstanceId, column);
+      });
+      console.log('[DataGridStompShared] All columns saved to grid-level storage');
+
+      // Update the profile with the active column IDs
+      const updated: DataGridStompSharedProfile = { 
+        ...activeProfileData, 
+        calculatedColumns: activeColumnIds
+      };
+
+      // Save the profile
+      await saveProfile(updated, false, updated.name);
+      console.log('[DataGridStompShared] Profile updated with calculated column IDs');
+
+      // Update temp state to apply immediately
+      setTempActiveProfileData(updated);
+      console.log('[DataGridStompShared] Applied', activeColumnIds.length, 'calculated columns');
+
+      toast({ 
+        title: 'Calculated Columns Applied', 
+        description: `${activeColumnIds.length} column(s) have been applied to the grid` 
+      });
+    } catch (error) {
+      console.error('[DataGridStompShared] Error applying calculated columns:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply calculated columns",
+        variant: "destructive"
+      });
+    }
+  }, [activeProfileData, saveProfile, gridInstanceId, toast]);
   
   // ========== Dialog Management Hook ==========
   const {
@@ -450,7 +597,7 @@ const DataGridStompSharedComponent = () => {
     onApplyColumnGroups: handleApplyColumnGroups,
     onApplyConditionalFormatting: handleApplyConditionalFormatting,
     onApplyCalculatedColumns: handleApplyCalculatedColumns,
-    currentCalculatedColumns: activeProfileData?.calculatedColumns,
+    currentCalculatedColumns: activeProfileData?.calculatedColumns, // Now stores column IDs
     gridInstanceId
   });
   

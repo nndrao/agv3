@@ -25,12 +25,14 @@ interface RuleListItemProps {
   index: number;
   totalRules: number;
   isSelected: boolean;
+  isActive?: boolean; // NEW: Whether this rule is active/checked
   onSelect: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onToggle: () => void;
+  onToggleActive?: () => void; // NEW: Handle checkbox toggle
 }
 
 export const RuleListItem: React.FC<RuleListItemProps> = ({
@@ -38,12 +40,14 @@ export const RuleListItem: React.FC<RuleListItemProps> = ({
   index,
   totalRules,
   isSelected,
+  isActive = false,
   onSelect,
   onDelete,
   onDuplicate,
   onMoveUp,
   onMoveDown,
-  onToggle
+  onToggle,
+  onToggleActive
 }) => {
   const handleAction = (e: React.MouseEvent, action: () => void) => {
     e.stopPropagation();
@@ -64,8 +68,21 @@ export const RuleListItem: React.FC<RuleListItemProps> = ({
     >
       <div className="px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          {/* Left side - Status and Name */}
+          {/* Left side - Checkbox, Status and Name */}
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            {/* Checkbox for active state */}
+            {onToggleActive && (
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onToggleActive();
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+              />
+            )}
+            
             {/* Simple status indicator */}
             <div className="flex-shrink-0">
               <Minus 

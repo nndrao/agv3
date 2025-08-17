@@ -27,6 +27,9 @@ export interface ConditionalFormattingRule {
   };
   priority: number;
   enabled: boolean;
+  createdAt?: number; // Creation timestamp (NEW)
+  updatedAt?: number; // Last modified timestamp (NEW)
+  description?: string; // Optional description (NEW)
 }
 
 /**
