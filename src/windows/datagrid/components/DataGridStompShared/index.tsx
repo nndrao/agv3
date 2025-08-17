@@ -245,14 +245,53 @@ const DataGridStompSharedComponent = () => {
         applyProfile(profile);
         profileChangeRequiredRef.current = false;
         pendingProfileRef.current = null;
+        
+        // Update the hash to reflect the newly applied profile
+        const profileHash = JSON.stringify({
+          name: profile.name,
+          columnGroups: profile.columnGroups,
+          gridOptions: profile.gridOptions,
+          selectedProviderId: profile.selectedProviderId,
+          sidebarVisible: profile.sidebarVisible
+        });
+        lastAppliedProfileRef.current = profileHash;
       }
     };
   }, [applyProfile, clearUnsavedOptions, gridApiRef]);
 
+  // Track the last applied profile to avoid unnecessary reapplications
+  const lastAppliedProfileRef = useRef<string | null>(null);
+  
   // Backup mechanism for direct activeProfileData changes
+  // Skip application if we're currently saving a profile to avoid unnecessary refresh
   useEffect(() => {
-    if (activeProfileData && gridApiRef.current && !profileChangeRequiredRef.current) {
+    if (activeProfileData && 
+        gridApiRef.current && 
+        !profileChangeRequiredRef.current) {
+      
+      // Create a simple hash of the profile to detect actual changes
+      const profileHash = JSON.stringify({
+        name: activeProfileData.name,
+        columnGroups: activeProfileData.columnGroups,
+        gridOptions: activeProfileData.gridOptions,
+        selectedProviderId: activeProfileData.selectedProviderId,
+        sidebarVisible: activeProfileData.sidebarVisible
+      });
+      
+      // Skip if we're saving or if this is the same profile we just applied
+      if (isSavingProfileRef.current) {
+        console.log('[🔍 MAIN-PROFILE-SKIP] Skipping profile application during save operation');
+        return;
+      }
+      
+      if (lastAppliedProfileRef.current === profileHash) {
+        console.log('[🔍 MAIN-PROFILE-SKIP] Skipping profile application - no meaningful changes detected');
+        return;
+      }
+      
+      console.log('[🔍 MAIN-PROFILE-APPLY] Applying profile due to activeProfileData change');
       applyProfile(activeProfileData);
+      lastAppliedProfileRef.current = profileHash;
     }
   }, [activeProfileData, gridApiRef, applyProfile]);
   
@@ -281,7 +320,8 @@ const DataGridStompSharedComponent = () => {
     setColumnGroups,
     checkProfileApplicationComplete,
     gridInstanceId,
-    gridApiRef
+    gridApiRef,
+    isSavingProfileRef
   });
   
   // ========== Connection Management Hook ==========
@@ -492,43 +532,54 @@ const DataGridStompSharedComponent = () => {
       unsavedGridOptions: !!unsavedGridOptions
     });
     
-    const success = await saveCurrentState(
-      selectedProviderId,
-      connectionState,
-      sidebarVisible,
-      showColumnSettings,
-      unsavedGridOptions,
-      unsavedColumnGroups,
-      getDefaultGridOptions,
-      saveAsNew,
-      name
-    );
+    // Set saving flag to prevent unnecessary profile reapplication
+    isSavingProfileRef.current = true;
     
-    if (success) {
-      console.log('[🔍 MAIN-SAVE-002] Save successful, clearing unsaved changes');
-      clearUnsavedOptions();
-      // Clear unsaved column groups only after successful save
-      // The saved groups are now in the profile
-      setUnsavedColumnGroups(null);
-      // Keep columnGroupsApplied as true since the groups are still applied
-      // They're just moved from unsaved to saved state
-      console.log('[🔍 MAIN-SAVE-003] Cleared unsaved column groups after successful save, columnGroupsApplied remains:', columnGroupsApplied);
+    try {
+      const success = await saveCurrentState(
+        selectedProviderId,
+        connectionState,
+        sidebarVisible,
+        showColumnSettings,
+        unsavedGridOptions,
+        unsavedColumnGroups,
+        getDefaultGridOptions,
+        saveAsNew,
+        name
+      );
       
-      // Verify grid still has column groups after save
+      if (success) {
+        console.log('[🔍 MAIN-SAVE-002] Save successful, clearing unsaved changes');
+        clearUnsavedOptions();
+        // Clear unsaved column groups only after successful save
+        // The saved groups are now in the profile
+        setUnsavedColumnGroups(null);
+        // Keep columnGroupsApplied as true since the groups are still applied
+        // They're just moved from unsaved to saved state
+        console.log('[🔍 MAIN-SAVE-003] Cleared unsaved column groups after successful save, columnGroupsApplied remains:', columnGroupsApplied);
+        
+        // Verify grid still has column groups after save
+        setTimeout(() => {
+          if (gridApi) {
+            const currentDefs = gridApi.getColumnDefs();
+            const hasGroups = currentDefs?.some((col: any) => col.children && col.children.length > 0);
+            console.log('[🔍 MAIN-SAVE-005] Grid state after save:', {
+              hasColumnGroups: hasGroups,
+              columnDefsCount: currentDefs?.length,
+              profileHasGroups: !!activeProfileData?.columnGroups?.length,
+              columnGroupsApplied
+            });
+          }
+        }, 100);
+      } else {
+        console.log('[🔍 MAIN-SAVE-004] Save failed, keeping unsaved changes');
+      }
+    } finally {
+      // Clear saving flag after a short delay to allow profile management to complete
       setTimeout(() => {
-        if (gridApi) {
-          const currentDefs = gridApi.getColumnDefs();
-          const hasGroups = currentDefs?.some((col: any) => col.children && col.children.length > 0);
-          console.log('[🔍 MAIN-SAVE-005] Grid state after save:', {
-            hasColumnGroups: hasGroups,
-            columnDefsCount: currentDefs?.length,
-            profileHasGroups: !!activeProfileData?.columnGroups?.length,
-            columnGroupsApplied
-          });
-        }
-      }, 100);
-    } else {
-      console.log('[🔍 MAIN-SAVE-004] Save failed, keeping unsaved changes');
+        isSavingProfileRef.current = false;
+        console.log('[🔍 MAIN-SAVE-006] Cleared saving flag, profile reapplication re-enabled');
+      }, 500);
     }
   }, [selectedProviderId, connectionState, sidebarVisible, showColumnSettings, 
       unsavedGridOptions, unsavedColumnGroups, saveCurrentState, clearUnsavedOptions, columnGroupsApplied]);

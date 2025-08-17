@@ -137,15 +137,11 @@ export function useProfileManagement<T extends BaseProfile>({
       }
       
       // Always update the active profile data
-      // But check if we're in the middle of saving to avoid unnecessary grid updates
-      if (!isSavingProfileRef.current) {
-        setActiveProfileData(profileData);
-        console.log('[🔍 PROFILE-EFFECT-004] Updated activeProfileData (not saving)');
-      } else {
-        // If we're saving, still update but flag it
-        setActiveProfileData(profileData);
-        console.log('[🔍 PROFILE-EFFECT-005] Updated activeProfileData (during save - grid should not refresh)');
-      }
+      setActiveProfileData(profileData);
+      console.log('[🔍 PROFILE-EFFECT-004] Updated activeProfileData', {
+        isSaving: isSavingProfileRef.current,
+        isSwitch: isProfileSwitch
+      });
     } else {
       console.log('[🔍][APP_STARTUP_EFFECT] Skipping - missing activeProfile or onProfileChange');
     }
@@ -409,8 +405,11 @@ export function useProfileManagement<T extends BaseProfile>({
       });
     } finally {
       setIsSaving(false);
-      isSavingProfileRef.current = false;
-      console.log('[🔍 PROFILE-SAVE-003] Save complete, isSavingProfileRef reset to false');
+      // Delay resetting the saving flag to prevent immediate profile reapplication
+      setTimeout(() => {
+        isSavingProfileRef.current = false;
+        console.log('[🔍 PROFILE-SAVE-003] Save complete, isSavingProfileRef reset to false (delayed)');
+      }, 500); // Increased delay to ensure all effects have settled
     }
   };
 

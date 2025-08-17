@@ -19,6 +19,7 @@ interface ProfileOperationsProps {
   checkProfileApplicationComplete: () => void;
   gridInstanceId: string; // Required for migration
   gridApiRef: React.MutableRefObject<any>; // Required for column group state saving
+  isSavingProfileRef: React.MutableRefObject<boolean>; // Track saving state
 }
 
 interface ProfileLoadingState {
@@ -41,7 +42,8 @@ export function useProfileOperations({
   setColumnGroups,
   checkProfileApplicationComplete,
   gridInstanceId,
-  gridApiRef
+  gridApiRef,
+  isSavingProfileRef
 }: ProfileOperationsProps) {
   const { toast } = useToast();
   
@@ -173,6 +175,9 @@ export function useProfileOperations({
     });
     
     try {
+      // Set saving flag to prevent grid refresh during save
+      isSavingProfileRef.current = true;
+      
       await saveProfile(currentState, saveAsNew, name);
       console.log('[🔍 SAVE-PROFILE-003] saveProfile completed successfully');
       // Save completed successfully
@@ -180,6 +185,11 @@ export function useProfileOperations({
     } catch (error) {
       console.error('[🔍 SAVE-PROFILE-004] Error saving profile:', error);
       return false;
+    } finally {
+      // Clear saving flag after save completes
+      setTimeout(() => {
+        isSavingProfileRef.current = false;
+      }, 100);
     }
   }, [activeProfileData, extractGridState, extractFullGridState, setColumnGroups, saveProfile]);
   

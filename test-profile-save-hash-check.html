@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Save Hash Check Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { background-color: #e7f5e7; }
+        .fail { background-color: #fce4e4; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .counter {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #333;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="counter" id="refreshCounter">Grid Refreshes: 0</div>
+    
+    <h1>Profile Save Hash Check Test</h1>
+    <p>This tests the profile hash checking mechanism to prevent unnecessary refreshes.</p>
+
+    <div class="test-case">
+        <h2>Test 1: Profile Hash Generation</h2>
+        <button onclick="testProfileHash()">Run Test</button>
+        <pre id="test1-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: Same Profile Detection</h2>
+        <button onclick="testSameProfileDetection()">Run Test</button>
+        <pre id="test2-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: Save Operation Flow</h2>
+        <button onclick="testSaveOperationFlow()">Run Test</button>
+        <pre id="test3-result"></pre>
+    </div>
+
+    <script>
+        let gridRefreshCount = 0;
+        
+        function updateCounter() {
+            document.getElementById('refreshCounter').textContent = `Grid Refreshes: ${gridRefreshCount}`;
+        }
+
+        // Mock profile hash generation (same logic as in the component)
+        function generateProfileHash(profile) {
+            return JSON.stringify({
+                name: profile.name,
+                columnGroups: profile.columnGroups,
+                gridOptions: profile.gridOptions,
+                selectedProviderId: profile.selectedProviderId,
+                sidebarVisible: profile.sidebarVisible
+            });
+        }
+
+        // Mock profile application logic
+        function mockApplyProfile(profile, lastAppliedHash, isSaving = false) {
+            const profileHash = generateProfileHash(profile);
+            
+            if (isSaving) {
+                console.log('[Mock] Skipping profile application during save operation');
+                return { applied: false, reason: 'saving', hash: lastAppliedHash };
+            }
+            
+            if (lastAppliedHash === profileHash) {
+                console.log('[Mock] Skipping profile application - no meaningful changes detected');
+                return { applied: false, reason: 'no changes', hash: lastAppliedHash };
+            }
+            
+            console.log('[Mock] Applying profile due to activeProfileData change');
+            gridRefreshCount++;
+            updateCounter();
+            return { applied: true, reason: 'changes detected', hash: profileHash };
+        }
+
+        function testProfileHash() {
+            const result = document.getElementById('test1-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Profile Hash Generation Test:\n\n';
+                
+                const profile1 = {
+                    name: 'Profile 1',
+                    columnGroups: ['group1', 'group2'],
+                    gridOptions: { rowHeight: 25 },
+                    selectedProviderId: 'provider1',
+                    sidebarVisible: true
+                };
+                
+                const profile2 = {
+                    name: 'Profile 1',
+                    columnGroups: ['group1', 'group2'],
+                    gridOptions: { rowHeight: 25 },
+                    selectedProviderId: 'provider1',
+                    sidebarVisible: true
+                };
+                
+                const profile3 = {
+                    name: 'Profile 1',
+                    columnGroups: ['group1', 'group3'], // Different groups
+                    gridOptions: { rowHeight: 25 },
+                    selectedProviderId: 'provider1',
+                    sidebarVisible: true
+                };
+                
+                const hash1 = generateProfileHash(profile1);
+                const hash2 = generateProfileHash(profile2);
+                const hash3 = generateProfileHash(profile3);
+                
+                output += `Profile 1 hash: ${hash1.substring(0, 50)}...\n`;
+                output += `Profile 2 hash: ${hash2.substring(0, 50)}...\n`;
+                output += `Profile 3 hash: ${hash3.substring(0, 50)}...\n\n`;
+                
+                const sameHash = hash1 === hash2;
+                const differentHash = hash1 !== hash3;
+                
+                output += `✓ Same profiles have same hash: ${sameHash}\n`;
+                output += `✓ Different profiles have different hash: ${differentHash}\n\n`;
+                
+                if (sameHash && differentHash) {
+                    output += '✓ Profile hash generation working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '✗ Profile hash generation failed';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testSameProfileDetection() {
+            const result = document.getElementById('test2-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Same Profile Detection Test:\n\n';
+                
+                const profile = {
+                    name: 'Test Profile',
+                    columnGroups: ['group1'],
+                    gridOptions: { rowHeight: 30 },
+                    selectedProviderId: 'provider1',
+                    sidebarVisible: false
+                };
+                
+                // First application - should apply
+                let lastHash = null;
+                const result1 = mockApplyProfile(profile, lastHash);
+                output += `First application: ${result1.applied ? 'Applied' : 'Skipped'} (${result1.reason})\n`;
+                lastHash = result1.hash;
+                
+                // Second application with same profile - should skip
+                const result2 = mockApplyProfile(profile, lastHash);
+                output += `Second application: ${result2.applied ? 'Applied' : 'Skipped'} (${result2.reason})\n`;
+                
+                // Third application with modified profile - should apply
+                const modifiedProfile = { ...profile, sidebarVisible: true };
+                const result3 = mockApplyProfile(modifiedProfile, lastHash);
+                output += `Modified profile: ${result3.applied ? 'Applied' : 'Skipped'} (${result3.reason})\n\n`;
+                
+                if (result1.applied && !result2.applied && result3.applied && gridRefreshCount === 2) {
+                    output += '✓ Same profile detection working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += `✗ Expected 2 refreshes, got ${gridRefreshCount}`;
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testSaveOperationFlow() {
+            const result = document.getElementById('test3-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Save Operation Flow Test:\n\n';
+                
+                const profile = {
+                    name: 'Save Test Profile',
+                    columnGroups: ['group1'],
+                    gridOptions: { rowHeight: 25 },
+                    selectedProviderId: 'provider1',
+                    sidebarVisible: true
+                };
+                
+                // Initial application
+                let lastHash = null;
+                const result1 = mockApplyProfile(profile, lastHash, false);
+                output += `1. Initial application: ${result1.applied ? 'Applied' : 'Skipped'}\n`;
+                lastHash = result1.hash;
+                
+                // During save - same profile should be skipped due to saving flag
+                const result2 = mockApplyProfile(profile, lastHash, true);
+                output += `2. During save: ${result2.applied ? 'Applied' : 'Skipped'} (${result2.reason})\n`;
+                
+                // After save - same profile should be skipped due to hash check
+                const result3 = mockApplyProfile(profile, lastHash, false);
+                output += `3. After save: ${result3.applied ? 'Applied' : 'Skipped'} (${result3.reason})\n\n`;
+                
+                output += `Total refreshes: ${gridRefreshCount}\n\n`;
+                
+                if (gridRefreshCount === 1) {
+                    output += '✓ Save operation flow working correctly - only one refresh';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += `✗ Expected 1 refresh, got ${gridRefreshCount}`;
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        // Reset counter on page load
+        window.addEventListener('load', () => {
+            gridRefreshCount = 0;
+            updateCounter();
+        });
+    </script>
+</body>
+</html>
