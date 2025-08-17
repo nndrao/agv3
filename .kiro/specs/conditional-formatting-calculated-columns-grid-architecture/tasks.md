@@ -53,12 +53,15 @@
 
 
 
-- [ ] 6. Update calculated columns handler signature and implementation
+- [x] 6. Update calculated columns handler signature and implementation
+
 
 
   - Change handleApplyCalculatedColumns to accept (activeColumnIds: string[], allColumns: CalculatedColumnDefinition[])
   - Implement logic to save all columns to grid storage and update profile with active column IDs
   - Update handler to follow the exact pattern as handleApplyColumnGroups
+
+
 
 
   - _Requirements: 1.2, 1.4, 2.3_

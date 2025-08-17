@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { GridApi, ColDef } from 'ag-grid-community';
 import { DataGridStompSharedProfile, CalculatedColumnDefinition } from '../types';
 import { ColumnGroupService } from '../columnGroups/columnGroupService';
+import { GridCalculatedColumnsStorage } from '../calculatedColumns';
 import { GridStateManager } from '../utils/gridStateManager';
 import { getDefaultGridOptions } from '../gridOptions/gridOptionsConfig';
 import { INITIAL_GRID_OPTIONS } from '../config/constants';
@@ -70,20 +71,50 @@ export function useProfileApplication({
     
     // Pre-compile expressions for better performance
     const calcColDefs = calculatedColumns.map(col => {
-      // Cache the compiled function
-      const expr = (col.expression || '').replace(/\[([^\]]+)\]/g, 'params.data.$1');
-      const compiledFn = new Function('params', `try { return (${expr}); } catch{ return undefined; }`);
-      
-      return {
-        field: col.field,
-        headerName: col.headerName || col.field,
-        valueGetter: compiledFn,
-        cellDataType: col.cellDataType || 'text',
-        pinned: col.pinned,
-        width: col.width,
-        enableCellChangeFlash: true,
-        ...(col.valueFormatter && { valueFormatter: col.valueFormatter })
-      };
+      // Validate and clean the expression
+      const rawExpression = col.expression || '';
+      if (!rawExpression.trim()) {
+        // Return a safe default for empty expressions
+        return {
+          field: col.field,
+          headerName: col.headerName || col.field,
+          valueGetter: () => '',
+          cellDataType: col.cellDataType || 'text',
+          width: col.width,
+          pinned: col.pinned
+        };
+      }
+
+      try {
+        // Replace column references with data access
+        const expr = rawExpression.replace(/\[([^\]]+)\]/g, 'params.data.$1');
+        
+        // Validate the expression by attempting to create the function
+        const compiledFn = new Function('params', `try { return (${expr}); } catch(e) { console.warn('Calc column error:', e); return undefined; }`);
+        
+        return {
+          field: col.field,
+          headerName: col.headerName || col.field,
+          valueGetter: compiledFn,
+          cellDataType: col.cellDataType || 'text',
+          pinned: col.pinned,
+          width: col.width,
+          enableCellChangeFlash: true,
+          ...(col.valueFormatter && { valueFormatter: col.valueFormatter })
+        };
+      } catch (error) {
+        // If expression compilation fails, return a safe fallback
+        console.warn(`[useProfileApplication] Invalid expression in calculated column "${col.field}":`, error);
+        return {
+          field: col.field,
+          headerName: col.headerName || col.field,
+          valueGetter: () => 'ERROR',
+          cellDataType: 'text',
+          pinned: col.pinned,
+          width: col.width,
+          enableCellChangeFlash: true
+        };
+      }
     });
     
     return baseColumnDefs.concat(calcColDefs); // concat is faster than spread
@@ -201,7 +232,11 @@ export function useProfileApplication({
       
       // Apply all column transformations in sequence (in memory only)
       if (profile.calculatedColumns?.length) {
-        finalColumnDefs = applyCalculatedColumns(finalColumnDefs, profile.calculatedColumns);
+        // Resolve calculated column IDs to full objects
+        const calculatedColumnObjects = GridCalculatedColumnsStorage.getColumns(gridInstanceId, profile.calculatedColumns);
+        if (calculatedColumnObjects.length > 0) {
+          finalColumnDefs = applyCalculatedColumns(finalColumnDefs, calculatedColumnObjects);
+        }
       }
       
       if (profile.columnGroups?.length) {

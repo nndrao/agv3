@@ -547,8 +547,23 @@ const DataGridStompSharedComponent = () => {
       await saveProfile(updated, false, updated.name);
       console.log('[DataGridStompShared] Profile updated with calculated column IDs');
 
-      // Update temp state to apply immediately
+      // Update temp state to trigger profile application (includes column def updates)
       setTempActiveProfileData(updated);
+      
+      // Apply the profile immediately to ensure column definitions are updated
+      if (gridApi) {
+        console.log('[DataGridStompShared] Applying profile to update column definitions with calculated columns');
+        applyProfile(updated);
+        
+        // Force grid refresh to show new columns immediately
+        setTimeout(() => {
+          console.log('[DataGridStompShared] Refreshing grid to show calculated columns');
+          gridApi.refreshCells({ force: true });
+          // Also refresh headers to show new column headers
+          gridApi.refreshHeader();
+        }, 10);
+      }
+
       console.log('[DataGridStompShared] Applied', activeColumnIds.length, 'calculated columns');
 
       toast({ 
