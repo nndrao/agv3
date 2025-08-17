@@ -202,146 +202,59 @@ const DataGridStompSharedComponent = () => {
     gridInstanceId
   });
   
-  const initialProfileAppliedRef = useRef(false);
-  const currentProfileNameRef = useRef<string | null>(null);
-  const pendingProfileSwitchRef = useRef<boolean>(false);
+  // Simple ref-based profile change tracking
+  const pendingProfileRef = useRef<DataGridStompSharedProfile | null>(null);
+  const profileChangeRequiredRef = useRef<boolean>(false);
+  
   const onGridReady = useCallback((params: any) => {
     onGridReadyBase(params);
     
-    console.log('[DataGridStompShared] Grid ready, checking profile:', {
-      hasActiveProfileData: !!activeProfileData,
-      profileName: activeProfileData?.name,
-      initialProfileApplied: initialProfileAppliedRef.current,
-      hasPendingSwitch: pendingProfileSwitchRef.current,
-      currentProfileName: currentProfileNameRef.current
-    });
-    
-    if (activeProfileData) {
-      const hasPendingSwitch = pendingProfileSwitchRef.current;
-      const isInitialApplication = !initialProfileAppliedRef.current;
-      
-      console.log('[DataGridStompShared] Grid ready - applying profile:', {
-        profileName: activeProfileData.name,
-        hasColumnGroups: !!activeProfileData.columnGroups,
-        columnGroupsCount: activeProfileData.columnGroups?.length || 0,
-        isInitialApplication,
-        hasPendingSwitch,
-        currentProfileName: currentProfileNameRef.current
-      });
-      
-      const shouldTreatAsSwitch = hasPendingSwitch || 
-                                 (initialProfileAppliedRef.current && 
-                                  currentProfileNameRef.current !== null &&
-                                  currentProfileNameRef.current !== activeProfileData.name);
-      
-      console.log('[DataGridStompShared] Grid ready - profile switch decision:', {
-        shouldTreatAsSwitch,
-        hasPendingSwitch,
-        isInitialApplication,
-        currentProfileName: currentProfileNameRef.current,
-        newProfileName: activeProfileData.name,
-        reason: hasPendingSwitch ? 'pending switch' : 
-                (initialProfileAppliedRef.current && currentProfileNameRef.current !== activeProfileData.name) ? 'profile name change' : 'initial load'
-      });
-      
-      applyProfile(activeProfileData, shouldTreatAsSwitch);
-      initialProfileAppliedRef.current = true;
-      currentProfileNameRef.current = activeProfileData.name;
-      pendingProfileSwitchRef.current = false;
-    } else {
-      console.log('[DataGridStompShared] Grid ready - no active profile yet, will apply when profile loads');
+    // Apply pending profile if one exists
+    if (profileChangeRequiredRef.current && pendingProfileRef.current) {
+      applyProfile(pendingProfileRef.current);
+      profileChangeRequiredRef.current = false;
+      pendingProfileRef.current = null;
+    } else if (activeProfileData) {
+      // Fallback: apply activeProfileData if no pending profile
+      applyProfile(activeProfileData);
     }
-  }, [onGridReadyBase, activeProfileData, applyProfile]);
+  }, [onGridReadyBase, applyProfile, activeProfileData]);
   
   useEffect(() => {
     profileChangeHandlerRef.current = (profile: DataGridStompSharedProfile) => {
-      console.log('[🔍 PROFILE-CHANGE-001] Profile change handler triggered', {
-        profileName: profile.name,
-        hasColumnGroups: !!profile.columnGroups,
-        columnGroupsCount: profile.columnGroups?.length || 0
-      });
+      // Store profile and mark for application
+      pendingProfileRef.current = profile;
+      profileChangeRequiredRef.current = true;
       
-      const isInitialLoad = !initialProfileAppliedRef.current;
-      const isActualProfileChange = currentProfileNameRef.current !== null && 
-                                   currentProfileNameRef.current !== profile.name;
-      const isProfileSwitch = !!gridApi && (isActualProfileChange || initialProfileAppliedRef.current);
+      // Clear unsaved changes
+      clearUnsavedOptions();
+      setUnsavedColumnGroups(null);
       
-      console.log('[🔍 PROFILE-CHANGE-002] Profile application context:', {
-        isInitialLoad,
-        isProfileSwitch,
-        isActualProfileChange,
-        hasGridApi: !!gridApi,
-        initialProfileApplied: initialProfileAppliedRef.current,
-        currentProfileName: currentProfileNameRef.current,
-        newProfileName: profile.name
-      });
-      
-      if (isProfileSwitch) {
-        clearUnsavedOptions();
-        setUnsavedColumnGroups(null);
-        console.log('[🔍 PROFILE-CHANGE-003] Cleared unsaved changes for profile switch');
-      }
-      
+      // Update UI state immediately
       setSidebarVisible(profile.sidebarVisible ?? false);
       setShowColumnSettings(profile.showColumnSettings ?? false);
       
-      if (isInitialMount.current) {
-        console.log('[🔍 PROFILE-CHANGE-004] Initial mount - setting provider ID');
-        if (profile.selectedProviderId) {
-          setSelectedProviderId(profile.selectedProviderId);
-        }
+      // Set provider on initial mount
+      if (isInitialMount.current && profile.selectedProviderId) {
+        setSelectedProviderId(profile.selectedProviderId);
+        isInitialMount.current = false;
       }
       
-      if (gridApi) {
-        if (isInitialLoad && !initialProfileAppliedRef.current) {
-          console.log('[🔍 PROFILE-CHANGE-005] Applying initial profile after grid ready');
-          applyProfile(profile, false);
-          initialProfileAppliedRef.current = true;
-          currentProfileNameRef.current = profile.name;
-        } else if (isProfileSwitch) {
-          console.log('[🔍 PROFILE-CHANGE-006] Applying profile for profile switch');
-          applyProfile(profile, true);
-          currentProfileNameRef.current = profile.name;
-        } else {
-          console.log('[🔍 PROFILE-CHANGE-007] Skipping profile application - not initial load and not a switch');
-        }
-        
-        if (isInitialMount.current) {
-          isInitialMount.current = false;
-        }
-      } else {
-        console.log('[🔍 PROFILE-CHANGE-008] Grid not ready - profile will be applied in onGridReady');
-        if (isActualProfileChange) {
-          pendingProfileSwitchRef.current = true;
-          console.log('[🔍 PROFILE-CHANGE-009] Marked pending profile switch for when grid is ready');
-        }
-        currentProfileNameRef.current = profile.name;
+      // Apply immediately if grid is ready
+      if (gridApiRef.current) {
+        applyProfile(profile);
+        profileChangeRequiredRef.current = false;
+        pendingProfileRef.current = null;
       }
-      
-      console.log('[DataGridStompShared] Profile change handler complete');
     };
-  }, [applyProfile, clearUnsavedOptions, gridApi]);
-  
-  // When grid becomes ready, check if we need to apply a pending profile change
+  }, [applyProfile, clearUnsavedOptions, gridApiRef]);
+
+  // Backup mechanism for direct activeProfileData changes
   useEffect(() => {
-    if (gridApi && activeProfileData && pendingProfileSwitchRef.current) {
-      console.log('[DataGridStompShared] Grid became ready with pending profile switch - applying now', {
-        currentProfileName: currentProfileNameRef.current,
-        newProfileName: activeProfileData.name,
-        pendingSwitch: pendingProfileSwitchRef.current
-      });
-      
-      console.log('[DataGridStompShared] Applying pending profile switch:', {
-        from: currentProfileNameRef.current,
-        to: activeProfileData.name,
-        pendingSwitch: pendingProfileSwitchRef.current
-      });
-      
-      applyProfile(activeProfileData, true);
-      currentProfileNameRef.current = activeProfileData.name;
-      pendingProfileSwitchRef.current = false;
+    if (activeProfileData && gridApiRef.current && !profileChangeRequiredRef.current) {
+      applyProfile(activeProfileData);
     }
-  }, [gridApi, activeProfileData, applyProfile]);
+  }, [activeProfileData, gridApiRef, applyProfile]);
   
   // ========== Profile Operations Hook ==========
   const {
