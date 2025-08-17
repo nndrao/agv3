@@ -147,7 +147,6 @@ export function useProfileApplication({
     // Ultra-fast batch application - do everything in one transaction
     const columnState = profile.gridState?.columnState || profile.columnState;
     const filterModel = profile.gridState?.filterModel || profile.filterModel;
-    const hasCustomColumns = profile.calculatedColumns?.length || profile.columnGroups?.length;
     
     // Batch all operations to minimize redraws
     gridApi.setGridOption('suppressAnimationFrame', true);
@@ -170,24 +169,26 @@ export function useProfileApplication({
         });
       }
       
-      // 2. Update column definitions if needed (before applying state)
-      if (hasCustomColumns) {
-        let columnDefs = originalColumnDefsRef.current.map((col: any) => ({
-          ...col,
-          enableCellChangeFlash: true
-        }));
-        
-        if (profile.calculatedColumns?.length) {
-          columnDefs = applyCalculatedColumns(columnDefs, profile.calculatedColumns);
-        }
-        
-        if (profile.columnGroups?.length) {
-          columnDefs = applyColumnGroups(columnDefs, profile.columnGroups);
-        }
-        
-        columnDefs = applyConditionalFormatting(columnDefs);
-        gridApi.setGridOption('columnDefs', columnDefs);
+      // 2. Build final column definitions in memory (all transformations at once)
+      let finalColumnDefs = originalColumnDefsRef.current.map((col: any) => ({
+        ...col,
+        enableCellChangeFlash: true
+      }));
+      
+      // Apply all column transformations in sequence (in memory only)
+      if (profile.calculatedColumns?.length) {
+        finalColumnDefs = applyCalculatedColumns(finalColumnDefs, profile.calculatedColumns);
       }
+      
+      if (profile.columnGroups?.length) {
+        finalColumnDefs = applyColumnGroups(finalColumnDefs, profile.columnGroups);
+      }
+      
+      // Always apply conditional formatting (lightweight operation)
+      finalColumnDefs = applyConditionalFormatting(finalColumnDefs);
+      
+      // Single column definition update (most expensive operation - only done once)
+      gridApi.setGridOption('columnDefs', finalColumnDefs);
       
       // 3. Apply column state and filters in one batch (most critical)
       if (columnState?.length) {
