@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Plus, Sparkles, FileText } from 'lucide-react';
+import { CheckCircle2, Plus, Sparkles, FileText, Save } from 'lucide-react';
+import { GridConditionalFormattingStorage } from './gridConditionalFormattingStorage';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ColDef } from 'ag-grid-community';
 import { RuleList } from '@/components/conditional-formatting/components/RuleList';
@@ -12,85 +13,144 @@ import './conditionalFormatting.css';
 
 interface ConditionalFormattingEditorContentProps {
   columnDefs: ColDef[];
-  currentRules?: ConditionalRule[];
-  onApply: (rules: ConditionalRule[]) => void;
+  currentRules?: ConditionalRule[]; // All available rules
+  selectedRuleIds?: string[]; // Currently selected rule IDs
+  onApply: (selectedRuleIds: string[], allRules: ConditionalRule[]) => void; // Updated signature
   onClose: () => void;
   profileName?: string;
+  gridInstanceId?: string; // Required for saving rules to grid storage
 }
 
 export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingEditorContentProps> = ({
   columnDefs,
   currentRules = [],
+  selectedRuleIds = [],
   onApply,
   onClose,
+  profileName,
+  gridInstanceId,
 }) => {
   const [rules, setRules] = useState<ConditionalRule[]>(currentRules);
+  const [activeRuleIds, setActiveRuleIds] = useState<string[]>(selectedRuleIds); // Track which rules are selected/active
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(
     currentRules.length > 0 ? currentRules[0].id : null
   );
   const [showTemplates, setShowTemplates] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // Track if rules have been modified
   
-  // Convert column defs to the format expected by components
-  const availableColumns = columnDefs.map(col => ({
-    field: col.field || '',
-    headerName: col.headerName,
-    type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
-  }));
+  // Convert column defs to the format expected by components - memoize to prevent re-renders
+  const availableColumns = React.useMemo(() => 
+    columnDefs.map(col => ({
+      field: col.field || '',
+      headerName: col.headerName,
+      type: Array.isArray(col.type) ? col.type[0] : (col.type || 'text')
+    })),
+    [columnDefs]
+  );
 
-  const selectedRule = rules.find(r => r.id === selectedRuleId);
+  const selectedRule = React.useMemo(
+    () => rules.find(r => r.id === selectedRuleId),
+    [rules, selectedRuleId]
+  );
+  
 
   const handleAddRule = useCallback(() => {
     const newRule = createNewRule();
-    setRules([...rules, newRule]);
+    setRules(prevRules => [...prevRules, newRule]);
     setSelectedRuleId(newRule.id);
     setShowTemplates(false);
-  }, [rules]);
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleDeleteRule = useCallback((ruleId: string) => {
-    const newRules = rules.filter(r => r.id !== ruleId);
-    setRules(newRules);
+    setRules(prevRules => prevRules.filter(r => r.id !== ruleId));
     
-    if (selectedRuleId === ruleId) {
-      setSelectedRuleId(newRules.length > 0 ? newRules[0].id : null);
-    }
-  }, [rules, selectedRuleId]);
+    // Remove from active rules if it was selected
+    setActiveRuleIds(prevActiveIds => prevActiveIds.filter(id => id !== ruleId));
+    
+    setSelectedRuleId(prevSelectedId => {
+      if (prevSelectedId === ruleId) {
+        // Will select first rule after deletion
+        return null;
+      }
+      return prevSelectedId;
+    });
+    
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleDuplicateRule = useCallback((ruleId: string) => {
-    const rule = rules.find(r => r.id === ruleId);
-    if (rule) {
-      const duplicated = duplicateRule(rule);
-      setRules([...rules, duplicated]);
-      setSelectedRuleId(duplicated.id);
-    }
-  }, [rules]);
+    setRules(prevRules => {
+      const rule = prevRules.find(r => r.id === ruleId);
+      if (rule) {
+        const duplicated = duplicateRule(rule);
+        setSelectedRuleId(duplicated.id);
+        setHasUnsavedChanges(true);
+        return [...prevRules, duplicated];
+      }
+      return prevRules;
+    });
+  }, []);
 
   const handleMoveRule = useCallback((ruleId: string, direction: 'up' | 'down') => {
-    const newRules = moveRule(rules, ruleId, direction);
-    setRules(newRules);
-  }, [rules]);
+    setRules(prevRules => moveRule(prevRules, ruleId, direction));
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleToggleRule = useCallback((ruleId: string) => {
-    setRules(rules.map(r => 
+    setRules(prevRules => prevRules.map(r => 
       r.id === ruleId ? { ...r, enabled: !r.enabled } : r
     ));
-  }, [rules]);
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleUpdateRule = useCallback((updatedRule: ConditionalRule) => {
-    setRules(rules.map(r => 
+    setRules(prevRules => prevRules.map(r => 
       r.id === updatedRule.id ? updatedRule : r
     ));
-  }, [rules]);
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleSelectTemplate = useCallback((template: ConditionalRuleTemplate) => {
     const newRule = createRuleFromTemplate(template);
-    setRules([...rules, newRule]);
+    setRules(prevRules => [...prevRules, newRule]);
     setSelectedRuleId(newRule.id);
     setShowTemplates(false);
-  }, [rules]);
+  }, []);
+
+  // Handle checkbox toggle for rule selection
+  const handleToggleRuleActive = useCallback((ruleId: string) => {
+    setActiveRuleIds(prev => 
+      prev.includes(ruleId) 
+        ? prev.filter(id => id !== ruleId)
+        : [...prev, ruleId]
+    );
+  }, []);
 
   const handleApply = useCallback(() => {
-    onApply(rules);
-  }, [rules, onApply]);
+    onApply(activeRuleIds, rules);
+  }, [activeRuleIds, rules, onApply]);
+
+  const handleSaveRules = useCallback(async () => {
+    if (!gridInstanceId) {
+      console.warn('[ConditionalFormattingEditor] No gridInstanceId provided, cannot save rules');
+      return;
+    }
+
+    try {
+      // Save all rules to grid-level storage
+      rules.forEach(rule => {
+        GridConditionalFormattingStorage.saveRule(gridInstanceId, rule);
+      });
+      
+      setHasUnsavedChanges(false);
+      console.log(`[ConditionalFormattingEditor] Saved ${rules.length} rules to grid storage`);
+      
+      // You could add a toast notification here if needed
+    } catch (error) {
+      console.error('[ConditionalFormattingEditor] Error saving rules:', error);
+    }
+  }, [rules, gridInstanceId]);
 
   return (
     <div className="conditional-formatting-dialog">
@@ -124,11 +184,13 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
               <RuleList
                 rules={rules}
                 selectedRuleId={selectedRuleId}
+                activeRuleIds={activeRuleIds}
                 onSelectRule={setSelectedRuleId}
                 onDeleteRule={handleDeleteRule}
                 onDuplicateRule={handleDuplicateRule}
                 onMoveRule={handleMoveRule}
                 onToggleRule={handleToggleRule}
+                onToggleActive={handleToggleRuleActive}
               />
             </div>
           </div>
@@ -157,7 +219,10 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
                   </div>
                   <div>
                     <p className="text-lg font-medium text-muted-foreground">No rule selected</p>
-                    <p className="text-sm text-muted-foreground/70 mt-1">Create a new rule or select from templates to get started</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Click on any rule in the sidebar to edit it,<br />
+                      or create a new rule to get started
+                    </p>
                   </div>
                 </div>
               </div>
@@ -180,14 +245,24 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
             variant="outline"
             onClick={onClose}
           >
-            Cancel
+            Close
+          </Button>
+          <Button
+            onClick={handleSaveRules}
+            variant="outline"
+            disabled={!hasUnsavedChanges}
+            className="min-w-[120px]"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save Rules
           </Button>
           <Button
             onClick={handleApply}
             className="min-w-[100px]"
+            variant="default"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
-            Apply Rules
+            Apply
           </Button>
         </div>
       </div>

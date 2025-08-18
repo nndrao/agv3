@@ -54,6 +54,9 @@ export interface UseProfileManagementResult<T extends BaseProfile> {
   exportProfile: (versionId: string) => Promise<string>;
   importProfile: (jsonData: string) => Promise<void>;
   resetToDefault: () => Promise<void>;
+  
+  // Refs for external use
+  isSavingProfileRef: React.MutableRefObject<boolean>;
 }
 
 export function useProfileManagement<T extends BaseProfile>({
@@ -74,6 +77,7 @@ export function useProfileManagement<T extends BaseProfile>({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isSavingProfileRef = useRef<boolean>(false);
 
   // Debug logging helper
   const log = useCallback((...args: unknown[]) => {
@@ -93,16 +97,51 @@ export function useProfileManagement<T extends BaseProfile>({
     log('Active profile:', activeProfile?.name);
   }, [profiles, activeProfile, log]);
 
+  // Track previous profile ID to detect actual profile changes vs updates
+  const previousProfileIdRef = useRef<string | null>(null);
+  
   // Apply profile when active profile changes
   useEffect(() => {
     console.log('[🔍][APP_STARTUP_EFFECT] Active profile changed');
     console.log('[🔍][APP_STARTUP_EFFECT] - activeProfile:', activeProfile?.name);
     console.log('[🔍][APP_STARTUP_EFFECT] - activeProfile.config:', activeProfile?.config);
+    
     if (activeProfile && onProfileChange) {
       const profileData = activeProfile.config as T;
-      console.log('[🔍][APP_STARTUP_EFFECT] Calling onProfileChange with:', profileData);
+      
+      // Only call onProfileChange if this is a different profile (not just an update to the same profile)
+      const isProfileSwitch = previousProfileIdRef.current !== activeProfile.versionId;
+      
+      console.log('[🔍 PROFILE-EFFECT-001] Profile effect triggered:', {
+        previousId: previousProfileIdRef.current,
+        currentId: activeProfile.versionId,
+        isSwitch: isProfileSwitch,
+        isSaving: isSavingProfileRef.current,
+        hasColumnGroups: !!profileData.columnGroups,
+        columnGroupsCount: profileData.columnGroups?.length || 0
+      });
+      
+      if (isProfileSwitch) {
+        console.log('[🔍 PROFILE-EFFECT-002] Profile switch detected - calling onProfileChange');
+        // Don't call onProfileChange if we're currently saving
+        if (!isSavingProfileRef.current) {
+          onProfileChange(profileData);
+        } else {
+          console.log('[🔍 PROFILE-EFFECT-002b] Delaying onProfileChange until save completes');
+        }
+        previousProfileIdRef.current = activeProfile.versionId;
+      } else {
+        console.log('[🔍 PROFILE-EFFECT-003] Same profile updated - skipping onProfileChange');
+        // Still update the ref to track current profile
+        previousProfileIdRef.current = activeProfile.versionId;
+      }
+      
+      // Always update the active profile data
       setActiveProfileData(profileData);
-      onProfileChange(profileData);
+      console.log('[🔍 PROFILE-EFFECT-004] Updated activeProfileData', {
+        isSaving: isSavingProfileRef.current,
+        isSwitch: isProfileSwitch
+      });
     } else {
       console.log('[🔍][APP_STARTUP_EFFECT] Skipping - missing activeProfile or onProfileChange');
     }
@@ -251,6 +290,7 @@ export function useProfileManagement<T extends BaseProfile>({
     
     log('Saving profile:', { data, saveAsNew, name });
     setIsSaving(true);
+    isSavingProfileRef.current = true;
 
     try {
       let updatedConfig: UnifiedConfig;
@@ -328,10 +368,21 @@ export function useProfileManagement<T extends BaseProfile>({
           log('New profile created and set as active:', newProfile.name);
         }
       } else {
-        // For updates, just update the necessary state
-        setConfig(updatedConfig);
-        setProfiles(updatedProfiles);
-        setActiveProfileData(data);
+        // For updates, find and set the updated profile
+        const updatedActiveProfile = updatedProfiles.find(p => p.versionId === activeProfile.versionId);
+        if (updatedActiveProfile) {
+          console.log('[🔍 PROFILE-SAVE-001] Updating existing profile:', {
+            versionId: updatedActiveProfile.versionId,
+            name: updatedActiveProfile.name,
+            hasColumnGroups: !!data.columnGroups,
+            columnGroupsCount: data.columnGroups?.length || 0
+          });
+          setConfig(updatedConfig);
+          setProfiles(updatedProfiles);
+          setActiveProfile(updatedActiveProfile); // This will trigger the effect with the new config
+          setActiveProfileData(data);
+          console.log('[🔍 PROFILE-SAVE-002] Profile state updated');
+        }
       }
       
       // Log the updated state
@@ -354,6 +405,11 @@ export function useProfileManagement<T extends BaseProfile>({
       });
     } finally {
       setIsSaving(false);
+      // Delay resetting the saving flag to prevent immediate profile reapplication
+      setTimeout(() => {
+        isSavingProfileRef.current = false;
+        console.log('[🔍 PROFILE-SAVE-003] Save complete, isSavingProfileRef reset to false (delayed)');
+      }, 500); // Increased delay to ensure all effects have settled
     }
   };
 
@@ -361,7 +417,13 @@ export function useProfileManagement<T extends BaseProfile>({
     const profile = profiles.find(p => p.versionId === versionId);
     if (!profile || !config) return;
 
-    log('Loading profile:', versionId);
+    console.log('[🔍 LOAD-PROFILE-001] Loading profile:', {
+      versionId,
+      profileName: profile.name,
+      currentActiveId: activeProfile?.versionId,
+      previousTrackedId: previousProfileIdRef.current,
+      isSavingProfile: isSavingProfileRef.current
+    });
 
     try {
       // Update active setting
@@ -376,6 +438,8 @@ export function useProfileManagement<T extends BaseProfile>({
       setConfig(updatedConfig);
       setActiveProfile(profile);
       setActiveProfileData(profile.config as T);
+      
+      console.log('[🔍 LOAD-PROFILE-002] Profile loaded and state updated');
 
       // Don't show toast here - the status indicator handles this
     } catch (err) {
@@ -560,6 +624,7 @@ export function useProfileManagement<T extends BaseProfile>({
     updateProfilePartial,
     exportProfile,
     importProfile,
-    resetToDefault
+    resetToDefault,
+    isSavingProfileRef
   };
 }

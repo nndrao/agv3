@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Moon, Sun, MoreVertical, Edit2, Settings, Layers, Code2, Palette } from "lucide-react";
+import { Moon, Sun, MoreVertical, Edit2, Settings, Layers, Code2, Palette, FunctionSquare } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ interface SettingsSectionProps {
   onOpenColumnGroups: () => void;
   onOpenExpressionEditor?: () => void;
   onOpenConditionalFormatting?: () => void;
+  onOpenCalculatedColumns?: () => void;
   profiles: any[];
   activeProfile: any;
   viewInstanceId: string;
@@ -37,6 +38,7 @@ export const SettingsSection = React.memo<SettingsSectionProps>(({
   onOpenColumnGroups,
   onOpenExpressionEditor,
   onOpenConditionalFormatting,
+  onOpenCalculatedColumns,
   profiles,
   activeProfile,
   viewInstanceId
@@ -124,6 +126,12 @@ export const SettingsSection = React.memo<SettingsSectionProps>(({
             <DropdownMenuItem onClick={onOpenConditionalFormatting}>
               <Palette className="h-4 w-4 mr-2" />
               Conditional Formatting
+            </DropdownMenuItem>
+          )}
+          {onOpenCalculatedColumns && (
+            <DropdownMenuItem onClick={onOpenCalculatedColumns}>
+              <FunctionSquare className="h-4 w-4 mr-2" />
+              Calculated Columns
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

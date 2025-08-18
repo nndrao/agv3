@@ -6,21 +6,25 @@ import { Sparkles } from 'lucide-react';
 interface RuleListProps {
   rules: ConditionalRule[];
   selectedRuleId: string | null;
+  activeRuleIds?: string[]; // NEW: Track which rules are active/selected
   onSelectRule: (ruleId: string) => void;
   onDeleteRule: (ruleId: string) => void;
   onDuplicateRule: (ruleId: string) => void;
   onMoveRule: (ruleId: string, direction: 'up' | 'down') => void;
   onToggleRule: (ruleId: string) => void;
+  onToggleActive?: (ruleId: string) => void; // NEW: Handle checkbox toggle
 }
 
 export const RuleList: React.FC<RuleListProps> = ({
   rules,
   selectedRuleId,
+  activeRuleIds = [],
   onSelectRule,
   onDeleteRule,
   onDuplicateRule,
   onMoveRule,
-  onToggleRule
+  onToggleRule,
+  onToggleActive
 }) => {
   if (rules.length === 0) {
     return (
@@ -44,12 +48,14 @@ export const RuleList: React.FC<RuleListProps> = ({
             index={index}
             totalRules={rules.length}
             isSelected={selectedRuleId === rule.id}
+            isActive={activeRuleIds.includes(rule.id)}
             onSelect={() => onSelectRule(rule.id)}
             onDelete={() => onDeleteRule(rule.id)}
             onDuplicate={() => onDuplicateRule(rule.id)}
             onMoveUp={() => onMoveRule(rule.id, 'up')}
             onMoveDown={() => onMoveRule(rule.id, 'down')}
             onToggle={() => onToggleRule(rule.id)}
+            onToggleActive={onToggleActive ? () => onToggleActive(rule.id) : undefined}
           />
         ))}
       </div>

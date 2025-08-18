@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ConditionalRule } from '@/components/conditional-formatting/types';
 import { ConditionalFormattingEditorContent } from '@/windows/datagrid/components/DataGridStompShared/conditionalFormatting/ConditionalFormattingEditorContent';
 import { initializeDialog, sendDialogResponse } from '@/services/openfin/OpenFinDialogService';
@@ -19,100 +19,212 @@ interface ConditionalFormattingData {
     headerName?: string;
     type?: string;
   }>;
-  currentRules?: ConditionalRule[];
+  currentRules?: ConditionalRule[]; // All available rules (grid-level)
+  activeRuleIds?: string[]; // Currently active rule IDs (profile-level)
   profileName?: string;
+  gridInstanceId?: string;
 }
 
 export const ConditionalFormattingApp: React.FC = () => {
-  const [rules, setRules] = useState<ConditionalRule[]>([]);
+  const [rules, setRules] = useState<ConditionalRule[]>([]); // All available rules
+  const [selectedRuleIds, setSelectedRuleIds] = useState<string[]>([]); // Currently selected rule IDs
   const [availableColumns, setAvailableColumns] = useState<ColumnInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [profileName, setProfileName] = useState<string>('');
+  const [gridInstanceId, setGridInstanceId] = useState<string>('');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
   const { toast } = useToast();
 
+  // Use refs to store the latest data for getData callback
+  const rulesRef = useRef(rules);
+  const selectedRuleIdsRef = useRef(selectedRuleIds);
+  useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
+  useEffect(() => {
+    selectedRuleIdsRef.current = selectedRuleIds;
+  }, [selectedRuleIds]);
+
   useEffect(() => {
     const initialize = async () => {
-      try {
-        // Set document title
-        document.title = 'Conditional Formatting Rules';
+      console.log('[ConditionalFormattingApp] Starting initialization');
+      
+      // Set document title
+      document.title = 'Conditional Formatting Rules';
 
-        // Get theme from localStorage
-        const inheritedTheme = localStorage.getItem('ui-theme') || 'dark';
-        setTheme(inheritedTheme as 'light' | 'dark' | 'system');
+      // Get theme from localStorage
+      const inheritedTheme = localStorage.getItem('ui-theme') || 'dark';
+      setTheme(inheritedTheme as 'light' | 'dark' | 'system');
 
-        // Initialize dialog communication
-        await initializeDialog({
-          onInitialize: (data: ConditionalFormattingData) => {
-            console.log('[ConditionalFormattingApp] Received initial data:', data);
-            
-            // Convert column definitions to the format expected by the component
-            const columns = data.columnDefs.map(col => ({
+      // Step 1: Get initial data (deterministic order of preference)
+      let dialogData: ConditionalFormattingData | null = null;
+      let dataSource = 'none';
+
+      // Check if running in OpenFin
+      const isOpenFin = typeof fin !== 'undefined';
+      
+      if (isOpenFin) {
+        // 1a. Try to get data from window customData (most reliable in OpenFin)
+        try {
+          const windowOptions = await (window as any).fin?.Window?.getCurrent()?.getOptions();
+          const customData = windowOptions?.customData;
+          if (customData?.dialogData) {
+            dialogData = customData.dialogData;
+            dataSource = 'customData';
+            console.log('[ConditionalFormattingApp] Got data from customData');
+          }
+        } catch (e) {
+          console.warn('[ConditionalFormattingApp] Could not get customData:', e);
+        }
+
+        // 1b. Set up IAB communication for future updates (non-blocking)
+        try {
+          initializeDialog({
+            onInitialize: (data: ConditionalFormattingData) => {
+              console.log('[ConditionalFormattingApp] Received data via IAB:', data);
+              
+              // Always update columns from parent window
+              if (data.columnDefs && data.columnDefs.length > 0) {
+                const columns = data.columnDefs.map(col => ({
+                  field: col.field,
+                  headerName: col.headerName || col.field,
+                  type: col.type
+                }));
+                
+                // Only update if columns actually changed - use JSON comparison for deep equality
+                setAvailableColumns(prevColumns => {
+                  const prevJson = JSON.stringify(prevColumns);
+                  const newJson = JSON.stringify(columns);
+                  return prevJson === newJson ? prevColumns : columns;
+                });
+                console.log('[ConditionalFormattingApp] Updated columns from IAB:', columns.length);
+              }
+              
+              // Update rules and selection if we don't have data yet or if this is newer
+              if (!dialogData || dataSource === 'localStorage') {
+                setRules(data.currentRules || []);
+                setSelectedRuleIds(data.activeRuleIds || []);
+                setProfileName(data.profileName || '');
+                setGridInstanceId(data.gridInstanceId || '');
+                console.log('[ConditionalFormattingApp] Updated rules and selection from IAB');
+              }
+            },
+            getData: () => ({ 
+              activeRuleIds: selectedRuleIdsRef.current, 
+              allRules: rulesRef.current 
+            }) // Return both selected IDs and all rules
+          }).catch(err => {
+            // Non-critical - we already have data from customData or will use localStorage
+            console.warn('[ConditionalFormattingApp] IAB initialization failed (non-critical):', err);
+          });
+        } catch (e) {
+          console.warn('[ConditionalFormattingApp] Could not set up IAB:', e);
+        }
+      }
+
+      // Step 2: If no dialog data yet, use localStorage as fallback
+      if (!dialogData) {
+        try {
+          const storedRules = localStorage.getItem('conditionalFormattingRules');
+          if (storedRules) {
+            dialogData = {
+              columnDefs: [], // Will use default columns
+              currentRules: JSON.parse(storedRules),
+              profileName: ''
+            };
+            dataSource = 'localStorage';
+            console.log('[ConditionalFormattingApp] Using localStorage data');
+          }
+        } catch (e) {
+          console.error('[ConditionalFormattingApp] Failed to load from localStorage:', e);
+        }
+      }
+
+      // Step 3: Apply the data we have (or use defaults)
+      if (dialogData) {
+        // Process column definitions
+        const columns = dialogData.columnDefs && dialogData.columnDefs.length > 0
+          ? dialogData.columnDefs.map(col => ({
               field: col.field,
               headerName: col.headerName || col.field,
               type: col.type
-            }));
-            
-            setAvailableColumns(columns);
-            setRules(data.currentRules || []);
-            setProfileName(data.profileName || '');
-            setIsLoading(false);
-          },
-          getData: () => ({ rules })
-        });
-
-      } catch (error) {
-        console.error('[ConditionalFormattingApp] Initialization error:', error);
+            }))
+          : [
+              // Default columns if none provided
+              { field: 'value', headerName: 'Value', type: 'number' },
+              { field: 'price', headerName: 'Price', type: 'number' },
+              { field: 'quantity', headerName: 'Quantity', type: 'number' },
+              { field: 'status', headerName: 'Status', type: 'string' }
+            ];
         
-        // If running in development without OpenFin, use mock data
-        if (typeof fin === 'undefined') {
-          console.warn('[ConditionalFormattingApp] Running without OpenFin - using mock data');
-          
-          setAvailableColumns([
-            { field: 'id', headerName: 'ID', type: 'number' },
-            { field: 'name', headerName: 'Name', type: 'string' },
-            { field: 'value', headerName: 'Value', type: 'number' },
-            { field: 'price', headerName: 'Price', type: 'number' },
-            { field: 'quantity', headerName: 'Quantity', type: 'number' },
-            { field: 'status', headerName: 'Status', type: 'string' },
-            { field: 'date', headerName: 'Date', type: 'date' }
-          ]);
-          setRules([]);
-          setIsLoading(false);
-          
-          toast({
-            title: 'Development Mode',
-            description: 'Running without OpenFin - using mock data',
-            variant: 'default'
-          });
-        } else {
-          // Show error and allow closing
-          setIsLoading(false);
-        }
+        setAvailableColumns(columns);
+        setRules(dialogData.currentRules || []);
+        setSelectedRuleIds(dialogData.activeRuleIds || []);
+        setProfileName(dialogData.profileName || '');
+        setGridInstanceId(dialogData.gridInstanceId || '');
+        
+        console.log(`[ConditionalFormattingApp] Initialized with ${dataSource} data:`, {
+          columns: columns.length,
+          rules: (dialogData.currentRules || []).length,
+          selectedRules: (dialogData.activeRuleIds || []).length
+        });
+      } else {
+        // No data available - use defaults
+        console.log('[ConditionalFormattingApp] No data available, using defaults');
+        
+        setAvailableColumns([
+          { field: 'value', headerName: 'Value', type: 'number' },
+          { field: 'price', headerName: 'Price', type: 'number' },
+          { field: 'quantity', headerName: 'Quantity', type: 'number' },
+          { field: 'status', headerName: 'Status', type: 'string' }
+        ]);
+        setRules([]);
+        setProfileName('');
       }
+
+      // Mark as loaded
+      setIsLoading(false);
+      console.log('[ConditionalFormattingApp] Initialization complete');
     };
 
     initialize();
-  }, []);
+  }, []); // Remove toast from dependencies to prevent re-initialization
 
-  const handleApply = async (updatedRules?: ConditionalRule[]) => {
+  const handleApply = async (selectedIds?: string[], allRules?: ConditionalRule[]) => {
     try {
-      const rulesToApply = updatedRules || rules;
+      const ruleIdsToApply = selectedIds || selectedRuleIds;
+      const rulesToStore = allRules || rules;
       
-      console.log('[ConditionalFormattingApp] Applying rules:', rulesToApply);
+      console.log('[ConditionalFormattingApp] Applying rules:', {
+        selectedIds: ruleIdsToApply,
+        totalRules: rulesToStore.length
+      });
       
-      // Send response to parent
-      await sendDialogResponse('apply', { rules: rulesToApply });
+      // Send response to parent with new format
+      await sendDialogResponse('apply', { 
+        activeRuleIds: ruleIdsToApply,
+        allRules: rulesToStore 
+      });
+      
+      // Show success message
+      toast({
+        title: 'Rules Applied',
+        description: `${ruleIdsToApply.length} rule(s) applied to the grid`,
+        variant: 'default'
+      });
       
     } catch (error) {
       console.error('[ConditionalFormattingApp] Failed to apply rules:', error);
       
       // If not in OpenFin, just log and close
       if (typeof fin === 'undefined') {
-        console.log('[ConditionalFormattingApp] Would send rules:', rulesToApply);
+        console.log('[ConditionalFormattingApp] Would send rules:', {
+          activeRuleIds: ruleIdsToApply,
+          allRules: rulesToStore
+        });
         toast({
           title: 'Rules Configured',
-          description: `${rulesToApply.length} rule(s) configured (dev mode)`,
+          description: `${ruleIdsToApply.length} rule(s) configured (dev mode)`,
           variant: 'default'
         });
         setTimeout(() => window.close(), 1000);
@@ -126,10 +238,10 @@ export const ConditionalFormattingApp: React.FC = () => {
     }
   };
 
-  const handleCancel = async () => {
+  const handleClose = async () => {
     try {
-      // Send cancel response to parent
-      await sendDialogResponse('cancel');
+      // Send close response to parent
+      await sendDialogResponse('close');
       
     } catch (error) {
       console.error('[ConditionalFormattingApp] Failed to close:', error);
@@ -160,12 +272,15 @@ export const ConditionalFormattingApp: React.FC = () => {
               type: col.type
             }))}
             currentRules={rules}
-            onApply={(updatedRules) => {
-              setRules(updatedRules);
-              handleApply(updatedRules);
+            selectedRuleIds={selectedRuleIds}
+            onApply={(selectedIds, allRules) => {
+              setRules(allRules);
+              setSelectedRuleIds(selectedIds);
+              handleApply(selectedIds, allRules);
             }}
-            onClose={handleCancel}
+            onClose={handleClose}
             profileName={profileName}
+            gridInstanceId={gridInstanceId}
           />
         </div>
         <Toaster />

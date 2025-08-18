@@ -7,6 +7,21 @@ export interface RowData {
   [key: string]: any;
 }
 
+// Calculated/Scratch column definition
+export interface CalculatedColumnDefinition {
+  id: string;
+  field: string;
+  headerName: string;
+  expression: string; // calculation expression using [Column] references
+  cellDataType?: 'text' | 'number' | 'boolean' | 'date' | 'dateString' | 'object';
+  pinned?: 'left' | 'right';
+  width?: number;
+  valueFormatter?: string; // optional formatter key resolved by grid context
+  createdAt?: number; // Creation timestamp (NEW)
+  updatedAt?: number; // Last modified timestamp (NEW)
+  description?: string; // Optional description (NEW)
+}
+
 // Profile interface for DataGridStompShared
 export interface DataGridStompSharedProfile extends BaseProfile {
   // Data source
@@ -18,7 +33,9 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   filterModel?: any;
   sortModel?: any;
   groupModel?: any;
-  columnGroups?: any[]; // Column group definitions
+  columnGroups?: string[]; // Active column group IDs (references to grid-level groups)
+  conditionalFormattingRules?: string[]; // Active conditional formatting rule IDs (references to grid-level rules)
+  calculatedColumns?: string[]; // Active calculated column IDs (references to grid-level columns)
   
   // Full grid state - comprehensive state management
   gridState?: GridStateType;
@@ -38,6 +55,8 @@ export interface DataGridStompSharedProfile extends BaseProfile {
   
   // Grid options (AG-Grid options)
   gridOptions?: Record<string, any>;
+
+  // Note: calculatedColumns moved to grid configuration section above as ID references
 }
 
 // Snapshot mode types
@@ -111,6 +130,7 @@ export interface ToolbarProps {
   onOpenColumnGroups: () => void;
   onOpenExpressionEditor?: () => void;
   onOpenConditionalFormatting?: () => void;
+  onOpenCalculatedColumns?: () => void;
   viewInstanceId: string;
   profileOperation?: string;
   profileName?: string;
@@ -134,4 +154,5 @@ export interface DataGridProps {
   connectionState: ConnectionState;
   snapshotData: SnapshotData;
   gridOptions?: Record<string, any>;
+  rowClassRules?: Record<string, (params: any) => boolean>;
 }

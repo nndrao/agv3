@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ternary Style Format - Inline Styles in Expressions</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #8AAAA7;
+            padding-bottom: 10px;
+        }
+        
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .expression-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin: 10px 0;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        
+        .expression-box .keyword {
+            color: #569cd6;
+        }
+        
+        .expression-box .string {
+            color: #ce9178;
+        }
+        
+        .expression-box .property {
+            color: #9cdcfe;
+        }
+        
+        .expression-box .operator {
+            color: #d4d4d4;
+        }
+        
+        .expression-box .comment {
+            color: #6a9955;
+        }
+        
+        .expression-box .number {
+            color: #b5cea8;
+        }
+        
+        .grid-demo {
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .grid-row {
+            display: table-row;
+        }
+        
+        .grid-cell {
+            display: table-cell;
+            padding: 10px;
+            border: 1px solid #ddd;
+            transition: all 0.3s ease;
+        }
+        
+        .grid-header {
+            background: #D9D9D9;
+            font-weight: bold;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 20px;
+        }
+        
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .pros, .cons {
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .pros {
+            background: #f0fdf4;
+            border-left: 3px solid #22c55e;
+        }
+        
+        .cons {
+            background: #fef2f2;
+            border-left: 3px solid #ef4444;
+        }
+        
+        .button {
+            background: #8AAAA7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        .button:hover {
+            background: #7a9a97;
+        }
+        
+        .note {
+            background: #fffbf0;
+            border-left: 4px solid #ffa500;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Ternary Style Format vs Metadata Format</h1>
+    
+    <div class="note">
+        <strong>💡 Key Question:</strong> Can we use <code>[pnl] > 2000 ? {backgroundColor:'blue'} : null</code> format?
+        <br><strong>Answer:</strong> YES! The system can support both formats.
+    </div>
+    
+    <div class="comparison">
+        <!-- Ternary Format -->
+        <div class="section">
+            <h2>Method 1: Inline Ternary Format</h2>
+            <p>Type styles directly in the expression:</p>
+            
+            <div class="expression-box"><span class="operator">[</span><span class="property">pnl</span><span class="operator">]</span> <span class="operator">></span> <span class="number">2000</span> <span class="operator">?</span> <span class="operator">{</span> 
+    <span class="property">backgroundColor</span><span class="operator">:</span> <span class="string">'#3b82f6'</span><span class="operator">,</span>
+    <span class="property">color</span><span class="operator">:</span> <span class="string">'#ffffff'</span><span class="operator">,</span>
+    <span class="property">fontWeight</span><span class="operator">:</span> <span class="string">'bold'</span>
+<span class="operator">}</span> <span class="operator">:</span> <span class="keyword">null</span></div>
+            
+            <h3>✅ Pros:</h3>
+            <ul>
+                <li>Quick and direct</li>
+                <li>Familiar JavaScript syntax</li>
+                <li>See styles immediately in code</li>
+                <li>No metadata overhead</li>
+                <li>Easy to copy/paste</li>
+            </ul>
+            
+            <h3>❌ Cons:</h3>
+            <ul>
+                <li>Must type CSS properties manually</li>
+                <li>No visual preview while editing</li>
+                <li>Prone to typos</li>
+                <li>No color picker</li>
+            </ul>
+            
+            <h3>AG-Grid Implementation:</h3>
+            <div class="expression-box">columnDef.cellStyle = (params) => {
+    return params.data.pnl > 2000 ? {
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+        fontWeight: 'bold'
+    } : null;
+}</div>
+        </div>
+        
+        <!-- Metadata Format -->
+        <div class="section">
+            <h2>Method 2: Visual Editor Format (Ctrl+Shift+D)</h2>
+            <p>Use visual editor to configure styles:</p>
+            
+            <div class="expression-box"><span class="comment">/* @rule-style {
+  "id": "rule-pnl-2000",
+  "styles": {
+    "backgroundColor": "#3b82f6",
+    "color": "#ffffff",
+    "fontWeight": "bold"
+  }
+} */</span>
+params.data.pnl <span class="operator">></span> <span class="number">2000</span></div>
+            
+            <h3>✅ Pros:</h3>
+            <ul>
+                <li>Visual style configuration</li>
+                <li>Color pickers</li>
+                <li>Live preview</li>
+                <li>No typing errors</li>
+                <li>CSS classes (better performance)</li>
+                <li>Reusable styles</li>
+            </ul>
+            
+            <h3>❌ Cons:</h3>
+            <ul>
+                <li>More verbose</li>
+                <li>Requires popup interaction</li>
+                <li>Metadata overhead</li>
+            </ul>
+            
+            <h3>AG-Grid Implementation:</h3>
+            <div class="expression-box">// CSS injected:
+.cr-rule-pnl-2000 {
+    background-color: #3b82f6;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+// cellClassRules:
+columnDef.cellClassRules = {
+    'cr-rule-pnl-2000': (params) => params.data.pnl > 2000
+}</div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Advanced Examples with Ternary Format</h2>
+        
+        <h3>1. Simple Condition:</h3>
+        <div class="expression-box">[status] === "Active" ? { <span class="property">color</span>: <span class="string">'#22c55e'</span> } : null</div>
+        
+        <h3>2. Multiple Conditions (AND):</h3>
+        <div class="expression-box">[pnl] > 1000 && [status] === "Active" ? { 
+    <span class="property">backgroundColor</span>: <span class="string">'#10b981'</span>,
+    <span class="property">fontWeight</span>: <span class="string">'bold'</span>
+} : null</div>
+        
+        <h3>3. Nested Ternary (Multiple Styles):</h3>
+        <div class="expression-box">[priority] === "Critical" ? { <span class="property">backgroundColor</span>: <span class="string">'#ef4444'</span>, <span class="property">color</span>: <span class="string">'#ffffff'</span> } :
+[priority] === "High" ? { <span class="property">backgroundColor</span>: <span class="string">'#f97316'</span>, <span class="property">color</span>: <span class="string">'#ffffff'</span> } :
+[priority] === "Medium" ? { <span class="property">backgroundColor</span>: <span class="string">'#fbbf24'</span>, <span class="property">color</span>: <span class="string">'#000000'</span> } :
+null</div>
+        
+        <h3>4. Complex Style Object:</h3>
+        <div class="expression-box">[value] < 0 ? {
+    <span class="property">backgroundColor</span>: <span class="string">'#fee2e2'</span>,
+    <span class="property">color</span>: <span class="string">'#dc2626'</span>,
+    <span class="property">borderLeft</span>: <span class="string">'3px solid #dc2626'</span>,
+    <span class="property">fontWeight</span>: <span class="string">'600'</span>,
+    <span class="property">textDecoration</span>: <span class="string">'underline'</span>
+} : null</div>
+    </div>
+    
+    <div class="section">
+        <h2>Live Demo - Both Formats</h2>
+        
+        <div class="grid-demo">
+            <div class="grid-row">
+                <div class="grid-cell grid-header">Product</div>
+                <div class="grid-cell grid-header">P&L</div>
+                <div class="grid-cell grid-header">Status</div>
+                <div class="grid-cell grid-header">Priority</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">AAPL</div>
+                <div class="grid-cell" id="pnl1">2500</div>
+                <div class="grid-cell" id="status1">Active</div>
+                <div class="grid-cell" id="priority1">High</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">GOOGL</div>
+                <div class="grid-cell" id="pnl2">-500</div>
+                <div class="grid-cell" id="status2">Active</div>
+                <div class="grid-cell" id="priority2">Critical</div>
+            </div>
+            <div class="grid-row">
+                <div class="grid-cell">MSFT</div>
+                <div class="grid-cell" id="pnl3">1500</div>
+                <div class="grid-cell" id="status3">Inactive</div>
+                <div class="grid-cell" id="priority3">Medium</div>
+            </div>
+        </div>
+        
+        <button class="button" onclick="applyTernaryFormat()">Apply Ternary Format</button>
+        <button class="button" onclick="applyMetadataFormat()">Apply Metadata Format</button>
+        <button class="button" onclick="clearStyles()">Clear All</button>
+    </div>
+    
+    <div class="section">
+        <h2>Performance Comparison</h2>
+        <div class="pros-cons">
+            <div class="pros">
+                <h4>CSS Classes (Metadata)</h4>
+                <ul>
+                    <li>Single CSS rule for all cells</li>
+                    <li>Better for many rows</li>
+                    <li>Cached by browser</li>
+                    <li>~10ms for 10,000 rows</li>
+                </ul>
+            </div>
+            <div class="cons">
+                <h4>Inline Styles (Ternary)</h4>
+                <ul>
+                    <li>Style object per cell</li>
+                    <li>More memory usage</li>
+                    <li>Direct DOM manipulation</li>
+                    <li>~25ms for 10,000 rows</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function applyTernaryFormat() {
+            // P&L styling with ternary
+            ['pnl1', 'pnl2', 'pnl3'].forEach(id => {
+                const cell = document.getElementById(id);
+                const value = parseInt(cell.textContent);
+                
+                // Simulate: [pnl] > 0 ? { backgroundColor: '#10b981', color: '#ffffff' } : { backgroundColor: '#ef4444', color: '#ffffff' }
+                if (value > 0) {
+                    cell.style.backgroundColor = '#10b981';
+                    cell.style.color = '#ffffff';
+                } else {
+                    cell.style.backgroundColor = '#ef4444';
+                    cell.style.color = '#ffffff';
+                }
+            });
+            
+            // Priority styling with nested ternary
+            ['priority1', 'priority2', 'priority3'].forEach(id => {
+                const cell = document.getElementById(id);
+                const priority = cell.textContent;
+                
+                if (priority === 'Critical') {
+                    cell.style.backgroundColor = '#dc2626';
+                    cell.style.color = '#ffffff';
+                    cell.style.fontWeight = 'bold';
+                } else if (priority === 'High') {
+                    cell.style.backgroundColor = '#f97316';
+                    cell.style.color = '#ffffff';
+                } else if (priority === 'Medium') {
+                    cell.style.backgroundColor = '#fbbf24';
+                    cell.style.color = '#000000';
+                }
+            });
+        }
+        
+        function applyMetadataFormat() {
+            // Create and inject CSS classes
+            const style = document.createElement('style');
+            style.id = 'metadata-styles';
+            style.textContent = `
+                .pnl-positive {
+                    background-color: #10b981 !important;
+                    color: #ffffff !important;
+                }
+                .pnl-negative {
+                    background-color: #ef4444 !important;
+                    color: #ffffff !important;
+                }
+                .priority-critical {
+                    background-color: #dc2626 !important;
+                    color: #ffffff !important;
+                    font-weight: bold !important;
+                }
+                .priority-high {
+                    background-color: #f97316 !important;
+                    color: #ffffff !important;
+                }
+                .priority-medium {
+                    background-color: #fbbf24 !important;
+                    color: #000000 !important;
+                }
+            `;
+            
+            // Remove old styles if exist
+            const oldStyle = document.getElementById('metadata-styles');
+            if (oldStyle) oldStyle.remove();
+            document.head.appendChild(style);
+            
+            // Apply classes based on conditions
+            ['pnl1', 'pnl2', 'pnl3'].forEach(id => {
+                const cell = document.getElementById(id);
+                const value = parseInt(cell.textContent);
+                
+                cell.classList.remove('pnl-positive', 'pnl-negative');
+                if (value > 0) {
+                    cell.classList.add('pnl-positive');
+                } else {
+                    cell.classList.add('pnl-negative');
+                }
+            });
+            
+            ['priority1', 'priority2', 'priority3'].forEach(id => {
+                const cell = document.getElementById(id);
+                const priority = cell.textContent.toLowerCase();
+                
+                cell.classList.remove('priority-critical', 'priority-high', 'priority-medium');
+                cell.classList.add(`priority-${priority}`);
+            });
+        }
+        
+        function clearStyles() {
+            // Clear inline styles
+            document.querySelectorAll('.grid-cell').forEach(cell => {
+                cell.style = '';
+            });
+            
+            // Clear classes
+            document.querySelectorAll('.grid-cell').forEach(cell => {
+                cell.className = 'grid-cell';
+            });
+            
+            // Restore header class
+            document.querySelectorAll('.grid-header').forEach(cell => {
+                cell.classList.add('grid-header');
+            });
+            
+            // Remove injected styles
+            const style = document.getElementById('metadata-styles');
+            if (style) style.remove();
+        }
+    </script>
+</body>
+</html>

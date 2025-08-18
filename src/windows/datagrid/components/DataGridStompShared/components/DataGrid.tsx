@@ -17,7 +17,8 @@ export const DataGrid = React.memo<DataGridProps>(({
   statusBarConfig,
   connectionState,
   snapshotData,
-  gridOptions = {}
+  gridOptions = {},
+  rowClassRules
 }) => {
   // Merge custom components with ag-grid components
   const components = useMemo(() => ({
@@ -40,9 +41,11 @@ export const DataGrid = React.memo<DataGridProps>(({
       }}
       getRowId={getRowId}
       statusBar={statusBar}
+      rowClassRules={rowClassRules}
       // Apply grid options from profile (excluding font which is handled by wrapper)
       {...Object.fromEntries(Object.entries(gridOptions).filter(([key]) => key !== 'font'))}
       // Override with performance config if not in gridOptions
+      enableCellChangeFlash={gridOptions.enableCellChangeFlash ?? true}
       animateRows={gridOptions.animateRows ?? GRID_PERFORMANCE_CONFIG.animateRows}
       suppressRowHoverHighlight={gridOptions.suppressRowHoverHighlight ?? GRID_PERFORMANCE_CONFIG.suppressRowHoverHighlight}
       cellFlashDuration={gridOptions.cellFlashDuration ?? GRID_PERFORMANCE_CONFIG.cellFlashDuration}

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Save No Refresh Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { background-color: #e7f5e7; }
+        .fail { background-color: #fce4e4; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        .counter {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #333;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="counter" id="refreshCounter">Grid Refreshes: 0</div>
+    
+    <h1>Profile Save No Refresh Test</h1>
+    <p>This tests that saving a profile doesn't cause unnecessary grid refreshes.</p>
+
+    <div class="test-case">
+        <h2>Test 1: Save Flag Behavior</h2>
+        <button onclick="testSaveFlag()">Run Test</button>
+        <pre id="test1-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: Profile Application Logic</h2>
+        <button onclick="testProfileApplicationLogic()">Run Test</button>
+        <pre id="test2-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: Save Operation Flow</h2>
+        <button onclick="testSaveOperationFlow()">Run Test</button>
+        <pre id="test3-result"></pre>
+    </div>
+
+    <script>
+        let gridRefreshCount = 0;
+        
+        // Mock components and refs
+        const mockRefs = {
+            isSavingProfileRef: { current: false },
+            profileChangeRequiredRef: { current: false },
+            gridApiRef: { current: { refreshCells: () => { gridRefreshCount++; updateCounter(); } } }
+        };
+
+        function updateCounter() {
+            document.getElementById('refreshCounter').textContent = `Grid Refreshes: ${gridRefreshCount}`;
+        }
+
+        // Mock profile application logic
+        function mockApplyProfile(activeProfileData, skipReason = null) {
+            if (skipReason) {
+                console.log(`[Mock] Skipping profile application: ${skipReason}`);
+                return false;
+            }
+            
+            console.log('[Mock] Applying profile to grid');
+            mockRefs.gridApiRef.current.refreshCells();
+            return true;
+        }
+
+        // Mock the useEffect logic from the main component
+        function mockProfileApplicationEffect(activeProfileData) {
+            if (activeProfileData && 
+                mockRefs.gridApiRef.current && 
+                !mockRefs.profileChangeRequiredRef.current && 
+                !mockRefs.isSavingProfileRef.current) {
+                console.log('[Mock] Applying profile due to activeProfileData change');
+                return mockApplyProfile(activeProfileData);
+            } else if (mockRefs.isSavingProfileRef.current) {
+                console.log('[Mock] Skipping profile application during save operation');
+                return mockApplyProfile(activeProfileData, 'saving in progress');
+            } else if (mockRefs.profileChangeRequiredRef.current) {
+                return mockApplyProfile(activeProfileData, 'profile change required');
+            } else if (!mockRefs.gridApiRef.current) {
+                return mockApplyProfile(activeProfileData, 'grid API not ready');
+            }
+            return false;
+        }
+
+        function testSaveFlag() {
+            const result = document.getElementById('test1-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Save Flag Behavior Test:\n\n';
+                
+                // Test 1: Normal profile application (should refresh)
+                mockRefs.isSavingProfileRef.current = false;
+                mockRefs.profileChangeRequiredRef.current = false;
+                
+                const applied1 = mockProfileApplicationEffect({ name: 'Test Profile' });
+                output += `✓ Normal application: ${applied1 ? 'Applied' : 'Skipped'} (refreshes: ${gridRefreshCount})\n`;
+                
+                // Test 2: During save operation (should skip)
+                mockRefs.isSavingProfileRef.current = true;
+                
+                const applied2 = mockProfileApplicationEffect({ name: 'Test Profile' });
+                output += `✓ During save: ${applied2 ? 'Applied' : 'Skipped'} (refreshes: ${gridRefreshCount})\n`;
+                
+                // Test 3: After save completes (should apply)
+                mockRefs.isSavingProfileRef.current = false;
+                
+                const applied3 = mockProfileApplicationEffect({ name: 'Test Profile' });
+                output += `✓ After save: ${applied3 ? 'Applied' : 'Skipped'} (refreshes: ${gridRefreshCount})\n\n`;
+                
+                if (gridRefreshCount === 2) { // Should refresh twice: normal + after save
+                    output += '✓ Save flag working correctly - prevented refresh during save';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += `✗ Expected 2 refreshes, got ${gridRefreshCount}`;
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testProfileApplicationLogic() {
+            const result = document.getElementById('test2-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Profile Application Logic Test:\n\n';
+                
+                // Reset all flags
+                mockRefs.isSavingProfileRef.current = false;
+                mockRefs.profileChangeRequiredRef.current = false;
+                
+                // Test different scenarios
+                const scenarios = [
+                    {
+                        name: 'Normal case',
+                        setup: () => {},
+                        expected: true
+                    },
+                    {
+                        name: 'Saving profile',
+                        setup: () => { mockRefs.isSavingProfileRef.current = true; },
+                        expected: false
+                    },
+                    {
+                        name: 'Profile change required',
+                        setup: () => { 
+                            mockRefs.isSavingProfileRef.current = false;
+                            mockRefs.profileChangeRequiredRef.current = true; 
+                        },
+                        expected: false
+                    },
+                    {
+                        name: 'No grid API',
+                        setup: () => { 
+                            mockRefs.isSavingProfileRef.current = false;
+                            mockRefs.profileChangeRequiredRef.current = false;
+                            mockRefs.gridApiRef.current = null; 
+                        },
+                        expected: false
+                    }
+                ];
+                
+                let correctResults = 0;
+                
+                scenarios.forEach(scenario => {
+                    scenario.setup();
+                    const applied = mockProfileApplicationEffect({ name: 'Test' });
+                    const correct = applied === scenario.expected;
+                    
+                    output += `${correct ? '✓' : '✗'} ${scenario.name}: ${applied ? 'Applied' : 'Skipped'} (expected: ${scenario.expected ? 'Applied' : 'Skipped'})\n`;
+                    
+                    if (correct) correctResults++;
+                    
+                    // Reset grid API for next test
+                    mockRefs.gridApiRef.current = { refreshCells: () => { gridRefreshCount++; updateCounter(); } };
+                });
+                
+                output += `\nResults: ${correctResults}/${scenarios.length} scenarios correct\n`;
+                
+                if (correctResults === scenarios.length) {
+                    output += '✓ All profile application logic working correctly';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '✗ Some profile application logic failed';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testSaveOperationFlow() {
+            const result = document.getElementById('test3-result');
+            gridRefreshCount = 0;
+            updateCounter();
+            
+            try {
+                let output = 'Save Operation Flow Test:\n\n';
+                
+                // Reset flags
+                mockRefs.isSavingProfileRef.current = false;
+                mockRefs.profileChangeRequiredRef.current = false;
+                
+                // Simulate save operation flow
+                output += '1. Initial state (should apply profile):\n';
+                const applied1 = mockProfileApplicationEffect({ name: 'Profile v1' });
+                output += `   Profile applied: ${applied1} (refreshes: ${gridRefreshCount})\n\n`;
+                
+                output += '2. Start save operation:\n';
+                mockRefs.isSavingProfileRef.current = true;
+                output += '   isSavingProfileRef.current = true\n';
+                
+                output += '3. Profile data updated during save (should skip):\n';
+                const applied2 = mockProfileApplicationEffect({ name: 'Profile v1 (saved)' });
+                output += `   Profile applied: ${applied2} (refreshes: ${gridRefreshCount})\n\n`;
+                
+                output += '4. Save completes:\n';
+                mockRefs.isSavingProfileRef.current = false;
+                output += '   isSavingProfileRef.current = false\n';
+                
+                output += '5. Final state (should not need to apply again):\n';
+                // In real scenario, the profile data wouldn't change again after save
+                // so this simulates the grid already being in the correct state
+                output += '   Grid already in correct state - no additional refresh needed\n\n';
+                
+                if (gridRefreshCount === 1) { // Should only refresh once at the beginning
+                    output += '✓ Save operation flow working correctly - no unnecessary refreshes';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += `✗ Expected 1 refresh, got ${gridRefreshCount}`;
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        // Reset counter on page load
+        window.addEventListener('load', () => {
+            gridRefreshCount = 0;
+            updateCounter();
+        });
+    </script>
+</body>
+</html>

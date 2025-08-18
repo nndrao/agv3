@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Editor, Monaco } from '@monaco-editor/react';
 import 'monaco-editor/min/vs/editor/editor.main.css';
 import { editor } from 'monaco-editor';
@@ -17,10 +17,12 @@ import { ExpressionEditorProps, ValidationResult } from './types';
 import { ExamplesTab } from './components/ExamplesTab';
 import { ValidationPanel } from './components/ValidationPanel';
 import { PreviewPanel } from './components/PreviewPanel';
+import { InlineStyleEditor } from './components/InlineStyleEditor';
 import { registerExpressionLanguage } from './utils/monacoLanguage';
 import { createFilteredCompletionProvider, CompletionFilter } from './utils/filteredCompletionProvider';
 import { validateExpression } from './utils/validator';
 import { useExpressionHistory } from './hooks/useExpressionHistory';
+import { formatStyleMetadata, convertColumnReferences } from '@/utils/runtimeCssManager';
 import './expression-editor.css';
 
 export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
@@ -35,14 +37,15 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   onExecute,
   showPreview = true,
   readOnly = false,
-  disableResize = false
+  disableResize = false,
+  id
 }) => {
   // Try to use theme from context, fallback to detecting from document
   let theme: 'dark' | 'light' = 'light';
   try {
     const themeContext = useTheme();
     theme = themeContext.theme === 'dark' ? 'dark' : 'light';
-  } catch (error) {
+  } catch {
     // If no ThemeProvider, detect from document class
     const isDark = document.documentElement.classList.contains('dark');
     theme = isDark ? 'dark' : 'light';
@@ -56,6 +59,8 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   const [showExamples, setShowExamples] = useState(false);
   const [showHotkeys, setShowHotkeys] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [showStyleEditor, setShowStyleEditor] = useState(false);
+  const [styleEditorPosition, setStyleEditorPosition] = useState<{ x: number; y: number } | undefined>();
   const containerRef = useRef<HTMLDivElement>(null);
   
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -64,6 +69,32 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   const completionProviderDisposable = useRef<{ dispose: () => void } | null>(null);
   
   const { addToHistory } = useExpressionHistory(mode);
+  
+  // Update expression when initialExpression changes (e.g., when selecting a different rule)
+  useEffect(() => {
+    setExpression(initialExpression);
+    // Also update the Monaco editor if it exists
+    if (editorRef.current && editorRef.current.getValue() !== initialExpression) {
+      editorRef.current.setValue(initialExpression);
+    }
+  }, [initialExpression, id]); // Also watch id to force update when component key changes
+  
+  // Re-register completion provider when columns change
+  useEffect(() => {
+    if (monacoRef.current && editorRef.current && completionProviderDisposable.current) {
+      // Dispose of previous provider
+      completionProviderDisposable.current.dispose();
+      
+      // Register new provider with updated columns
+      completionProviderDisposable.current = monacoRef.current.languages.registerCompletionItemProvider('expression', 
+        createFilteredCompletionProvider(monacoRef.current, {
+          columns: availableColumns,
+          variables: availableVariables,
+          functions: customFunctions
+        }, activeCompletionFilter.current || 'all')
+      );
+    }
+  }, [availableColumns, availableVariables, customFunctions]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -90,30 +121,8 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
         // Update compact mode based on size
         setIsCompact(isSmall);
         
-        // Update editor options based on container size
+        // Trigger layout update when container size changes
         if (editorRef.current) {
-          editorRef.current.updateOptions({
-            // Disable minimap to avoid left-side reserved space
-            minimap: { enabled: false },
-            lineNumbers: isVerySmall ? 'off' : 'on',
-            lineNumbersMinChars: isSmall ? 2 : 3,
-            folding: !isVerySmall,
-            renderLineHighlight: isVerySmall ? 'none' : 'all',
-            overviewRulerLanes: isSmall ? 0 : (isMedium ? 2 : 3),
-            scrollbar: {
-              vertical: 'auto',
-              horizontal: 'auto',
-              verticalScrollbarSize: isSmall ? 8 : 12,
-              horizontalScrollbarSize: isSmall ? 8 : 12,
-              useShadows: !isVerySmall
-            },
-            fontSize: isVerySmall ? 12 : (isSmall ? 13 : 14),
-            wordWrap: isSmall ? 'on' : 'off',
-            renderWhitespace: isVerySmall ? 'none' : 'boundary',
-            glyphMargin: false
-          });
-          
-          // Trigger layout update
           editorRef.current.layout();
         }
       }
@@ -162,7 +171,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
   };
 
   // Handle editor mount
-  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+  const handleEditorDidMount = useCallback((editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
@@ -191,24 +200,10 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     // Register default completion provider
     registerCompletionProvider('all');
 
-    // Configure initial editor options (responsive settings will be applied by ResizeObserver)
-    const containerWidth = containerRef.current?.offsetWidth || 800;
-    
-    // Determine initial responsive settings
-    const isVerySmallInitial = containerWidth < 400;
-    const isSmallInitial = containerWidth < 600;
-    const isMediumInitial = containerWidth < 900;
-    
+    // Configure basic editor options
     editor.updateOptions({
-      // Disable minimap to prevent left gutter width
-      minimap: { enabled: false },
-      lineNumbers: isVerySmallInitial ? 'off' : 'on',
-      lineNumbersMinChars: isSmallInitial ? 2 : 3,
-      roundedSelection: false,
-      scrollBeyondLastLine: false,
       automaticLayout: true,
-      fontSize: isVerySmallInitial ? 12 : (isSmallInitial ? 13 : 14),
-      fontFamily: 'JetBrains Mono, Consolas, "Courier New", monospace',
+      minimap: { enabled: false },
       suggestOnTriggerCharacters: true,
       quickSuggestions: {
         other: true,
@@ -218,19 +213,18 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
       parameterHints: {
         enabled: true
       },
-      folding: !isVerySmallInitial,
-      renderLineHighlight: isVerySmallInitial ? 'none' : 'all',
-      overviewRulerLanes: isSmallInitial ? 0 : (isMediumInitial ? 2 : 3),
-      scrollbar: {
-        vertical: 'auto',
-        horizontal: 'auto',
-        verticalScrollbarSize: isSmallInitial ? 8 : 12,
-        horizontalScrollbarSize: isSmallInitial ? 8 : 12,
-        useShadows: !isVerySmallInitial
-      },
-      wordWrap: isSmallInitial ? 'on' : 'off',
-      renderWhitespace: isVerySmallInitial ? 'none' : 'boundary',
-      glyphMargin: false
+      // Fix overflow widgets (suggestion, hover, etc.)
+      fixedOverflowWidgets: true,
+      // Set line height for better readability
+      fontSize: 14,
+      // Configure suggestions
+      suggest: {
+        showWords: true,
+        showSnippets: true,
+        showIcons: true,
+        maxVisibleSuggestions: 10,
+        shareSuggestSelections: false
+      }
     });
 
     // Add keyboard shortcuts
@@ -334,6 +328,53 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
       }
     });
 
+    // Hotkey for opening style editor (Ctrl+Shift+D)
+    editor.addAction({
+      id: 'open-style-editor',
+      label: 'Open Visual Style Editor',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyD],
+      run: () => {
+        const position = editor.getPosition();
+        if (position) {
+          const model = editor.getModel();
+          if (model) {
+            // Get the current line or selected text
+            const selection = editor.getSelection();
+            let currentExpression = '';
+            
+            if (selection && !selection.isEmpty()) {
+              // Use selected text
+              currentExpression = model.getValueInRange(selection);
+            } else {
+              // Use current line
+              currentExpression = model.getLineContent(position.lineNumber);
+            }
+            
+            // Convert column references to params format
+            currentExpression = convertColumnReferences(currentExpression.trim());
+            
+            // Get cursor position in viewport
+            const cursorCoords = editor.getScrolledVisiblePosition(position);
+            if (cursorCoords && containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              setStyleEditorPosition({
+                x: rect.left + cursorCoords.left,
+                y: rect.top + cursorCoords.top + cursorCoords.height
+              });
+            }
+            
+            // Store current expression for the style editor
+            if (editorRef.current) {
+              (editorRef.current as editor.IStandaloneCodeEditor & { currentExpression?: string }).currentExpression = currentExpression;
+            }
+            
+            // Open the style editor
+            setShowStyleEditor(true);
+          }
+        }
+      }
+    });
+
     // Save expression (Ctrl+S) - onSave is not provided in props currently
     // This is commented out since onSave is not part of ExpressionEditorProps
     // if (onSave) {
@@ -357,7 +398,7 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
         }, 1000);
       }
     });
-  };
+  }, [availableColumns, availableVariables, customFunctions, executeExpression]);
 
   // Handle undo/redo
   const handleUndo = () => {
@@ -368,6 +409,43 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
     editorRef.current?.trigger('keyboard', 'redo', null);
   };
 
+  // Handle style save from inline style editor
+  const handleStyleSave = (styles: React.CSSProperties, ruleId: string) => {
+    if (!editorRef.current) return;
+    
+    const editor = editorRef.current;
+    const model = editor.getModel();
+    if (!model) return;
+    
+    const position = editor.getPosition();
+    if (!position) return;
+    
+    // Get the current expression
+    const currentExpression = (editorRef.current as editor.IStandaloneCodeEditor & { currentExpression?: string })?.currentExpression || '';
+    
+    // Format the style metadata
+    const metadata = formatStyleMetadata(ruleId, styles);
+    
+    // Insert the metadata and expression
+    const textToInsert = `${metadata}\n${currentExpression}`;
+    
+    // Get current line
+    const currentLine = position.lineNumber;
+    
+    // Insert at the beginning of the current line
+    editor.executeEdits('insert-style', [{
+      range: new monaco.Range(currentLine, 1, currentLine, model.getLineMaxColumn(currentLine)),
+      text: textToInsert
+    }]);
+    
+    // Move cursor to end of expression
+    const newPosition = new monaco.Position(currentLine + 1, currentExpression.length + 1);
+    editor.setPosition(newPosition);
+    editor.focus();
+    
+    // Update the expression state
+    setExpression(model.getValue());
+  };
 
   const editorTheme = theme === 'dark' ? 'vs-dark' : 'vs-light';
 
@@ -466,6 +544,10 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                           <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Shift+O</kbd>
                         </div>
                         <div className="flex justify-between">
+                          <span className="text-muted-foreground">Visual Style Editor</span>
+                          <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Shift+D</kbd>
+                        </div>
+                        <div className="flex justify-between">
                           <span className="text-muted-foreground">Execute Expression</span>
                           <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Enter</kbd>
                         </div>
@@ -512,7 +594,9 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                 onMount={handleEditorDidMount}
                 options={{
                   readOnly,
-                  automaticLayout: true
+                  automaticLayout: true,
+                  fixedOverflowWidgets: true,
+                  fontSize: 14
                 }}
               />
             </div>
@@ -562,6 +646,15 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
             </Tabs>
           </div>
         )}
+        
+        {/* Inline Style Editor Popup */}
+        <InlineStyleEditor
+          isOpen={showStyleEditor}
+          onClose={() => setShowStyleEditor(false)}
+          onSave={handleStyleSave}
+          position={styleEditorPosition}
+          initialExpression={(editorRef.current as editor.IStandaloneCodeEditor & { currentExpression?: string })?.currentExpression || ''}
+        />
       </div>
     );
   }
@@ -653,6 +746,10 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                             <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Shift+O</kbd>
                           </div>
                           <div className="flex justify-between">
+                            <span className="text-muted-foreground">Visual Style Editor</span>
+                            <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Shift+D</kbd>
+                          </div>
+                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Execute Expression</span>
                             <kbd className="px-1.5 py-0.5 text-xs font-mono bg-muted rounded">Ctrl+Enter</kbd>
                           </div>
@@ -699,7 +796,9 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
                   onMount={handleEditorDidMount}
                   options={{
                     readOnly,
-                    automaticLayout: true
+                    automaticLayout: true,
+                    fixedOverflowWidgets: true,
+                    fontSize: 14
                   }}
                 />
               </div>
@@ -759,6 +858,15 @@ export const ExpressionEditor: React.FC<ExpressionEditorProps> = ({
           </Tabs>
         </div>
       )}
+      
+      {/* Inline Style Editor Popup */}
+      <InlineStyleEditor
+        isOpen={showStyleEditor}
+        onClose={() => setShowStyleEditor(false)}
+        onSave={handleStyleSave}
+        position={styleEditorPosition}
+        initialExpression={(editorRef.current as editor.IStandaloneCodeEditor & { currentExpression?: string })?.currentExpression || ''}
+      />
     </div>
   );
 };

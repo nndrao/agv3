@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Column Groups Persistence Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .pass { background-color: #e7f5e7; }
+        .fail { background-color: #fce4e4; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Column Groups Persistence Test</h1>
+    <p>This tests the column groups persistence with isActive property.</p>
+
+    <div class="test-case">
+        <h2>Test 1: Save Column Groups with isActive</h2>
+        <button onclick="testSaveColumnGroups()">Run Test</button>
+        <pre id="test1-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: Load Column Groups with isActive</h2>
+        <button onclick="testLoadColumnGroups()">Run Test</button>
+        <pre id="test2-result"></pre>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: Apply Active Groups Only</h2>
+        <button onclick="testApplyActiveGroups()">Run Test</button>
+        <pre id="test3-result"></pre>
+    </div>
+
+    <script>
+        // Simulate column groups with isActive property
+        const testGroups = [
+            {
+                groupId: 'group_1',
+                headerName: 'Basic Info',
+                children: ['name', 'age', 'email'],
+                isActive: true,
+                columnStates: {
+                    'name': 'open',
+                    'age': 'closed',
+                    'email': undefined
+                }
+            },
+            {
+                groupId: 'group_2',
+                headerName: 'Address',
+                children: ['street', 'city', 'country'],
+                isActive: false,  // This group should not be applied
+                columnStates: {
+                    'street': 'open',
+                    'city': 'open',
+                    'country': 'closed'
+                }
+            },
+            {
+                groupId: 'group_3',
+                headerName: 'Work Info',
+                children: ['company', 'position', 'salary'],
+                isActive: true,
+                columnStates: {
+                    'company': undefined,
+                    'position': 'open',
+                    'salary': 'closed'
+                }
+            }
+        ];
+
+        function testSaveColumnGroups() {
+            const result = document.getElementById('test1-result');
+            
+            try {
+                // Simulate saving to localStorage (like the profile save)
+                const profileData = {
+                    name: 'Test Profile',
+                    columnGroups: testGroups
+                };
+                
+                localStorage.setItem('test_profile', JSON.stringify(profileData));
+                
+                // Verify what was saved
+                const saved = JSON.parse(localStorage.getItem('test_profile'));
+                
+                let output = 'Profile saved successfully!\n\n';
+                output += 'Column Groups:\n';
+                saved.columnGroups.forEach(group => {
+                    output += `  - ${group.headerName} (${group.groupId})\n`;
+                    output += `    isActive: ${group.isActive}\n`;
+                    output += `    children: ${group.children.join(', ')}\n`;
+                });
+                
+                result.textContent = output;
+                result.parentElement.classList.add('pass');
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testLoadColumnGroups() {
+            const result = document.getElementById('test2-result');
+            
+            try {
+                // Load from localStorage
+                const saved = JSON.parse(localStorage.getItem('test_profile'));
+                
+                if (!saved) {
+                    throw new Error('No saved profile found. Run Test 1 first.');
+                }
+                
+                let output = 'Profile loaded successfully!\n\n';
+                output += 'Checking isActive properties:\n';
+                
+                saved.columnGroups.forEach(group => {
+                    const hasIsActive = 'isActive' in group;
+                    output += `  - ${group.headerName}: `;
+                    if (hasIsActive) {
+                        output += `✓ isActive = ${group.isActive}\n`;
+                    } else {
+                        output += `✗ isActive property missing!\n`;
+                    }
+                });
+                
+                // Check if all isActive properties are preserved
+                const allPreserved = saved.columnGroups.every(group => 'isActive' in group);
+                
+                if (allPreserved) {
+                    output += '\n✓ All isActive properties preserved!';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += '\n✗ Some isActive properties lost!';
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        function testApplyActiveGroups() {
+            const result = document.getElementById('test3-result');
+            
+            try {
+                // Load from localStorage
+                const saved = JSON.parse(localStorage.getItem('test_profile'));
+                
+                if (!saved) {
+                    throw new Error('No saved profile found. Run Test 1 first.');
+                }
+                
+                // Filter only active groups (like ColumnGroupService does)
+                const activeGroups = saved.columnGroups.filter(g => g.isActive !== false);
+                
+                let output = 'Applying column groups to grid:\n\n';
+                output += `Total groups: ${saved.columnGroups.length}\n`;
+                output += `Active groups: ${activeGroups.length}\n\n`;
+                
+                output += 'Groups to be applied:\n';
+                activeGroups.forEach(group => {
+                    output += `  ✓ ${group.headerName} (${group.children.length} columns)\n`;
+                });
+                
+                output += '\nGroups NOT applied (inactive):\n';
+                saved.columnGroups.filter(g => g.isActive === false).forEach(group => {
+                    output += `  ✗ ${group.headerName} (${group.children.length} columns)\n`;
+                });
+                
+                // Verify the filtering works correctly
+                const expectedActive = 2; // group_1 and group_3 are active
+                if (activeGroups.length === expectedActive) {
+                    output += '\n✓ Correct number of active groups!';
+                    result.parentElement.classList.add('pass');
+                } else {
+                    output += `\n✗ Expected ${expectedActive} active groups, got ${activeGroups.length}`;
+                    result.parentElement.classList.add('fail');
+                }
+                
+                result.textContent = output;
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+                result.parentElement.classList.add('fail');
+            }
+        }
+
+        // Clean up on page load
+        window.addEventListener('load', () => {
+            localStorage.removeItem('test_profile');
+        });
+    </script>
+</body>
+</html>

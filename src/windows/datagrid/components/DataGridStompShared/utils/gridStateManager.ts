@@ -25,7 +25,7 @@ export interface GridState {
   columnState: ColumnState[];
   columnGroupState?: Array<{ groupId: string; open: boolean }>; // Track group expansion
   columnDefs?: ColDef[];
-  columnGroups?: any[]; // Full column group definitions
+  activeColumnGroupIds?: string[]; // Active column group IDs (references to grid-level groups)
   
   // Data filtering and sorting
   filterModel: FilterModel;
@@ -149,7 +149,7 @@ export interface ApplyStateOptions {
 export class GridStateManager {
   private gridApi: GridApi | null = null;
   private defaultState: Partial<GridState> = {};
-  private columnGroups: any[] = [];
+  private activeColumnGroupIds: string[] = [];
   private pendingColumnState: ColumnState[] | null = null;
   private pendingColumnGroupState: Array<{ groupId: string; open: boolean }> | null = null;
   
@@ -167,17 +167,17 @@ export class GridStateManager {
   }
   
   /**
-   * Set column groups for state extraction
+   * Set active column group IDs for state extraction
    */
-  setColumnGroups(groups: any[]) {
-    this.columnGroups = groups || [];
+  setActiveColumnGroupIds(groupIds: string[]) {
+    this.activeColumnGroupIds = groupIds || [];
   }
   
   /**
-   * Get column groups
+   * Get active column group IDs
    */
-  getColumnGroups(): any[] {
-    return this.columnGroups;
+  getActiveColumnGroupIds(): string[] {
+    return this.activeColumnGroupIds;
   }
   
   setPendingColumnState(columnState: ColumnState[]): void {
@@ -192,13 +192,7 @@ export class GridStateManager {
     this.pendingColumnState = null;
   }
   
-  getPendingColumnGroupState(): Array<{ groupId: string; open: boolean }> | null {
-    return this.pendingColumnGroupState;
-  }
-  
-  clearPendingColumnGroupState(): void {
-    this.pendingColumnGroupState = null;
-  }
+  // Removed pending column group state methods - now handled properly in profile application
   
   /**
    * Set default state for reset operations
@@ -267,10 +261,9 @@ export class GridStateManager {
         state.columnDefs = this.gridApi.getColumnDefs() || undefined;
       }
       
-      // Include column groups if they exist
-      if (this.columnGroups && this.columnGroups.length > 0) {
-        state.columnGroups = this.columnGroups;
-      } else {
+      // Include active column group IDs if they exist
+      if (this.activeColumnGroupIds && this.activeColumnGroupIds.length > 0) {
+        state.activeColumnGroupIds = this.activeColumnGroupIds;
       }
       
       // Include pinned rows if they exist
@@ -296,12 +289,12 @@ export class GridStateManager {
   }
   
   /**
-   * Apply grid state
+   * Apply grid state with proper sequencing (no delays)
    */
   applyState(state: GridState, options: ApplyStateOptions = {}): boolean {
     
     if (!this.gridApi || !state) {
-      console.warn('[🔍][GRID_STATE_APPLY] Cannot apply state - GridApi or state not available');
+      console.warn('[GridStateManager] Cannot apply state - GridApi or state not available');
       return false;
     }
     
@@ -321,33 +314,29 @@ export class GridStateManager {
       animateChanges = false
     } = options;
     
+    console.log('[GridStateManager] Applying grid state with options:', {
+      applyColumnState,
+      applyFilters,
+      applyGrouping,
+      applyPagination
+    });
     
     try {
-      // Apply column state (but delay if we have column groups to apply first)
-      const hasColumnGroups = state.columnGroups && state.columnGroups.length > 0;
-      
+      // Apply column state immediately (no delays)
       if (applyColumnState && state.columnState) {
-        if (hasColumnGroups) {
-          // Store column state to be applied later by ColumnGroupService
-          this.setPendingColumnState(state.columnState);
-        } else {
-          this.applyColumnState(state.columnState);
-        }
+        console.log('[GridStateManager] Applying column state');
+        this.applyColumnState(state.columnState);
       }
       
-      // Store column group state for later application
-      if (state.columnGroupState && state.columnGroupState.length > 0) {
-        this.pendingColumnGroupState = state.columnGroupState;
-      }
-      
-      // Store column groups for later use (they need to be applied via ColumnGroupService)
-      if (state.columnGroups && state.columnGroups.length > 0) {
-        this.columnGroups = state.columnGroups;
-      } else {
+      // Store active column group IDs for reference (they are applied via ColumnGroupService in profile application)
+      if (state.activeColumnGroupIds && state.activeColumnGroupIds.length > 0) {
+        this.activeColumnGroupIds = state.activeColumnGroupIds;
+        console.log('[GridStateManager] Stored active column group IDs for reference');
       }
       
       // Apply filters
       if (applyFilters && state.filterModel) {
+        console.log('[GridStateManager] Applying filter model');
         this.gridApi.setFilterModel(state.filterModel);
         
         if (state.quickFilter) {
@@ -355,11 +344,8 @@ export class GridStateManager {
         }
       }
       
-      // Apply sorting
-      // In AG-Grid v31+, sorting is part of column state, not a separate model
-      // The sorting will be applied when we apply column state above
+      // Apply sorting (handled via column state in AG-Grid v33+)
       if (applySorting && state.sortModel) {
-        // Sort model is already applied via column state
         console.debug('[GridStateManager] Sort model applied via column state');
       }
       
@@ -383,6 +369,12 @@ export class GridStateManager {
         this.applyExpansionState(state.expandedGroups);
       }
       
+      // Apply column group state
+      if (state.columnGroupState && state.columnGroupState.length > 0) {
+        console.log('[GridStateManager] Applying column group state');
+        this.applyColumnGroupState(state);
+      }
+      
       // Apply pinning
       if (applyPinning) {
         if (state.pinnedTopRowData && typeof (this.gridApi as any).setPinnedTopRowData === 'function') {
@@ -398,11 +390,9 @@ export class GridStateManager {
         this.applyGridOptions(state.gridOptions);
       }
       
-      // Apply scroll position (after a delay to let grid render)
+      // Apply scroll position
       if (applyScrollPosition && state.scrollPosition) {
-        setTimeout(() => {
-          this.applyScrollPosition(state.scrollPosition!);
-        }, 100);
+        this.applyScrollPosition(state.scrollPosition!);
       }
       
       // Apply sidebar state
@@ -410,11 +400,12 @@ export class GridStateManager {
         this.applySideBarState(state.sideBarState);
       }
       
-      // Refresh the grid
+      // Refresh the grid if requested
       if (animateChanges) {
         this.gridApi.refreshCells({ force: true });
       }
       
+      console.log('[GridStateManager] Grid state applied successfully');
       return true;
     } catch (error) {
       console.error('[GridStateManager] Error applying state:', error);
@@ -499,69 +490,20 @@ export class GridStateManager {
   private extractColumnGroupState(): Array<{ groupId: string; open: boolean }> {
     if (!this.gridApi) return [];
     
-    const groups: Array<{ groupId: string; open: boolean }> = [];
-    
     try {
-      // Check for setColumnGroupOpened method to determine group states
-      if (typeof (this.gridApi as any).setColumnGroupOpened === 'function') {
-        const columnDefs = this.gridApi.getColumnDefs();
-        if (columnDefs) {
-          const extractGroups = (defs: any[]) => {
-            defs.forEach((def: any) => {
-              if (def.children && def.groupId) {
-                // Determine if group is open or collapsed based on column visibility
-                let isOpen = true;
-                
-                // Analyze columns to determine group state:
-                // If columns with columnGroupShow:'open' are hidden -> group is collapsed
-                // If columns with columnGroupShow:'closed' are visible -> group is collapsed
-                let hasOpenColumns = false;
-                let hasClosedColumns = false;
-                let openColumnsHidden = false;
-                let closedColumnsVisible = false;
-                
-                def.children.forEach((child: any) => {
-                  const colState = this.gridApi!.getColumnState()?.find((s: any) => 
-                    s.colId === (child.colId || child.field)
-                  );
-                  
-                  if (child.columnGroupShow === 'open') {
-                    hasOpenColumns = true;
-                    if (colState && colState.hide === true) {
-                      openColumnsHidden = true;
-                    }
-                  } else if (child.columnGroupShow === 'closed') {
-                    hasClosedColumns = true;
-                    if (colState && colState.hide === false) {
-                      closedColumnsVisible = true;
-                    }
-                  }
-                  // Columns with undefined columnGroupShow are always visible
-                });
-                
-                // Determine group state based on column visibility patterns
-                if (hasOpenColumns && openColumnsHidden) {
-                  isOpen = false; // Group is collapsed (open columns are hidden)
-                } else if (hasClosedColumns && closedColumnsVisible) {
-                  isOpen = false; // Group is collapsed (closed columns are visible)
-                }
-                
-                groups.push({
-                  groupId: def.groupId,
-                  open: isOpen
-                });
-                
-              }
-            });
-          };
-          extractGroups(columnDefs);
-        }
+      // Use the official AG-Grid API to get column group state
+      if (typeof this.gridApi.getColumnGroupState === 'function') {
+        const groupState = this.gridApi.getColumnGroupState();
+        console.log('[🔍 GRIDSTATE-001] Extracted column group state using AG-Grid API:', groupState);
+        return groupState || [];
+      } else {
+        console.warn('[🔍 GRIDSTATE-002] getColumnGroupState not available on grid API');
+        return [];
       }
     } catch (error) {
-      console.warn('[🔍][COLUMN_GROUP_STATE_EXTRACT] Error extracting column group state:', error);
+      console.error('[🔍 GRIDSTATE-003] Error extracting column group state:', error);
+      return [];
     }
-    
-    return groups;
   }
   
   private extractSortModel(): SortModel {
@@ -773,8 +715,44 @@ export class GridStateManager {
     this.gridApi.applyColumnState({ state: columnState });
   }
   
-  // Note: Column group state is handled through column visibility in columnState
-  // No need for separate applyColumnGroupState method
+  private applyColumnGroupState(state: GridState): boolean {
+    if (!this.gridApi || !state.columnGroupState) return true;
+    
+    try {
+      console.log('[🔍 GRIDSTATE-004] Applying column group state using AG-Grid API:', state.columnGroupState);
+      
+      // Use the official AG-Grid API to set column group state
+      if (typeof this.gridApi.setColumnGroupState === 'function') {
+        this.gridApi.setColumnGroupState(state.columnGroupState);
+        
+        // Verify the state was applied
+        const newState = this.gridApi.getColumnGroupState();
+        console.log('[🔍 GRIDSTATE-005] Column group state after application:', newState);
+        
+        return true;
+      } else {
+        console.warn('[🔍 GRIDSTATE-006] setColumnGroupState not available, using fallback');
+        
+        // Fallback: use setColumnGroupOpened for each group
+        if (typeof this.gridApi.setColumnGroupOpened === 'function') {
+          state.columnGroupState.forEach((groupState: any) => {
+            try {
+              this.gridApi.setColumnGroupOpened(groupState.groupId, groupState.open);
+            } catch (e) {
+              console.warn(`[🔍 GRIDSTATE-007] Could not set state for group ${groupState.groupId}:`, e);
+            }
+          });
+          return true;
+        } else {
+          console.error('[🔍 GRIDSTATE-008] No column group state methods available on grid API');
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('[🔍 GRIDSTATE-009] Error applying column group state:', error);
+      return false;
+    }
+  }
   
   private applyGroupingState(state: GridState) {
     if (!this.gridApi) return;
