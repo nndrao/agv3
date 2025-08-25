@@ -322,8 +322,13 @@ export function useProfileManagement<T extends BaseProfile>({
         setActiveProfile(newVersion);
         setActiveProfileData(data);
         
-        // For new profiles, we need to save the full config
-        await StorageClient.save(updatedConfig);
+        // For new profiles, we need to update the existing config with new settings
+        await StorageClient.update(config.configId, {
+          settings: updatedSettings,
+          activeSetting: newVersion.versionId,
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'user'
+        });
       } else {
         // Update existing profile - use partial update for better performance
         const updatedSettings = profiles.map(p => 
@@ -481,10 +486,15 @@ export function useProfileManagement<T extends BaseProfile>({
         settings: updatedSettings,
         activeSetting: newActiveId,
         lastUpdated: new Date(),
-        modifiedBy: 'user'
+        lastUpdatedBy: 'user'
       };
 
-      await StorageClient.save(updatedConfig);
+      await StorageClient.update(config.configId, {
+        settings: updatedSettings,
+        activeSetting: newActiveId,
+        lastUpdated: new Date(),
+        lastUpdatedBy: 'user'
+      });
       setConfig(updatedConfig);
       setProfiles(updatedSettings);
 

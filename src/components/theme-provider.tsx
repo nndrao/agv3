@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { StorageClient } from '@/services/storage/storageClient';
+import { UnifiedConfig } from '@/services/storage/types';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -20,17 +22,110 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
+interface ThemeConfig {
+  theme: Theme;
+  lastUpdated: Date;
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = 'system',
   storageKey = 'ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [isLoading, setIsLoading] = useState(true);
+  const configIdRef = useRef<string>('agv3-theme-config');
+
+  const saveThemeToConfig = async (newTheme: Theme) => {
+    try {
+      const themeConfig: ThemeConfig = {
+        theme: newTheme,
+        lastUpdated: new Date()
+      };
+      
+      // Check if config exists
+      const existing = await StorageClient.get(configIdRef.current);
+      
+      if (existing) {
+        // Update existing
+        await StorageClient.update(configIdRef.current, {
+          config: themeConfig,
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'current-user'
+        });
+      } else {
+        // Create new
+        const unifiedConfig: UnifiedConfig = {
+          configId: configIdRef.current,
+          appId: 'agv3',
+          userId: 'system',
+          componentType: 'system',
+          componentSubType: 'theme',
+          name: 'Theme Configuration',
+          description: 'Application theme settings',
+          config: themeConfig,
+          settings: [],
+          activeSetting: 'default',
+          createdBy: 'system',
+          lastUpdatedBy: 'system',
+          creationTime: new Date(),
+          lastUpdated: new Date()
+        };
+        
+        await StorageClient.save(unifiedConfig);
+      }
+      
+      console.log('[ThemeProvider] Saved theme to Configuration Service:', newTheme);
+    } catch (error) {
+      console.error('[ThemeProvider] Failed to save theme to Configuration Service:', error);
+      // Fallback to localStorage
+      localStorage.setItem(storageKey, newTheme);
+    }
+  };
+
+  // Load theme on mount
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        // Try to load from Configuration Service
+        const config = await StorageClient.get(configIdRef.current);
+        
+        if (config && config.config) {
+          const themeConfig = config.config as ThemeConfig;
+          setThemeState(themeConfig.theme);
+          console.log('[ThemeProvider] Loaded theme from Configuration Service:', themeConfig.theme);
+        } else {
+          // Try localStorage as fallback for migration
+          const legacyTheme = localStorage.getItem(storageKey) as Theme;
+          if (legacyTheme) {
+            console.log('[ThemeProvider] Migrating theme from localStorage to Configuration Service');
+            setThemeState(legacyTheme);
+            // Save to Configuration Service
+            await saveThemeToConfig(legacyTheme);
+            // Remove from localStorage after migration
+            localStorage.removeItem(storageKey);
+          }
+        }
+      } catch (error) {
+        console.error('[ThemeProvider] Failed to load theme from Configuration Service:', error);
+        // Fallback to localStorage
+        const savedTheme = localStorage.getItem(storageKey) as Theme;
+        if (savedTheme) {
+          setThemeState(savedTheme);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTheme();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
   useEffect(() => {
+    if (isLoading) return;
+    
     const root = window.document.documentElement;
 
     root.classList.remove('light', 'dark');
@@ -46,13 +141,13 @@ export function ThemeProvider({
     }
 
     root.classList.add(theme);
-  }, [theme]);
+  }, [theme, isLoading]);
 
   const value = {
     theme,
-    setTheme: (newTheme: Theme) => {
-      localStorage.setItem(storageKey, newTheme);
+    setTheme: async (newTheme: Theme) => {
       setThemeState(newTheme);
+      await saveThemeToConfig(newTheme);
     },
   };
 

@@ -108,9 +108,7 @@ export const CalculatedColumnsEditorContent: React.FC<CalculatedColumnsEditorCon
 
     try {
       // Save all columns to grid-level storage
-      columns.forEach(column => {
-        GridCalculatedColumnsStorage.saveColumn(gridInstanceId, column);
-      });
+      await GridCalculatedColumnsStorage.saveColumns(gridInstanceId, columns);
       
       setHasUnsavedChanges(false);
       console.log(`[CalculatedColumnsEditor] Saved ${columns.length} columns to grid storage`);

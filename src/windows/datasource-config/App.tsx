@@ -12,9 +12,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Database, Variable } from 'lucide-react';
+import { withOpenFinServices } from '@/utils/withOpenFinServices';
+import { useOpenFinServices } from '@/services/openfin/useOpenFinServices';
 import './datasource-config.css';
 
-export function App() {
+function DatasourceConfigApp() {
+  const { logger, configuration } = useOpenFinServices();
   const [datasources, setDatasources] = useState<UnifiedConfig[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,39 +39,66 @@ export function App() {
   const loadDatasources = async () => {
     try {
       setLoading(true);
+      logger.info('[DatasourceConfig] Loading datasources');
       const configs = await StorageClient.query({
         componentType: 'datasource',
         appId: 'agv3'
       });
       setDatasources(configs);
+      logger.info('[DatasourceConfig] Loaded datasources', { count: configs.length });
     } catch (error) {
-      console.error('Failed to load datasources:', error);
+      logger.error('[DatasourceConfig] Failed to load datasources:', error);
     } finally {
       setLoading(false);
     }
   };
   
   const handleSave = async (config: any) => {
-    const unifiedConfig: UnifiedConfig = {
-      configId: config.id || '',
-      appId: 'agv3',
-      userId: 'current-user',
-      componentType: 'datasource',
-      componentSubType: config.type || 'stomp',
-      name: config.name,
-      description: config.description || '',
-      config: config,
-      settings: [],
-      activeSetting: 'default',
-      createdBy: 'current-user',
-      lastUpdatedBy: 'current-user',
-      creationTime: new Date(),
-      lastUpdated: new Date()
-    };
-    
-    await StorageClient.save(unifiedConfig);
-    await loadDatasources();
-    setSelectedId(null);
+    try {
+      // Check if this is an update or create
+      const isUpdate = config.id && selectedId !== 'new';
+      
+      if (isUpdate) {
+        // Update existing configuration
+        await StorageClient.update(config.id, {
+          name: config.name,
+          description: config.description || '',
+          config: config,
+          componentSubType: config.type || 'stomp',
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'current-user'
+        });
+        logger.info('[DatasourceConfig] Updated datasource', { id: config.id });
+      } else {
+        // Create new configuration
+        const unifiedConfig: UnifiedConfig = {
+          configId: config.id || '',
+          appId: 'agv3',
+          userId: 'current-user',
+          componentType: 'datasource',
+          componentSubType: config.type || 'stomp',
+          name: config.name,
+          description: config.description || '',
+          config: config,
+          settings: [],
+          activeSetting: 'default',
+          createdBy: 'current-user',
+          lastUpdatedBy: 'current-user',
+          creationTime: new Date(),
+          lastUpdated: new Date()
+        };
+        
+        await StorageClient.save(unifiedConfig);
+        logger.info('[DatasourceConfig] Created new datasource', { id: config.id });
+      }
+      
+      await loadDatasources();
+      setSelectedId(null);
+    } catch (error) {
+      logger.error('[DatasourceConfig] Failed to save datasource:', error);
+      // You could add a toast notification here to show the error to the user
+      alert(`Failed to save datasource: ${error.message}`);
+    }
   };
   
   const handleNewDatasource = (type: 'stomp' | 'variables') => {
@@ -214,3 +244,9 @@ export function App() {
     </div>
   );
 }
+
+// Export wrapped with OpenFinServiceProvider
+export const App = withOpenFinServices(DatasourceConfigApp, {
+  services: ['configuration', 'logging', 'events'],
+  logLevel: 'info'
+});

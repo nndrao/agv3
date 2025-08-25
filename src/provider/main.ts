@@ -47,6 +47,16 @@ async function initializeWorkspacePlatform() {
   setupDeveloperModeShortcut();
   
   try {
+    // Start the Configuration Service channel directly
+    await startConfigurationServiceChannel();
+    
+    // Launch the Service Manager window (optional, can fail)
+    try {
+      await launchServiceManager();
+    } catch (error) {
+      console.warn('[Main] Service Manager launch failed, continuing without it:', error);
+    }
+    
     // Initialize storage service
     await StorageService.initialize();
     
@@ -443,6 +453,284 @@ function setupDeveloperModeShortcut() {
   };
   
   registerHotkey();
+}
+
+/**
+ * Start the Configuration Service channel directly
+ */
+async function startConfigurationServiceChannel(): Promise<void> {
+  console.log('[Main] Starting Configuration Service channel...');
+  
+  try {
+    // Check if channel already exists
+    const existingChannels = await fin.InterApplicationBus.Channel.getAllChannels();
+    const channelExists = existingChannels.some(ch => ch.name === 'agv3-configuration-service');
+    
+    if (channelExists) {
+      console.log('[Main] Configuration Service channel already exists');
+      return;
+    }
+    
+    // Import and initialize IndexedDB adapter
+    const { IndexedDBAdapter } = await import('../services/storage/adapters/IndexedDBAdapter');
+    const dbAdapter = new IndexedDBAdapter();
+    await dbAdapter.initialize();
+    console.log('[Main] IndexedDB adapter initialized for Configuration Service');
+    
+    // Create the Configuration Service channel
+    const channel = await fin.InterApplicationBus.Channel.create('agv3-configuration-service');
+    
+    // Set up handlers using IndexedDB adapter
+    channel.register('create', async (payload) => {
+      console.log('[ConfigService] Create:', payload);
+      try {
+        // Check if config already exists
+        const existing = await dbAdapter.read(payload.record.id);
+        
+        if (existing) {
+          // Update existing instead of creating new
+          console.log('[ConfigService] Config already exists, updating instead:', payload.record.id);
+          await dbAdapter.update(payload.record.id, {
+            name: payload.record.name,
+            description: payload.record.description,
+            config: payload.record.config,
+            settings: payload.record.settings,
+            activeSetting: payload.record.metadata?.activeSetting || 'default',
+            tags: payload.record.metadata?.tags,
+            category: payload.record.metadata?.category,
+            isShared: payload.record.metadata?.isShared,
+            isDefault: payload.record.metadata?.isDefault,
+            isLocked: payload.record.metadata?.isLocked,
+            lastUpdated: new Date(),
+            lastUpdatedBy: payload.record.userId || 'current-user'
+          });
+          return { id: payload.record.id };
+        }
+        
+        // Convert the payload to UnifiedConfig format for new config
+        const config = {
+          configId: payload.record.id,
+          appId: payload.record.appId || 'agv3',
+          userId: payload.record.userId || 'current-user',
+          componentType: payload.record.componentType,
+          componentSubType: payload.record.componentSubType,
+          name: payload.record.name,
+          description: payload.record.description,
+          config: payload.record.config,
+          settings: payload.record.settings || [],
+          activeSetting: payload.record.metadata?.activeSetting || 'default',
+          tags: payload.record.metadata?.tags,
+          category: payload.record.metadata?.category,
+          isShared: payload.record.metadata?.isShared,
+          isDefault: payload.record.metadata?.isDefault,
+          isLocked: payload.record.metadata?.isLocked,
+          createdBy: payload.record.userId || 'current-user',
+          lastUpdatedBy: payload.record.userId || 'current-user',
+          creationTime: new Date(),
+          lastUpdated: new Date()
+        };
+        const id = await dbAdapter.create(config);
+        return { id };
+      } catch (error) {
+        console.error('[ConfigService] Create error:', error);
+        throw error;
+      }
+    });
+    
+    channel.register('get', async (payload) => {
+      console.log('[ConfigService] Get:', payload);
+      try {
+        const result = await dbAdapter.read(payload.id);
+        if (!result) return null;
+        
+        // Convert UnifiedConfig back to expected format
+        return {
+          id: result.configId,
+          appId: result.appId,
+          userId: result.userId,
+          componentType: result.componentType,
+          componentSubType: result.componentSubType,
+          componentId: result.configId,
+          name: result.name,
+          description: result.description,
+          config: result.config,
+          settings: result.settings,
+          metadata: {
+            tags: result.tags,
+            category: result.category,
+            isShared: result.isShared,
+            isDefault: result.isDefault,
+            isLocked: result.isLocked,
+            activeSetting: result.activeSetting
+          },
+          createdAt: result.creationTime,
+          updatedAt: result.lastUpdated
+        };
+      } catch (error) {
+        console.error('[ConfigService] Get error:', error);
+        return null;
+      }
+    });
+    
+    channel.register('update', async (payload) => {
+      console.log('[ConfigService] Update:', payload);
+      try {
+        await dbAdapter.update(payload.id, {
+          ...payload.updates,
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'current-user'
+        });
+        return { success: true };
+      } catch (error) {
+        console.error('[ConfigService] Update error:', error);
+        return { success: false, error: error.message };
+      }
+    });
+    
+    channel.register('delete', async (payload) => {
+      console.log('[ConfigService] Delete:', payload);
+      try {
+        await dbAdapter.delete(payload.id);
+        return { success: true };
+      } catch (error) {
+        console.error('[ConfigService] Delete error:', error);
+        return { success: false, error: error.message };
+      }
+    });
+    
+    channel.register('query', async (payload) => {
+      console.log('[ConfigService] Query:', payload);
+      try {
+        const results = await dbAdapter.query(payload.filter || {});
+        // Convert results to expected format
+        return results.map(r => ({
+          id: r.configId,
+          appId: r.appId,
+          userId: r.userId,
+          componentType: r.componentType,
+          componentSubType: r.componentSubType,
+          componentId: r.configId,
+          name: r.name,
+          description: r.description,
+          config: r.config,
+          settings: r.settings,
+          metadata: {
+            tags: r.tags,
+            category: r.category,
+            isShared: r.isShared,
+            isDefault: r.isDefault,
+            isLocked: r.isLocked,
+            activeSetting: r.activeSetting
+          },
+          createdAt: r.creationTime,
+          updatedAt: r.lastUpdated
+        }));
+      } catch (error) {
+        console.error('[ConfigService] Query error:', error);
+        return [];
+      }
+    });
+    
+    console.log('[Main] Configuration Service channel created successfully with IndexedDB');
+  } catch (error) {
+    console.error('[Main] Failed to create Configuration Service channel:', error);
+    // Don't throw - allow platform to continue
+  }
+}
+
+/**
+ * Launch the Service Manager window
+ */
+async function launchServiceManager(): Promise<void> {
+  console.log('[Main] Launching Service Manager window...');
+  
+  try {
+    // Check if service manager already exists
+    let existingWindow = null;
+    try {
+      existingWindow = await fin.Window.wrap({ 
+        uuid: fin.me.uuid, 
+        name: 'service-manager' 
+      });
+      
+      // Check if the window is actually alive
+      const info = await existingWindow.getInfo();
+      if (info) {
+        console.log('[Main] Service Manager window already exists and is alive');
+        return;
+      }
+    } catch (error) {
+      console.log('[Main] Service Manager window does not exist, creating it...');
+      // Window doesn't exist, create it
+    }
+    
+    // Create the Service Manager window
+    const serviceManagerWindow = await fin.Window.create({
+      name: 'service-manager',
+      url: `${window.location.origin}/service-manager.html`,
+      autoShow: false,  // Keep it hidden (headless)
+      frame: false,
+      defaultWidth: 500,
+      defaultHeight: 400,
+      saveWindowState: false,
+      alwaysOnTop: false,
+      showTaskbarIcon: false,  // Hide from taskbar
+      contextMenu: false,
+      customData: {
+        role: 'service-manager'
+      }
+    });
+    
+    console.log('[Main] Service Manager window created');
+    
+    // Wait for services to be ready (with shorter timeout)
+    await waitForServicesReady();
+    
+    console.log('[Main] Service Manager is ready');
+  } catch (error) {
+    console.error('[Main] Failed to launch Service Manager:', error);
+    // Don't throw - allow platform to continue without service manager
+    console.warn('[Main] Continuing without Service Manager');
+  }
+}
+
+/**
+ * Wait for Service Manager to signal that services are ready
+ */
+async function waitForServicesReady(): Promise<void> {
+  return new Promise((resolve) => {
+    console.log('[Main] Waiting for services to be ready...');
+    
+    const handleServiceReady = (message: any) => {
+      if (message.type === 'services-ready') {
+        console.log('[Main] Services are ready:', message.services);
+        fin.InterApplicationBus.unsubscribe(
+          { uuid: '*' }, 
+          'service-manager-events', 
+          handleServiceReady
+        );
+        resolve();
+      }
+    };
+    
+    // Subscribe to service manager events
+    fin.InterApplicationBus.subscribe(
+      { uuid: '*' },
+      'service-manager-events',
+      handleServiceReady
+    );
+    
+    // Set a shorter timeout - services should start quickly
+    setTimeout(() => {
+      console.warn('[Main] Service ready timeout (3s), continuing anyway');
+      fin.InterApplicationBus.unsubscribe(
+        { uuid: '*' }, 
+        'service-manager-events', 
+        handleServiceReady
+      );
+      resolve();
+    }, 3000); // 3 second timeout
+  });
 }
 
 // Auto-initialize when loaded

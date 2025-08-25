@@ -151,6 +151,14 @@ export function createDockButtons(includeDeveloperButtons = false): DockButton[]
           }
         },
         {
+          tooltip: 'Service Manager',
+          iconUrl: `${baseUrl}/icons/tools.svg`,
+          action: {
+            id: 'show-service-manager',
+            customData: {}
+          }
+        },
+        {
           tooltip: 'Reload Dock',
           iconUrl: createColorfulIcon('refresh'),
           action: {

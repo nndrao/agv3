@@ -45,662 +45,451 @@ export class ColumnGroupService {
    * Apply column groups to AG-Grid using grid-level storage
    * Returns the saved column state that should be applied after groups are set
    */
-  static applyColumnGroups(
+  static async applyColumnGroups(
     gridApi: any,
     columnApi: any,
     activeGroupIds: string[],
     gridInstanceId: string,
     originalColumnDefs?: ColDef[],
     gridStateManager?: any
-  ): any[] | null {
+  ): Promise<any[] | null> {
     
     // Load groups from grid-level storage
-    const allGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
-    const activeGroups = GridColumnGroupStorage.getColumnGroups(gridInstanceId, activeGroupIds);
+    const allGroups = await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+    const activeGroups = await GridColumnGroupStorage.getColumnGroups(gridInstanceId, activeGroupIds);
     
-    console.log('[🔍 COLGROUP-SERVICE-001] applyColumnGroups called:', {
+    console.log('[ColumnGroupService] Applying column groups:', {
+      gridInstanceId,
+      activeGroupIds,
       totalGroups: allGroups.length,
-      activeGroupIds: activeGroupIds,
-      activeGroups: activeGroups.length,
-      groups: activeGroups.map(g => ({ 
-        groupId: g.groupId, 
-        headerName: g.headerName,
-        childrenCount: g.children?.length || 0
-      }))
+      activeGroups: activeGroups.length
     });
     
-    if (!gridApi) {
-      console.error('[🔍 COLGROUP-SERVICE-ERROR] Grid API not available');
-      return;
-    }
-    
-    // Verify that column definitions exist
-    const currentDefs = gridApi.getColumnDefs();
-    if (!currentDefs || currentDefs.length === 0) {
-      console.warn('[🔍 COLGROUP-SERVICE-WARNING] No column definitions available yet, cannot apply column groups');
-      return;
-    }
-
-    // Get the original column definitions if not provided
-    let baseColumnDefs = originalColumnDefs;
-    if (!baseColumnDefs) {
-      // Try to get from grid state
-      const gridState = gridApi.getColumnDefs();
-      if (gridState && gridState.length > 0) {
-        // Extract base columns from current state (flatten any existing groups)
-        baseColumnDefs = this.extractBaseColumns(gridState);
-      } else {
-        console.error('No column definitions available');
-        return;
+    if (activeGroups.length === 0) {
+      console.log('[ColumnGroupService] No active column groups to apply');
+      
+      // If we have original column defs, restore them
+      if (originalColumnDefs && gridApi) {
+        console.log('[ColumnGroupService] Restoring original column definitions');
+        gridApi.setColumnDefs(originalColumnDefs);
       }
+      
+      return null;
     }
-
-
-    // Build new column definitions with groups (pass gridApi to preserve column state)
-    // Only use active groups
-    const newColumnDefs = this.buildColumnDefsWithGroups(baseColumnDefs, activeGroups, gridApi);
     
-    // Store the current column group state before applying new definitions
+    // Get current column definitions from the grid
+    const currentColumns = gridApi.getColumnDefs() || [];
+    console.log('[ColumnGroupService] Current column definitions count:', currentColumns.length);
+    
+    // Create column groups hierarchy
+    const columnGroups = activeGroups.map(group => createColumnGroupDef(group, currentColumns));
+    
+    // Collect all columns that are part of groups
+    const groupedColumnIds = new Set<string>();
+    activeGroups.forEach(group => {
+      group.children.forEach(childId => groupedColumnIds.add(childId));
+    });
+    
+    // Filter ungrouped columns
+    const ungroupedColumns = currentColumns.filter((col: ColDef) => {
+      const colId = col.colId || col.field;
+      return colId && !groupedColumnIds.has(colId);
+    });
+    
+    // Combine grouped and ungrouped columns
+    const newColumnDefs = [...columnGroups, ...ungroupedColumns];
+    
+    console.log('[ColumnGroupService] Setting new column definitions:', {
+      totalColumns: newColumnDefs.length,
+      groupedColumns: columnGroups.length,
+      ungroupedColumns: ungroupedColumns.length
+    });
+    
+    // IMPORTANT: Save column state BEFORE applying new column defs
+    let savedColumnState: any[] | null = null;
     try {
-      // Try to get column group state before changes
-      if (typeof (gridApi as any).getColumnGroupState === 'function') {
-        (gridApi as any).getColumnGroupState();
+      if (gridStateManager && typeof gridStateManager.getCurrentGridState === 'function') {
+        const currentState = gridStateManager.getCurrentGridState(gridApi, columnApi);
+        savedColumnState = currentState?.columnState || null;
+        console.log('[🔍 COLGROUP-PRESERVE-001] Saved column state before applying groups:', 
+          savedColumnState?.map((s: any) => ({ colId: s.colId, width: s.width, hide: s.hide })));
+      } else if (columnApi && typeof columnApi.getColumnState === 'function') {
+        savedColumnState = columnApi.getColumnState();
+        console.log('[🔍 COLGROUP-PRESERVE-002] Saved column state using columnApi');
+      } else if (typeof gridApi.getColumnState === 'function') {
+        savedColumnState = gridApi.getColumnState();
+        console.log('[🔍 COLGROUP-PRESERVE-003] Saved column state using gridApi');
       }
     } catch (e) {
+      console.warn('[🔍 COLGROUP-PRESERVE-004] Could not save column state:', e);
     }
     
-    // Get the column state to restore after applying groups
-    // Use pending state from GridStateManager if available, otherwise use current state
-    let savedColumnState = null;
-    if (gridStateManager && typeof gridStateManager.getPendingColumnState === 'function') {
-      savedColumnState = gridStateManager.getPendingColumnState();
-      // Clear the pending state after using it
-      gridStateManager.clearPendingColumnState();
-    }
-    if (!savedColumnState) {
-      savedColumnState = gridApi.getColumnState();
-    }
+    // Apply new column definitions with groups
+    gridApi.setColumnDefs(newColumnDefs);
     
-    // Update grid state manager with active group IDs
-    if (gridStateManager && typeof gridStateManager.setActiveColumnGroupIds === 'function') {
-      gridStateManager.setActiveColumnGroupIds(activeGroupIds);
-    }
+    console.log('[ColumnGroupService] Column groups applied successfully');
     
-    // Apply the new column definitions to the grid
-    gridApi.setGridOption('columnDefs', newColumnDefs);
+    // Test and set column group state immediately
+    testColumnGroupShow(gridApi);
     
-    // Get the initial column group state before setting up listeners
-    const initialGroupState = gridApi.getColumnGroupState ? gridApi.getColumnGroupState() : [];
-    console.log('[🔍 COLGROUP-SERVICE-008] Initial column group state after applying defs:', initialGroupState);
-    
-    // Let AG-Grid handle column group expand/collapse natively
-    // The columnGroupShow property on columns will be respected automatically
-    
-    // Return the saved column state to be applied by the caller after groups are fully set
-    console.log('[🔍 COLGROUP-SERVICE-009] Returning saved column state for later application:', {
-      hasColumnState: !!savedColumnState,
-      columnStateCount: savedColumnState?.length || 0
-    });
-    
-    // Force grid to redraw columns
-    if (columnApi) {
-      try {
-        columnApi.autoSizeAllColumns();
-      } catch (e) {
-      }
-    }
-    
-    // Refresh the grid
-    gridApi.refreshCells({ force: true });
-    
-    // AG-Grid will handle initial group state and column visibility automatically
-    // based on openByDefault and columnGroupShow properties
-    
-    // Return the saved column state to be applied after column groups are fully configured
+    // Return the saved column state for restoration
     return savedColumnState;
   }
-
+  
   /**
-   * Extract base column definitions from potentially grouped columns
+   * Create a column group definition from storage
    */
-  private static extractBaseColumns(columnDefs: any[]): ColDef[] {
-    const baseColumns: ColDef[] = [];
-    
-    const processColDef = (colDef: any) => {
-      if (colDef.children) {
-        // This is a group, process its children
-        colDef.children.forEach((child: any) => processColDef(child));
-      } else {
-        // This is a base column, preserve all its properties
-        const baseDef: ColDef = { ...colDef };
-        // Ensure we have a colId
-        if (!baseDef.colId && baseDef.field) {
-          baseDef.colId = baseDef.field;
-        }
-        baseColumns.push(baseDef);
-      }
-    };
-    
-    columnDefs.forEach(colDef => processColDef(colDef));
-    return baseColumns;
+  static createColumnGroupDefinitionFromStorage(
+    group: ColumnGroupDefinition, 
+    allColumns: ColDef[]
+  ): ColGroupDef {
+    return createColumnGroupDef(group, allColumns);
   }
-
+  
   /**
-   * Build column definitions with groups using grid-level storage
-   * This is a pure function that returns new columnDefs without side effects
+   * Get column group definitions for active groups
    */
-  static buildColumnDefsWithGroups(
-    baseColumns: ColDef[],
-    activeGroupIds: string[],
+  static async getColumnGroupDefinitions(
     gridInstanceId: string,
-    gridApi?: any
-  ): (ColDef | ColGroupDef)[] {
+    activeGroupIds: string[]
+  ): Promise<ColGroupDef[]> {
+    const groups = await GridColumnGroupStorage.getColumnGroups(gridInstanceId, activeGroupIds);
+    return groups.map(group => ({
+      groupId: group.groupId,
+      headerName: group.headerName,
+      children: group.children,
+      openByDefault: group.openByDefault,
+      marryChildren: group.marryChildren
+    }));
+  }
+  
+  /**
+   * Save column groups to storage
+   */
+  static async saveColumnGroups(
+    gridInstanceId: string,
+    groups: ColumnGroupDefinition[]
+  ): Promise<void> {
+    await GridColumnGroupStorage.saveColumnGroups(gridInstanceId, groups);
+  }
+  
+  /**
+   * Load all column groups from storage
+   */
+  static async loadColumnGroups(gridInstanceId: string): Promise<ColumnGroupDefinition[]> {
+    return await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+  }
+  
+  /**
+   * Import column groups from array (used for profile migration)
+   */
+  static async importColumnGroups(
+    gridInstanceId: string,
+    groups: ColumnGroupDefinition[]
+  ): Promise<void> {
+    const existingGroups = await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
     
-    // Load active groups from grid-level storage
-    const groups = GridColumnGroupStorage.getColumnGroups(gridInstanceId, activeGroupIds);
+    // Merge with existing groups (avoid duplicates based on groupId)
+    const existingIds = new Set(existingGroups.map(g => g.groupId));
+    const newGroups = groups.filter(g => !existingIds.has(g.groupId));
     
-    // Get current column state to preserve widths and other properties
-    let currentColumnState: any[] = [];
-    if (gridApi) {
-      currentColumnState = gridApi.getColumnState() || [];
+    if (newGroups.length > 0) {
+      const mergedGroups = [...existingGroups, ...newGroups];
+      await GridColumnGroupStorage.saveColumnGroups(gridInstanceId, mergedGroups);
+      console.log(`[ColumnGroupService] Imported ${newGroups.length} new column groups`);
     }
-    
-    // Create a map of column ID to current state
-    const columnStateMap = new Map<string, any>();
-    currentColumnState.forEach(state => {
-      if (state.colId) {
-        columnStateMap.set(state.colId, state);
-      }
-    });
-    
-    // Create a map of column ID to column definition
-    const columnMap = new Map<string, ColDef>();
-    baseColumns.forEach(col => {
-      const colId = col.colId || col.field;
-      if (colId) {
-        // Preserve width and other state from current column state
-        const currentState = columnStateMap.get(colId);
-        if (currentState) {
-          // Preserve width if it exists
-          if (currentState.width !== undefined && currentState.width !== null) {
-            col.width = currentState.width;
-          }
-          // Preserve hide state
-          if (currentState.hide !== undefined) {
-            col.hide = currentState.hide;
-          }
-          // Preserve pinned state
-          if (currentState.pinned !== undefined && currentState.pinned !== null) {
-            col.pinned = currentState.pinned;
-          }
-        }
-        
-        columnMap.set(colId, col);
-        // Also add by field name if different from colId
-        if (col.field && col.field !== colId) {
-          columnMap.set(col.field, col);
-        }
-      }
-    });
-
-    // Create a set of grouped column IDs
-    const groupedColumnIds = new Set<string>();
-    groups.forEach(group => {
-      group.children.forEach(colId => groupedColumnIds.add(colId));
-    });
-
-    // Build the final column definitions
-    const finalColumnDefs: (ColDef | ColGroupDef)[] = [];
-
-    // Add column groups
-    groups.forEach(group => {
-      const groupChildren: ColDef[] = [];
-      
-      group.children.forEach(colId => {
-        const colDef = columnMap.get(colId);
-        if (colDef) {
-          // Apply columnGroupShow if defined in columnStates
-          const columnState = group.columnStates?.[colId];
-          // Create a new column definition with columnGroupShow
-          let colDefWithGroupShow: any = { ...colDef };
-          if (columnState !== undefined) {
-            colDefWithGroupShow.columnGroupShow = columnState;
-            console.log('[🔍 COLGROUP-SERVICE-002] Applied columnGroupShow:', {
-              colId,
-              columnGroupShow: columnState,
-              groupId: group.groupId,
-              groupHeaderName: group.headerName
-            });
-          } else {
-            console.log('[🔍 COLGROUP-SERVICE-003] No columnGroupShow for:', colId);
-          }
-          groupChildren.push(colDefWithGroupShow);
-        } else {
-          console.warn(`  - Column "${colId}" not found in column map!`);
-        }
-      });
-
-      if (groupChildren.length > 0) {
-        const colGroupDef: ColGroupDef = {
-          headerName: group.headerName,
-          groupId: group.groupId,
-          children: groupChildren,
-          openByDefault: group.openByDefault ?? true,
-          marryChildren: group.marryChildren || false
-        };
-        
-        console.log('[🔍 COLGROUP-SERVICE-004] Created column group:', {
-          groupId: colGroupDef.groupId,
-          headerName: colGroupDef.headerName,
-          openByDefault: colGroupDef.openByDefault,
-          childrenCount: groupChildren.length,
-          childrenWithGroupShow: groupChildren.filter((c: any) => c.columnGroupShow !== undefined).map((c: any) => ({
-            field: c.field || c.colId,
-            columnGroupShow: c.columnGroupShow
-          }))
-        });
-        
-        finalColumnDefs.push(colGroupDef);
-      } else {
-        console.warn(`- Skipping empty group "${group.headerName}"`);
-      }
-    });
-
-    // Add ungrouped columns
-    baseColumns.forEach(col => {
-      const colId = col.colId || col.field;
-      if (colId && !groupedColumnIds.has(colId)) {
-        finalColumnDefs.push(col);
-      }
-    });
-
-    console.log('[🔍 COLGROUP-BUILD-FINAL] Final column definitions structure:', {
-      totalDefs: finalColumnDefs.length,
-      groups: finalColumnDefs.filter((col: any) => col.children).map((col: any) => ({
-        headerName: col.headerName,
-        groupId: col.groupId,
-        childrenCount: col.children?.length
-      })),
-      ungroupedColumns: finalColumnDefs.filter((col: any) => !col.children).length
-    });
-    
-    return finalColumnDefs;
   }
-
+  
   /**
-   * Save column group configuration to grid-level storage
+   * Convert profile column groups to grid-level storage and return active group IDs
    */
-  static saveConfiguration(gridInstanceId: string, groups: ColumnGroupDefinition[]): void {
-    GridColumnGroupStorage.saveColumnGroups(gridInstanceId, groups);
-  }
-
-  /**
-   * Load column group configuration from grid-level storage
-   */
-  static loadConfiguration(gridInstanceId: string): ColumnGroupDefinition[] {
-    return GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
-  }
-
-  /**
-   * Export column groups as JSON string
-   */
-  static exportConfiguration(gridInstanceId: string): string {
-    const groups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
-    const config = {
-      version: '2.0.0',
-      groups: groups,
-      timestamp: Date.now()
-    };
-    return JSON.stringify(config, null, 2);
-  }
-
-  /**
-   * Import column groups from JSON string
-   */
-  static importConfiguration(gridInstanceId: string, configJson: string): ColumnGroupDefinition[] {
-    try {
-      const config = JSON.parse(configJson);
-      const groups = config.groups || [];
-      
-      // Save imported groups to grid-level storage
-      GridColumnGroupStorage.saveColumnGroups(gridInstanceId, groups);
-      
-      return groups;
-    } catch (error) {
-      console.error('Failed to parse column group configuration:', error);
+  static async migrateProfileColumnGroups(
+    gridInstanceId: string,
+    profileColumnGroups: any[]
+  ): Promise<string[]> {
+    if (!profileColumnGroups || profileColumnGroups.length === 0) {
       return [];
     }
-  }
-
-  /**
-   * Extract current column groups from column definitions
-   */
-  static extractGroupsFromColumnDefs(columnDefs: any[]): ColumnGroupDefinition[] {
-    const groups: ColumnGroupDefinition[] = [];
     
-    if (!columnDefs || columnDefs.length === 0) return groups;
-    
-    columnDefs.forEach((colDef: any) => {
-      if (colDef.children) {
-        // This is a column group
-        const childIds: string[] = [];
-        const columnStates: Record<string, 'open' | 'closed' | undefined> = {};
-        
-        const extractChildData = (children: any[]) => {
-          children.forEach((child: any) => {
-            if (child.children) {
-              // Nested group - extract its children
-              extractChildData(child.children);
-            } else {
-              // Regular column
-              const colId = child.colId || child.field;
-              if (colId) {
-                childIds.push(colId);
-                // Extract columnGroupShow if present
-                if (child.columnGroupShow) {
-                  columnStates[colId] = child.columnGroupShow;
-                }
-              }
-            }
-          });
-        };
-        
-        extractChildData(colDef.children);
-        
-        if (childIds.length > 0) {
-          groups.push({
-            groupId: colDef.groupId || `group_${Date.now()}_${Math.random()}`,
-            headerName: colDef.headerName || 'Unnamed Group',
-            children: childIds,
-            openByDefault: colDef.openByDefault !== false,
-            columnStates
-          });
-        }
-      }
-    });
-    
-    return groups;
-  }
-
-  /**
-   * Create a new column group and save it to grid-level storage
-   */
-  static createColumnGroup(
-    gridInstanceId: string,
-    headerName: string,
-    children: string[],
-    columnStates?: Record<string, 'open' | 'closed' | undefined>,
-    openByDefault: boolean = true
-  ): ColumnGroupDefinition {
-    const newGroup: ColumnGroupDefinition = {
-      groupId: `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      headerName,
-      children,
-      openByDefault,
-      columnStates: columnStates || {},
+    // Convert old format to new format and save
+    const convertedGroups: ColumnGroupDefinition[] = profileColumnGroups.map(group => ({
+      groupId: group.groupId || `group_${Date.now()}_${Math.random()}`,
+      headerName: group.headerName || 'Column Group',
+      children: group.children || [],
+      openByDefault: group.openByDefault ?? true,
+      marryChildren: group.marryChildren || false,
+      columnStates: group.columnStates || {},
       createdAt: Date.now(),
       updatedAt: Date.now()
+    }));
+    
+    // Save to grid-level storage
+    await this.importColumnGroups(gridInstanceId, convertedGroups);
+    
+    // Return the IDs of the migrated groups (they should all be active)
+    return convertedGroups.map(g => g.groupId);
+  }
+  
+  /**
+   * Create a new column group
+   */
+  static async createColumnGroup(
+    gridInstanceId: string,
+    group: Partial<ColumnGroupDefinition>
+  ): Promise<ColumnGroupDefinition> {
+    const newGroup: ColumnGroupDefinition = {
+      groupId: group.groupId || `group_${Date.now()}_${Math.random()}`,
+      headerName: group.headerName || 'New Group',
+      children: group.children || [],
+      openByDefault: group.openByDefault ?? true,
+      marryChildren: group.marryChildren || false,
+      columnStates: group.columnStates || {},
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ...group
     };
-
-    GridColumnGroupStorage.saveColumnGroup(gridInstanceId, newGroup);
+    
+    await GridColumnGroupStorage.saveColumnGroup(gridInstanceId, newGroup);
     return newGroup;
   }
-
+  
   /**
    * Update an existing column group
    */
-  static updateColumnGroup(
+  static async updateColumnGroup(
     gridInstanceId: string,
     groupId: string,
     updates: Partial<ColumnGroupDefinition>
-  ): ColumnGroupDefinition | null {
-    const existingGroup = GridColumnGroupStorage.getColumnGroup(gridInstanceId, groupId);
+  ): Promise<ColumnGroupDefinition> {
+    const existingGroup = await GridColumnGroupStorage.getColumnGroup(gridInstanceId, groupId);
     if (!existingGroup) {
-      console.warn(`Column group not found: ${groupId}`);
-      return null;
+      throw new Error(`Column group ${groupId} not found`);
     }
-
+    
     const updatedGroup: ColumnGroupDefinition = {
       ...existingGroup,
       ...updates,
-      groupId, // Ensure groupId cannot be changed
+      groupId: existingGroup.groupId, // Ensure ID doesn't change
       updatedAt: Date.now()
     };
-
-    GridColumnGroupStorage.saveColumnGroup(gridInstanceId, updatedGroup);
+    
+    await GridColumnGroupStorage.saveColumnGroup(gridInstanceId, updatedGroup);
     return updatedGroup;
   }
-
+  
   /**
-   * Delete a column group from grid-level storage
+   * Delete a column group
    */
-  static deleteColumnGroup(gridInstanceId: string, groupId: string): void {
-    GridColumnGroupStorage.deleteColumnGroup(gridInstanceId, groupId);
+  static async deleteColumnGroup(gridInstanceId: string, groupId: string): Promise<void> {
+    await GridColumnGroupStorage.deleteColumnGroup(gridInstanceId, groupId);
   }
-
+  
   /**
-   * Get all available column groups for a grid
+   * Get all available column groups
    */
-  static getAllColumnGroups(gridInstanceId: string): ColumnGroupDefinition[] {
-    return GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+  static async getAllColumnGroups(gridInstanceId: string): Promise<ColumnGroupDefinition[]> {
+    return await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
   }
-
+  
   /**
-   * Migrate profile-based column groups to grid-level storage
-   * Returns the active group IDs that should be stored in the profile
+   * Migrate from old profile-based column groups to grid-level storage
+   * Returns the IDs of the migrated groups that should be active
    */
-  static migrateProfileColumnGroups(
+  static async migrateFromProfileGroups(
     gridInstanceId: string,
     profileColumnGroups: any[]
-  ): string[] {
-    return GridColumnGroupStorage.migrateFromProfileGroups(gridInstanceId, profileColumnGroups);
+  ): Promise<string[]> {
+    return await GridColumnGroupStorage.migrateFromProfileGroups(gridInstanceId, profileColumnGroups);
   }
+}
 
-  /**
-   * Extract column group state from AG-Grid using native API
-   * Returns the current open/closed state of all column groups
-   */
-  static extractColumnGroupState(gridApi: any): Array<{ groupId: string; open: boolean }> {
-    if (!gridApi) {
-      console.warn('[ColumnGroupService] Grid API not available for state extraction');
-      return [];
-    }
-
-    try {
-      // Use AG-Grid's native getColumnGroupState API
-      if (typeof gridApi.getColumnGroupState === 'function') {
-        const groupState = gridApi.getColumnGroupState();
-        console.log('[🔍 COLGROUP-EXTRACT-STATE] Extracted column group state using AG-Grid API:', groupState);
-        return groupState || [];
-      } else {
-        console.warn('[ColumnGroupService] getColumnGroupState not available on grid API');
-        return [];
-      }
-    } catch (error) {
-      console.error('[ColumnGroupService] Error extracting column group state:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Apply column group state to AG-Grid using native API
-   * Sets the open/closed state of column groups
-   */
-  static applyColumnGroupState(
-    gridApi: any, 
-    groupState: Array<{ groupId: string; open: boolean }>
-  ): boolean {
-    if (!gridApi) {
-      console.warn('[ColumnGroupService] Grid API not available for state application');
-      return false;
-    }
-
-    if (!groupState || groupState.length === 0) {
-      console.log('[ColumnGroupService] No column group state to apply');
-      return true;
-    }
-
-    try {
-      console.log('[🔍 COLGROUP-APPLY-STATE] Applying column group state using AG-Grid API:', groupState);
+// Helper function to create AG-Grid column group definition
+function createColumnGroupDef(
+  group: ColumnGroupDefinition, 
+  allColumns: ColDef[]
+): ColGroupDef {
+  console.log('[🔍 COLGROUP-CREATE-001] Creating column group:', {
+    groupId: group.groupId,
+    headerName: group.headerName,
+    children: group.children,
+    columnStates: group.columnStates,
+    openByDefault: group.openByDefault
+  });
+  
+  // Map children IDs to actual column definitions
+  const childColumns = group.children
+    .map(childId => {
+      const column = allColumns.find((col: ColDef) => 
+        col.colId === childId || col.field === childId
+      );
       
-      // Use AG-Grid's native setColumnGroupState API
-      if (typeof gridApi.setColumnGroupState === 'function') {
-        gridApi.setColumnGroupState(groupState);
-        
-        // Verify the state was applied
-        const newState = gridApi.getColumnGroupState();
-        console.log('[🔍 COLGROUP-APPLY-STATE-VERIFY] Column group state after application:', newState);
-        
-        return true;
-      } else {
-        console.warn('[ColumnGroupService] setColumnGroupState not available, using fallback');
-        
-        // Fallback to individual group operations
-        if (typeof gridApi.setColumnGroupOpened === 'function') {
-          groupState.forEach(state => {
-            try {
-              gridApi.setColumnGroupOpened(state.groupId, state.open);
-            } catch (e) {
-              console.warn(`[ColumnGroupService] Could not set state for group ${state.groupId}:`, e);
-            }
-          });
-          return true;
-        } else {
-          console.error('[ColumnGroupService] No column group state methods available on grid API');
-          return false;
+      if (!column) {
+        console.warn(`[🔍 COLGROUP-CREATE-002] Column ${childId} not found for group ${group.groupId}`);
+        return null;
+      }
+      
+      // Apply columnGroupShow based on column states
+      const columnState = group.columnStates?.[childId];
+      console.log(`[🔍 COLGROUP-CREATE-003] Column ${childId} state:`, columnState);
+      
+      if (columnState === 'open' || columnState === 'closed') {
+        const modifiedColumn = { 
+          ...column, 
+          columnGroupShow: columnState
+        };
+        console.log(`[🔍 COLGROUP-CREATE-004] Applied columnGroupShow '${columnState}' to column ${childId}`);
+        return modifiedColumn;
+      }
+      
+      return column;
+    })
+    .filter(col => col !== null) as ColDef[];
+  
+  const groupDef: ColGroupDef = {
+    groupId: group.groupId,
+    headerName: group.headerName,
+    children: childColumns,
+    openByDefault: group.openByDefault ?? true,
+    marryChildren: group.marryChildren || false
+  };
+  
+  console.log('[🔍 COLGROUP-CREATE-005] Created column group definition:', {
+    groupId: groupDef.groupId,
+    headerName: groupDef.headerName,
+    childCount: groupDef.children.length,
+    openByDefault: groupDef.openByDefault
+  });
+  
+  return groupDef;
+}
+
+// Test function for column group show functionality
+function testColumnGroupShow(gridApi: any): void {
+  console.log('[🔍 COLGROUP-TEST-001] Testing column group show functionality...');
+  
+  // Try to expand/collapse groups to verify columnGroupShow works
+  setTimeout(() => {
+    const columnGroups = gridApi.getColumnDefs()?.filter((col: any) => col.children) || [];
+    console.log('[🔍 COLGROUP-TEST-002] Found column groups:', columnGroups.map((g: any) => g.groupId));
+    
+    columnGroups.forEach((group: any) => {
+      if (group.groupId) {
+        // Try to toggle the group
+        try {
+          // First close it
+          if (typeof gridApi.setColumnGroupOpened === 'function') {
+            gridApi.setColumnGroupOpened(group.groupId, false);
+            console.log(`[🔍 COLGROUP-TEST-003] Closed group: ${group.groupId}`);
+            
+            // Check which columns are visible
+            setTimeout(() => {
+              const visibleColumns = gridApi.getAllDisplayedColumns()?.map((c: any) => c.colId) || [];
+              console.log(`[🔍 COLGROUP-TEST-004] Visible columns after closing ${group.groupId}:`, visibleColumns);
+              
+              // Now open it
+              gridApi.setColumnGroupOpened(group.groupId, true);
+              console.log(`[🔍 COLGROUP-TEST-005] Opened group: ${group.groupId}`);
+              
+              setTimeout(() => {
+                const visibleColumnsAfter = gridApi.getAllDisplayedColumns()?.map((c: any) => c.colId) || [];
+                console.log(`[🔍 COLGROUP-TEST-006] Visible columns after opening ${group.groupId}:`, visibleColumnsAfter);
+              }, 100);
+            }, 100);
+          }
+        } catch (e) {
+          console.warn(`[🔍 COLGROUP-TEST-007] Could not test group ${group.groupId}:`, e);
         }
       }
-    } catch (error) {
-      console.error('[ColumnGroupService] Error applying column group state:', error);
-      return false;
+    });
+  }, 500);
+}
+
+/**
+ * Re-import groups from array - used during testing/debugging
+ * This will merge with existing groups (won't create duplicates)
+ */
+export async function reimportGroups(
+  gridInstanceId: string, 
+  groupsToImport: ColumnGroupDefinition[]
+): Promise<void> {
+  try {
+    if (!gridInstanceId || !groupsToImport || groupsToImport.length === 0) {
+      console.warn('[reimportGroups] Invalid parameters');
+      return;
     }
+    
+    const existingGroups = await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+    const existingIds = new Set(existingGroups.map(g => g.groupId));
+    
+    // Filter out duplicates
+    const newGroups = groupsToImport.filter(g => !existingIds.has(g.groupId));
+    
+    if (newGroups.length > 0) {
+      const updatedGroups = [...existingGroups, ...newGroups];
+      await GridColumnGroupStorage.saveColumnGroups(gridInstanceId, updatedGroups);
+      console.log(`[reimportGroups] Successfully imported ${newGroups.length} new groups`);
+    } else {
+      console.log('[reimportGroups] All groups already exist, no new imports');
+    }
+  } catch (error) {
+    console.error('[reimportGroups] Error importing groups:', error);
   }
+}
 
-  /**
-   * Save column group state to grid-level storage
-   * Combines group definitions with their current open/closed state
-   */
-  static saveColumnGroupState(
-    gridInstanceId: string,
-    gridApi: any,
-    activeGroupIds: string[]
-  ): void {
-    try {
-      // Extract current column group state from AG-Grid
-      const groupState = this.extractColumnGroupState(gridApi);
+/**
+ * Check and apply column groups from profile
+ * This is called when a profile is loaded
+ */
+export async function checkAndApplyColumnGroups(
+  gridApi: any,
+  columnApi: any,
+  gridInstanceId: string,
+  profileColumnGroups?: any[],
+  activeColumnGroupIds?: string[]
+): Promise<void> {
+  try {
+    console.log('[checkAndApplyColumnGroups] Starting...', {
+      gridInstanceId,
+      hasProfileGroups: !!profileColumnGroups,
+      profileGroupCount: profileColumnGroups?.length || 0,
+      activeIds: activeColumnGroupIds
+    });
+    
+    // First, check if we have any profile column groups that need migration
+    if (profileColumnGroups && profileColumnGroups.length > 0) {
+      console.log('[checkAndApplyColumnGroups] Migrating profile column groups...');
+      const migratedIds = await ColumnGroupService.migrateFromProfileGroups(
+        gridInstanceId,
+        profileColumnGroups
+      );
+      console.log('[checkAndApplyColumnGroups] Migrated group IDs:', migratedIds);
       
-      // Load existing groups from storage
-      const existingGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
-      
-      // Update groups with current state
-      const updatedGroups = existingGroups.map(group => {
-        const currentState = groupState.find(state => state.groupId === group.groupId);
-        return {
-          ...group,
-          openByDefault: currentState ? currentState.open : group.openByDefault,
-          updatedAt: Date.now()
-        };
-      });
-      
-      // Save updated groups back to storage
-      GridColumnGroupStorage.saveColumnGroups(gridInstanceId, updatedGroups);
-      
-      console.log('[🔍 COLGROUP-SAVE-STATE] Saved column group state to storage:', {
-        groupCount: updatedGroups.length,
-        stateCount: groupState.length
-      });
-    } catch (error) {
-      console.error('[ColumnGroupService] Error saving column group state:', error);
-    }
-  }
-
-  /**
-   * Load and apply column group state from grid-level storage
-   * Restores both group definitions and their open/closed state
-   */
-  static loadAndApplyColumnGroupState(
-    gridInstanceId: string,
-    gridApi: any,
-    activeGroupIds: string[]
-  ): boolean {
-    try {
-      // Load groups from storage
-      const allGroups = GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
-      const activeGroups = allGroups.filter(group => activeGroupIds.includes(group.groupId));
-      
-      if (activeGroups.length === 0) {
-        console.log('[ColumnGroupService] No active groups to restore state for');
-        return true;
+      // Use migrated IDs as active if no active IDs provided
+      if (!activeColumnGroupIds || activeColumnGroupIds.length === 0) {
+        activeColumnGroupIds = migratedIds;
       }
-      
-      // Build group state array from stored openByDefault values
-      const groupState = activeGroups.map(group => ({
-        groupId: group.groupId,
-        open: group.openByDefault ?? true
-      }));
-      
-      // Apply the state using AG-Grid API
-      const success = this.applyColumnGroupState(gridApi, groupState);
-      
-      console.log('[🔍 COLGROUP-LOAD-STATE] Loaded and applied column group state:', {
-        success,
-        groupCount: activeGroups.length,
-        groupState
-      });
-      
-      return success;
-    } catch (error) {
-      console.error('[ColumnGroupService] Error loading and applying column group state:', error);
-      return false;
     }
-  }
-
-  /**
-   * Set up event listeners to automatically save column group state changes
-   * This should be called after column groups are applied to the grid
-   */
-  static setupColumnGroupStateListeners(
-    gridInstanceId: string,
-    gridApi: any,
-    activeGroupIds: string[]
-  ): () => void {
-    if (!gridApi) {
-      console.warn('[ColumnGroupService] Grid API not available for setting up listeners');
-      return () => {};
+    
+    // Load all available groups from grid storage
+    const allGroups = await GridColumnGroupStorage.loadColumnGroups(gridInstanceId);
+    console.log('[checkAndApplyColumnGroups] All available groups:', allGroups.map(g => ({
+      id: g.groupId,
+      name: g.headerName
+    })));
+    
+    // Apply active groups
+    if (activeColumnGroupIds && activeColumnGroupIds.length > 0) {
+      console.log('[checkAndApplyColumnGroups] Applying active column groups...');
+      await ColumnGroupService.applyColumnGroups(
+        gridApi,
+        columnApi,
+        activeColumnGroupIds,
+        gridInstanceId
+      );
+    } else {
+      console.log('[checkAndApplyColumnGroups] No active column groups to apply');
     }
-
-    let debounceTimer: NodeJS.Timeout | null = null;
-
-    const saveStateDebounced = () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      
-      debounceTimer = setTimeout(() => {
-        this.saveColumnGroupState(gridInstanceId, gridApi, activeGroupIds);
-      }, 500); // Debounce to avoid excessive saves
-    };
-
-    // Listen for column group opened/closed events
-    const onColumnGroupOpened = (event: any) => {
-      console.log('[🔍 COLGROUP-EVENT] Column group opened/closed:', event);
-      saveStateDebounced();
-    };
-
-    // Add event listener
-    if (typeof gridApi.addEventListener === 'function') {
-      gridApi.addEventListener('columnGroupOpened', onColumnGroupOpened);
-    }
-
-    // Return cleanup function
-    return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      
-      if (typeof gridApi.removeEventListener === 'function') {
-        gridApi.removeEventListener('columnGroupOpened', onColumnGroupOpened);
-      }
-    };
+  } catch (error) {
+    console.error('[checkAndApplyColumnGroups] Error:', error);
   }
 }

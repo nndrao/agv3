@@ -195,7 +195,7 @@ export function useProfileApplication({
     // Skip other state applications for speed - they're less critical for profile switching
   }, []);
   
-  const applyProfile = useCallback((profile: DataGridStompSharedProfile) => {
+  const applyProfile = useCallback(async (profile: DataGridStompSharedProfile) => {
     const gridApi = gridApiRef.current;
     if (!gridApi) return;
     
@@ -233,7 +233,7 @@ export function useProfileApplication({
       // Apply all column transformations in sequence (in memory only)
       if (profile.calculatedColumns?.length) {
         // Resolve calculated column IDs to full objects
-        const calculatedColumnObjects = GridCalculatedColumnsStorage.getColumns(gridInstanceId, profile.calculatedColumns);
+        const calculatedColumnObjects = await GridCalculatedColumnsStorage.getColumns(gridInstanceId, profile.calculatedColumns);
         if (calculatedColumnObjects.length > 0) {
           finalColumnDefs = applyCalculatedColumns(finalColumnDefs, calculatedColumnObjects);
         }

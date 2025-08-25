@@ -8,6 +8,8 @@ import { ExpressionEditorDialogControlled } from '@/components/expression-editor
 import { WindowManager } from "@/services/window/windowManager";
 import { debugStorage } from "@/utils/storageDebug";
 import { getViewInstanceId } from "@/utils/viewUtils";
+import { OpenFinServiceProvider } from "@/services/openfin/OpenFinServiceProvider";
+import { useOpenFinServices } from "@/services/openfin/useOpenFinServices";
 
 
 
@@ -68,6 +70,35 @@ import "./gridOptions/styles.css";
  */
 const DataGridStompSharedComponent = () => {
   const { toast } = useToast();
+  
+  // Access centralized services (with fallback)
+  let services: any = {};
+  let logger: any;
+  let configuration: any;
+  let events: any;
+  let windowOps: any;
+  
+  try {
+    services = useOpenFinServices();
+    logger = services.logger;
+    configuration = services.configuration;
+    events = services.events;
+    windowOps = services.window;
+  } catch (error) {
+    console.warn('[DataGridStompShared] Services not available, using fallbacks:', error);
+    // Provide fallback implementations
+    logger = {
+      info: (...args: any[]) => console.log('[DataGridStompShared]', ...args),
+      warn: (...args: any[]) => console.warn('[DataGridStompShared]', ...args),
+      error: (...args: any[]) => console.error('[DataGridStompShared]', ...args),
+      debug: (...args: any[]) => console.debug('[DataGridStompShared]', ...args)
+    };
+    events = {
+      on: () => () => {},
+      emit: () => {},
+      broadcast: () => Promise.resolve()
+    };
+  }
   
   // ========== Core State ==========
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
@@ -272,6 +303,18 @@ const DataGridStompSharedComponent = () => {
   } = useGridOptionsManagement({ gridApi, activeProfileData });
   
   const { connectionState, workerClient, connect, disconnect } = useSharedWorkerConnection(selectedProviderId, gridApiRef);
+  
+  // Log connection state changes
+  useEffect(() => {
+    if (connectionState) {
+      logger.info('Connection state changed', { 
+        providerId: selectedProviderId,
+        isConnecting: connectionState.isConnecting,
+        isConnected: connectionState.isConnected,
+        mode: connectionState.mode
+      });
+    }
+  }, [connectionState, selectedProviderId, logger]);
   const { snapshotData, handleSnapshotData, handleRealtimeUpdate, resetSnapshot, requestSnapshot } = useSnapshotData(gridApiRef);
   const { applyProfile } = useProfileApplication({
     gridApiRef,
@@ -628,6 +671,7 @@ const DataGridStompSharedComponent = () => {
   // ========== Window Instance Registration ==========
   useEffect(() => {
     debugStorage('DataGridStompShared Mount');
+    logger.info('DataGridStompShared component mounted', { viewInstanceId });
     
     // Extract a readable name from the ID
     let instanceName = 'DataGrid STOMP (Shared)';
@@ -642,14 +686,11 @@ const DataGridStompSharedComponent = () => {
     }
     
     WindowManager.registerViewInstance(viewInstanceId, instanceName, 'DataGridStompShared');
+    logger.debug('View instance registered', { viewInstanceId, instanceName });
     
-    // Restore saved title if available
-    const savedTitle = localStorage.getItem(`viewTitle_${viewInstanceId}`);
-    if (savedTitle) {
-      document.title = savedTitle;
-    } else {
-      document.title = instanceName;
-    }
+    // Title restoration is now handled by useViewTitle hook which uses Configuration Service
+    // Set initial title - useViewTitle hook will restore saved title if available
+    document.title = instanceName;
   }, [viewInstanceId]);
   
   // ========== Handle rename dialog request from context menu ==========
@@ -789,12 +830,17 @@ const DataGridStompSharedComponent = () => {
   
   // ========== Loading State ==========
   if (!stylesLoaded || profilesLoading) {
-    return <div className="h-full flex items-center justify-center">Loading...</div>;
+    console.log('[DataGridStompShared] Loading state:', { stylesLoaded, profilesLoading });
+    return <div className="h-full w-full flex items-center justify-center bg-background text-foreground">
+      <div className="text-lg">Loading DataGrid...</div>
+    </div>;
   }
+  
+  console.log('[DataGridStompShared] Rendering main component');
   
   // ========== Main Render ==========
   return (
-    <div className={className} data-theme={isDarkMode ? 'dark' : 'light'}>
+    <div className={`${className} min-h-screen bg-background`} data-theme={isDarkMode ? 'dark' : 'light'}>
       {/* Toolbar */}
       <Toolbar
         connectionState={connectionState}
@@ -903,5 +949,26 @@ const DataGridStompSharedComponent = () => {
   );
 };
 
-// Export with React.memo for performance optimization
-export const DataGridStompShared = React.memo(DataGridStompSharedComponent);
+// Wrap with OpenFinServiceProvider
+const DataGridStompSharedWithServices = () => {
+  const viewId = useMemo(() => getViewInstanceId(), []);
+  
+  return (
+    <OpenFinServiceProvider
+      viewId={viewId}
+      services={['configuration', 'logging', 'events', 'window', 'appVariables']}
+      logLevel="info"
+      logToConsole={true}
+      logToIndexedDB={true}
+      subscribeToWorkspaceEvents={true}
+      subscribeToThemeEvents={true}
+      subscribeToProfileEvents={true}
+      enableCaching={true}
+    >
+      <DataGridStompSharedComponent />
+    </OpenFinServiceProvider>
+  );
+};
+
+// Export without React.memo to avoid double initialization issues
+export const DataGridStompShared = DataGridStompSharedWithServices;

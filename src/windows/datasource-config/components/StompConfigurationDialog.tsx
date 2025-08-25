@@ -77,6 +77,150 @@ export function StompConfigurationDialog({
   const [manualColumns, setManualColumns] = useState<ColumnDefinition[]>([]);
   const [fieldColumnOverrides, setFieldColumnOverrides] = useState<Record<string, Partial<ColumnDefinition>>>({});
   
+  // Helper functions needed by handleSave
+  const findFieldNode = (fields: FieldNode[], path: string): FieldNode | undefined => {
+    for (const field of fields) {
+      if (field.path === path) return field;
+      if (field.children) {
+        const found = findFieldNode(field.children, path);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+  
+  const mapFieldTypeToCellType = (type: string): ColumnDefinition['cellDataType'] => {
+    switch (type) {
+      case 'number': return 'number';
+      case 'boolean': return 'boolean';
+      case 'object': return 'object';
+      case 'date': return 'date';
+      default: return 'text';
+    }
+  };
+
+  const convertFieldNodeToInfo = (node: FieldNode): FieldInfo => {
+    const info: FieldInfo = {
+      path: node.path,
+      type: node.type as FieldInfo['type'],
+      nullable: node.nullable,
+      sample: node.sample,
+    };
+    
+    if (node.children) {
+      info.children = {};
+      node.children.forEach(child => {
+        const childName = child.path.split('.').pop() || child.path;
+        info.children![childName] = convertFieldNodeToInfo(child);
+      });
+    }
+    
+    return info;
+  };
+  
+  // Move handleSave function definition before useEffect
+  const handleSave = () => {
+    // Validate required fields
+    if (!formData.name || !formData.websocketUrl) {
+      toast({
+        title: 'Missing required fields',
+        description: 'Please fill in Name and WebSocket URL',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Handle topic configuration
+    if (formData.manualTopics) {
+      // Manual topics are already set, just ensure request body is set
+      if (!formData.requestBody) {
+        formData.requestBody = 'START';
+      }
+    } else {
+      // Generate auto topics if not using manual configuration
+      const clientId = uuidv4();
+      const dataType = formData.dataType || 'positions';
+      const messageRate = formData.messageRate || 1000;
+      const batchSize = formData.batchSize || '';
+      
+      formData.listenerTopic = `/snapshot/${dataType}/${clientId}`;
+      formData.requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
+      formData.requestBody = 'START';
+      
+      console.log('[Save] Generated auto topics:', {
+        listenerTopic: formData.listenerTopic,
+        requestMessage: formData.requestMessage,
+        clientId
+      });
+    }
+    
+    // Build columns from selected fields + manual columns
+    const columnsFromFields: ColumnDefinition[] = Array.from(selectedFields).map(path => {
+      const override = fieldColumnOverrides[path] || {};
+      const fieldNode = findFieldNode(inferredFields, path);
+      const cellDataType = override.cellDataType || mapFieldTypeToCellType(fieldNode?.type || 'string');
+      
+      const column: ColumnDefinition = {
+        field: path,
+        headerName: override.headerName || path.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' '),
+        cellDataType: cellDataType,
+      };
+      
+      // Apply value formatter from override
+      if (override.valueFormatter !== undefined) {
+        column.valueFormatter = override.valueFormatter;
+      } else if (cellDataType === 'date' || cellDataType === 'dateString') {
+        // Default to ISO DateTime format for date columns
+        // Now this format pattern is supported as an alias in DateFormatters.ts
+        column.valueFormatter = 'YYYY-MM-DD HH:mm:ss';
+      } else if (cellDataType === 'number' && !override.valueFormatter) {
+        // Default formatter for numeric columns
+        column.valueFormatter = '2DecimalWithThousandSeparator';
+      }
+      
+      // Apply cell renderer from override
+      if (override.cellRenderer !== undefined) {
+        column.cellRenderer = override.cellRenderer;
+      } else if (cellDataType === 'number' && !override.cellRenderer) {
+        // Default renderer for numeric columns
+        column.cellRenderer = 'NumericCellRenderer';
+      }
+      
+      // Apply number-specific settings
+      if (cellDataType === 'number') {
+        column.type = 'numericColumn';
+        column.filter = 'agNumberColumnFilter';
+      }
+      
+      // Apply date-specific settings
+      if (cellDataType === 'date' || cellDataType === 'dateString') {
+        column.filter = 'agDateColumnFilter';
+      }
+      
+      // Apply any other override properties
+      if (override.width !== undefined) column.width = override.width;
+      if (override.filter !== undefined) column.filter = override.filter;
+      if (override.sortable !== undefined) column.sortable = override.sortable;
+      if (override.resizable !== undefined) column.resizable = override.resizable;
+      if (override.hide !== undefined) column.hide = override.hide;
+      if (override.type !== undefined) column.type = override.type;
+      
+      return column;
+    });
+    
+    const updatedConfig = {
+      ...formData,
+      columnDefinitions: [...columnsFromFields, ...manualColumns],
+      inferredFields: inferredFields.map(field => convertFieldNodeToInfo(field)),
+    };
+    
+    onSave(updatedConfig);
+    toast({
+      title: 'Datasource saved',
+      description: 'Configuration has been updated successfully',
+    });
+  };
+
   // Listen for update datasource events
   useEffect(() => {
     const handleUpdate = () => {
@@ -224,25 +368,6 @@ export function StompConfigurationDialog({
         convertFieldNodeRecursive(childField, childKey)
       ) : undefined,
     };
-  };
-  
-  const convertFieldNodeToInfo = (node: FieldNode): FieldInfo => {
-    const info: FieldInfo = {
-      path: node.path,
-      type: node.type as FieldInfo['type'],
-      nullable: node.nullable,
-      sample: node.sample,
-    };
-    
-    if (node.children) {
-      info.children = {};
-      node.children.forEach(child => {
-        const childName = child.path.split('.').pop() || child.path;
-        info.children![childName] = convertFieldNodeToInfo(child);
-      });
-    }
-    
-    return info;
   };
   
   // Helper function to collect all non-object leaf paths from a field
@@ -420,125 +545,6 @@ export function StompConfigurationDialog({
     } finally {
       provider.disconnect();
       setInferring(false);
-    }
-  };
-  
-  const handleSave = () => {
-    // Validate required fields
-    if (!formData.name || !formData.websocketUrl) {
-      toast({
-        title: 'Missing required fields',
-        description: 'Please fill in Name and WebSocket URL',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    // Handle topic configuration
-    if (formData.manualTopics) {
-      // Manual topics are already set, just ensure request body is set
-      if (!formData.requestBody) {
-        formData.requestBody = 'START';
-      }
-    } else {
-      // Generate auto topics if not using manual configuration
-      const clientId = uuidv4();
-      const dataType = formData.dataType || 'positions';
-      const messageRate = formData.messageRate || 1000;
-      const batchSize = formData.batchSize || '';
-      
-      formData.listenerTopic = `/snapshot/${dataType}/${clientId}`;
-      formData.requestMessage = `/snapshot/${dataType}/${clientId}/${messageRate}${batchSize ? `/${batchSize}` : ''}`;
-      formData.requestBody = 'START';
-      
-      console.log('[Save] Generated auto topics:', {
-        listenerTopic: formData.listenerTopic,
-        requestMessage: formData.requestMessage,
-        clientId
-      });
-    }
-    
-    // Build columns from selected fields + manual columns
-    const columnsFromFields: ColumnDefinition[] = Array.from(selectedFields).map(path => {
-      const override = fieldColumnOverrides[path] || {};
-      const fieldNode = findFieldNode(inferredFields, path);
-      const cellDataType = override.cellDataType || mapFieldTypeToCellType(fieldNode?.type || 'string');
-      
-      const column: ColumnDefinition = {
-        field: path,
-        headerName: override.headerName || path.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' '),
-        cellDataType: cellDataType,
-      };
-      
-      // Apply value formatter from override
-      if (override.valueFormatter !== undefined) {
-        column.valueFormatter = override.valueFormatter;
-      } else if (cellDataType === 'date' || cellDataType === 'dateString') {
-        // Default to ISO DateTime format for date columns
-        // Now this format pattern is supported as an alias in DateFormatters.ts
-        column.valueFormatter = 'YYYY-MM-DD HH:mm:ss';
-      } else if (cellDataType === 'number' && !override.valueFormatter) {
-        // Default formatter for numeric columns
-        column.valueFormatter = '2DecimalWithThousandSeparator';
-      }
-      
-      // Apply cell renderer from override
-      if (override.cellRenderer !== undefined) {
-        column.cellRenderer = override.cellRenderer;
-      } else if (cellDataType === 'number' && !override.cellRenderer) {
-        // Default renderer for numeric columns
-        column.cellRenderer = 'NumericCellRenderer';
-      }
-      
-      // Apply number-specific settings
-      if (cellDataType === 'number') {
-        column.type = 'numericColumn';
-        column.filter = 'agNumberColumnFilter';
-      }
-      
-      // Apply date-specific settings
-      if (cellDataType === 'date' || cellDataType === 'dateString') {
-        column.filter = 'agDateColumnFilter';
-      }
-      
-      // Apply any other override properties
-      if (override.width !== undefined) column.width = override.width;
-      if (override.filter !== undefined) column.filter = override.filter;
-      if (override.sortable !== undefined) column.sortable = override.sortable;
-      if (override.resizable !== undefined) column.resizable = override.resizable;
-      if (override.hide !== undefined) column.hide = override.hide;
-      if (override.type !== undefined) column.type = override.type;
-      
-      return column;
-    });
-    
-    const updatedConfig = {
-      ...formData,
-      columnDefinitions: [...columnsFromFields, ...manualColumns],
-      inferredFields: inferredFields.map(field => convertFieldNodeToInfo(field)),
-    };
-    
-    onSave(updatedConfig);
-  };
-  
-  const findFieldNode = (fields: FieldNode[], path: string): FieldNode | undefined => {
-    for (const field of fields) {
-      if (field.path === path) return field;
-      if (field.children) {
-        const found = findFieldNode(field.children, path);
-        if (found) return found;
-      }
-    }
-    return undefined;
-  };
-  
-  const mapFieldTypeToCellType = (type: string): ColumnDefinition['cellDataType'] => {
-    switch (type) {
-      case 'number': return 'number';
-      case 'boolean': return 'boolean';
-      case 'object': return 'object';
-      case 'date': return 'date';
-      default: return 'text';
     }
   };
   

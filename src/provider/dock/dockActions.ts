@@ -136,6 +136,18 @@ export function getDockCustomActions(): CustomActionsMap {
       }
     },
     
+    // Developer Tools - Service Manager
+    'show-service-manager': async (payload: CustomActionPayload): Promise<void> => {
+      if (payload.callerType === CustomActionCallerType.CustomDropdownItem) {
+        console.log('[DockActions] Opening Service Manager...');
+        try {
+          await WindowManager.showServiceManager();
+        } catch (error) {
+          console.error('[DockActions] Failed to open Service Manager:', error);
+        }
+      }
+    },
+    
     // Reload Dock
     'reload-dock': async (payload: CustomActionPayload): Promise<void> => {
       if (payload.callerType === CustomActionCallerType.CustomDropdownItem) {

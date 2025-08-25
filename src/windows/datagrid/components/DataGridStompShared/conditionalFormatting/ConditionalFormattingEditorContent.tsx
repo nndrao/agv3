@@ -139,9 +139,7 @@ export const ConditionalFormattingEditorContent: React.FC<ConditionalFormattingE
 
     try {
       // Save all rules to grid-level storage
-      rules.forEach(rule => {
-        GridConditionalFormattingStorage.saveRule(gridInstanceId, rule);
-      });
+      await GridConditionalFormattingStorage.saveRules(gridInstanceId, rules);
       
       setHasUnsavedChanges(false);
       console.log(`[ConditionalFormattingEditor] Saved ${rules.length} rules to grid storage`);

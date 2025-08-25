@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getViewUrl } from '@/utils/urlUtils';
+import { StorageClient } from '@/services/storage/storageClient';
+import { UnifiedConfig } from '@/services/storage/types';
 
 interface ViewInstance {
   id: string;
@@ -8,10 +10,18 @@ interface ViewInstance {
   createdAt: string;
 }
 
+interface ViewInstancesConfig {
+  instances: ViewInstance[];
+  lastUpdated: Date;
+}
+
 export class WindowManager {
   private static windows: Map<string, any> = new Map();
   private static viewInstances: Map<string, ViewInstance> = new Map();
   private static readonly VIEW_INSTANCES_KEY = 'agv3-view-instances';
+  private static readonly CONFIG_ID = 'agv3-view-instances-config';
+  private static isLoadingInstances = false;
+  private static hasLoadedInstances = false;
   
   static async openDatasourceConfig(): Promise<any> {
     const windowName = 'datasource-config-window';
@@ -128,9 +138,59 @@ export class WindowManager {
     return window;
   }
   
+  static async showServiceManager(): Promise<any> {
+    const windowName = 'service-manager-window';
+    
+    // Check if window already exists
+    try {
+      const existingWindow = await fin.Window.wrapSync({ uuid: fin.me.uuid, name: windowName });
+      if (existingWindow) {
+        await existingWindow.focus();
+        await existingWindow.bringToFront();
+        return existingWindow;
+      }
+    } catch (error) {
+      // Window doesn't exist, create it
+    }
+    
+    // Create a normal OpenFin window
+    const window = await fin.Window.create({
+      name: windowName,
+      url: getViewUrl('/service-manager'),
+      defaultWidth: 1000,
+      defaultHeight: 700,
+      defaultCentered: true,
+      autoShow: true,
+      frame: true,
+      contextMenu: true,
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      alwaysOnTop: false,
+      saveWindowState: false,
+      customData: {
+        windowType: 'service-manager'
+      }
+    });
+    
+    // Store window reference
+    this.windows.set(windowName, window);
+    
+    // Track window closure
+    window.on('closed', () => {
+      this.windows.delete(windowName);
+    });
+    
+    // Focus the window
+    await window.focus();
+    await window.bringToFront();
+    
+    return window;
+  }
+  
   static async openDataGridStomp(instanceName?: string): Promise<any> {
     // Load existing instances
-    this.loadViewInstances();
+    await this.loadViewInstances();
     
     let id: string;
     let viewName: string;
@@ -175,8 +235,10 @@ export class WindowManager {
     
     // Check if there's a saved title for this view
     let viewTitle = viewName;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const savedTitle = localStorage.getItem(`viewTitle_${id}`);
+    // View titles are now managed by useViewTitle hook which uses Configuration Service
+    // This is just a fallback for initial title
+    if (false) { // Disabled localStorage usage - view titles handled by useViewTitle hook
+      const savedTitle = null;
       if (savedTitle) {
         viewTitle = savedTitle;
       }
@@ -204,7 +266,7 @@ export class WindowManager {
   
   static async openDataGridStompShared(instanceName?: string): Promise<any> {
     // Load existing instances
-    this.loadViewInstances();
+    await this.loadViewInstances();
     
     let id: string;
     let viewName: string;
@@ -249,8 +311,10 @@ export class WindowManager {
     
     // Check if there's a saved title for this view
     let viewTitle = viewName;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const savedTitle = localStorage.getItem(`viewTitle_${id}`);
+    // View titles are now managed by useViewTitle hook which uses Configuration Service
+    // This is just a fallback for initial title
+    if (false) { // Disabled localStorage usage - view titles handled by useViewTitle hook
+      const savedTitle = null;
       if (savedTitle) {
         viewTitle = savedTitle;
       }
@@ -354,8 +418,8 @@ export class WindowManager {
     return Array.from(this.windows.keys());
   }
   
-  static getDataGridStompInstances(): ViewInstance[] {
-    this.loadViewInstances();
+  static async getDataGridStompInstances(): Promise<ViewInstance[]> {
+    await this.loadViewInstances();
     return Array.from(this.viewInstances.values())
       .filter(instance => instance.type === 'DataGridStomp');
   }
@@ -412,31 +476,122 @@ export class WindowManager {
     return window;
   }
   
-  static registerViewInstance(id: string, name: string, type: string): void {
-    this.loadViewInstances();
+  static async registerViewInstance(id: string, name: string, type: string): Promise<void> {
+    await this.loadViewInstances();
     
     // Check if instance already exists
     if (!this.viewInstances.has(id)) {
-      this.saveViewInstance(id, name, type);
+      await this.saveViewInstance(id, name, type);
     }
   }
   
-  private static loadViewInstances(): void {
+  private static async loadViewInstances(): Promise<void> {
+    if (this.isLoadingInstances || this.hasLoadedInstances) {
+      return;
+    }
+    
+    this.isLoadingInstances = true;
+    
     try {
-      const stored = localStorage.getItem(this.VIEW_INSTANCES_KEY);
-      if (stored) {
-        const instances = JSON.parse(stored) as ViewInstance[];
+      // Try to load from Configuration Service
+      const config = await StorageClient.get(this.CONFIG_ID);
+      
+      if (config && config.config) {
+        const instancesConfig = config.config as ViewInstancesConfig;
         this.viewInstances.clear();
-        instances.forEach(instance => {
+        instancesConfig.instances.forEach(instance => {
           this.viewInstances.set(instance.id, instance);
         });
+        console.log('[WindowManager] Loaded view instances from Configuration Service');
+      } else {
+        // Try localStorage as fallback for migration
+        const stored = localStorage.getItem(this.VIEW_INSTANCES_KEY);
+        if (stored) {
+          const instances = JSON.parse(stored) as ViewInstance[];
+          this.viewInstances.clear();
+          instances.forEach(instance => {
+            this.viewInstances.set(instance.id, instance);
+          });
+          
+          // Migrate to Configuration Service
+          console.log('[WindowManager] Migrating view instances from localStorage to Configuration Service');
+          await this.saveViewInstancesToConfig();
+          
+          // Remove from localStorage after migration
+          localStorage.removeItem(this.VIEW_INSTANCES_KEY);
+        }
       }
     } catch (error) {
       console.error('[WindowManager] Failed to load view instances:', error);
+      // Fallback to localStorage
+      try {
+        const stored = localStorage.getItem(this.VIEW_INSTANCES_KEY);
+        if (stored) {
+          const instances = JSON.parse(stored) as ViewInstance[];
+          this.viewInstances.clear();
+          instances.forEach(instance => {
+            this.viewInstances.set(instance.id, instance);
+          });
+        }
+      } catch (fallbackError) {
+        console.error('[WindowManager] Failed to load from localStorage fallback:', fallbackError);
+      }
+    } finally {
+      this.isLoadingInstances = false;
+      this.hasLoadedInstances = true;
     }
   }
   
-  private static saveViewInstance(id: string, name: string, type: string): void {
+  private static async saveViewInstancesToConfig(): Promise<void> {
+    try {
+      const instances = Array.from(this.viewInstances.values());
+      const instancesConfig: ViewInstancesConfig = {
+        instances,
+        lastUpdated: new Date()
+      };
+      
+      // Check if config exists
+      const existing = await StorageClient.get(this.CONFIG_ID);
+      
+      if (existing) {
+        // Update existing
+        await StorageClient.update(this.CONFIG_ID, {
+          config: instancesConfig,
+          lastUpdated: new Date(),
+          lastUpdatedBy: 'system'
+        });
+      } else {
+        // Create new
+        const unifiedConfig: UnifiedConfig = {
+          configId: this.CONFIG_ID,
+          appId: 'agv3',
+          userId: 'system',
+          componentType: 'system',
+          componentSubType: 'view-instances',
+          name: 'View Instances Registry',
+          description: 'Registry of all view instances',
+          config: instancesConfig,
+          settings: [],
+          activeSetting: 'default',
+          createdBy: 'system',
+          lastUpdatedBy: 'system',
+          creationTime: new Date(),
+          lastUpdated: new Date()
+        };
+        
+        await StorageClient.save(unifiedConfig);
+      }
+      
+      console.log('[WindowManager] Saved view instances to Configuration Service');
+    } catch (error) {
+      console.error('[WindowManager] Failed to save view instances to Configuration Service:', error);
+      // Fallback to localStorage
+      const instances = Array.from(this.viewInstances.values());
+      localStorage.setItem(this.VIEW_INSTANCES_KEY, JSON.stringify(instances));
+    }
+  }
+  
+  private static async saveViewInstance(id: string, name: string, type: string): Promise<void> {
     const instance: ViewInstance = {
       id,
       name,
@@ -446,11 +601,6 @@ export class WindowManager {
     
     this.viewInstances.set(id, instance);
     
-    try {
-      const instances = Array.from(this.viewInstances.values());
-      localStorage.setItem(this.VIEW_INSTANCES_KEY, JSON.stringify(instances));
-    } catch (error) {
-      console.error('[WindowManager] Failed to save view instances:', error);
-    }
+    await this.saveViewInstancesToConfig();
   }
 }

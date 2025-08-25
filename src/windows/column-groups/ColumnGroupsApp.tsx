@@ -3,6 +3,8 @@ import { ColumnGroupEditorContent } from '@/windows/datagrid/components/DataGrid
 import { initializeDialog, sendDialogResponse } from '@/services/openfin/OpenFinDialogService';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { withOpenFinServices } from '@/utils/withOpenFinServices';
+import { useOpenFinServices } from '@/services/openfin/useOpenFinServices';
 import '@/index.css';
 
 interface ColumnGroupsData {
@@ -19,14 +21,19 @@ interface ColumnGroupsData {
  * Standalone app that hosts the ColumnGroupEditorContent component
  * and communicates with parent window via OpenFin IAB
  */
-export const ColumnGroupsApp: React.FC = () => {
+const ColumnGroupsAppContent: React.FC = () => {
   const [initialData, setInitialData] = useState<ColumnGroupsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark');
+  
+  // Access centralized services
+  const { logger, events } = useOpenFinServices();
 
   useEffect(() => {
     const initialize = async () => {
       try {
+        logger.info('[ColumnGroupsApp] Starting initialization');
+        
         // Set document title
         document.title = 'Column Groups';
 
@@ -37,7 +44,10 @@ export const ColumnGroupsApp: React.FC = () => {
         // Initialize dialog communication
         await initializeDialog({
           onInitialize: (data: ColumnGroupsData) => {
-            console.log('[ColumnGroupsApp] Received initial data:', data);
+            logger.info('[ColumnGroupsApp] Received initial data', {
+              columns: data.columnDefs?.length || 0,
+              groups: data.currentGroups?.length || 0
+            });
             setInitialData(data);
             setIsLoading(false);
           },
@@ -45,11 +55,11 @@ export const ColumnGroupsApp: React.FC = () => {
         });
 
       } catch (error) {
-        console.error('[ColumnGroupsApp] Initialization error:', error);
+        logger.error('[ColumnGroupsApp] Initialization error:', error);
         
         // If running in development without OpenFin, use mock data
         if (typeof fin === 'undefined') {
-          console.warn('[ColumnGroupsApp] Running without OpenFin - using mock data');
+          logger.warn('[ColumnGroupsApp] Running without OpenFin - using mock data');
           setInitialData({
             columnDefs: [
               { field: 'id', headerName: 'ID' },
@@ -71,13 +81,23 @@ export const ColumnGroupsApp: React.FC = () => {
     };
 
     initialize();
-  }, []);
+  }, [logger]);
+
+  // Subscribe to theme changes
+  useEffect(() => {
+    const unsubscribe = events.on('theme:changed', (themeInfo) => {
+      logger.debug('[ColumnGroupsApp] Theme changed', { theme: themeInfo.mode });
+      setTheme(themeInfo.mode);
+    });
+    
+    return unsubscribe;
+  }, [events, logger]);
 
   const handleApply = async (activeGroupIds: string[], allGroups: any[]) => {
     try {
-      console.log('[ColumnGroupsApp] Applying column groups:', {
-        activeGroupIds,
-        allGroups: allGroups.length
+      logger.info('[ColumnGroupsApp] Applying column groups', {
+        activeGroupIds: activeGroupIds.length,
+        totalGroups: allGroups.length
       });
       
       // Send response to parent with new format
@@ -87,11 +107,11 @@ export const ColumnGroupsApp: React.FC = () => {
       });
       
     } catch (error) {
-      console.error('[ColumnGroupsApp] Failed to apply groups:', error);
+      logger.error('[ColumnGroupsApp] Failed to apply groups:', error);
       
       // If not in OpenFin, just log
       if (typeof fin === 'undefined') {
-        console.log('[ColumnGroupsApp] Would send:', { activeGroupIds, allGroups });
+        logger.debug('[ColumnGroupsApp] Would send:', { activeGroupIds, allGroups });
         window.close();
       }
     }
@@ -99,11 +119,12 @@ export const ColumnGroupsApp: React.FC = () => {
 
   const handleClose = async () => {
     try {
+      logger.info('[ColumnGroupsApp] Closing dialog');
       // Send cancel response to parent
       await sendDialogResponse('cancel');
       
     } catch (error) {
-      console.error('[ColumnGroupsApp] Failed to close:', error);
+      logger.error('[ColumnGroupsApp] Failed to close:', error);
       
       // If not in OpenFin, just close
       if (typeof fin === 'undefined') {
@@ -151,3 +172,10 @@ export const ColumnGroupsApp: React.FC = () => {
     </ThemeProvider>
   );
 };
+
+// Wrap with OpenFinServiceProvider using HOC
+export const ColumnGroupsApp = withOpenFinServices(ColumnGroupsAppContent, {
+  services: ['logging', 'events'],
+  logLevel: 'info',
+  subscribeToThemeEvents: true
+});

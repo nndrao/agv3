@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGV3 Service Manager</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1f23;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+    
+    h1 {
+      font-size: 18px;
+      margin: 0 0 20px 0;
+      color: #0A76D3;
+    }
+    
+    .status {
+      background: #2a2b30;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #3a3b40;
+    }
+    
+    .status-item:last-child {
+      border-bottom: none;
+    }
+    
+    .service-name {
+      font-weight: 500;
+    }
+    
+    .service-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+    }
+    
+    .status-indicator.initializing {
+      background: #ffa500;
+      animation: pulse 1.5s infinite;
+    }
+    
+    .status-indicator.connected {
+      background: #4caf50;
+    }
+    
+    .status-indicator.error {
+      background: #f44336;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .logs {
+      flex: 1;
+      background: #2a2b30;
+      border-radius: 8px;
+      padding: 16px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    
+    .log-entry {
+      margin-bottom: 4px;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .log-time {
+      color: #666;
+      white-space: nowrap;
+    }
+    
+    .log-level {
+      font-weight: bold;
+      width: 50px;
+    }
+    
+    .log-level.info { color: #4caf50; }
+    .log-level.warn { color: #ffa500; }
+    .log-level.error { color: #f44336; }
+    .log-level.debug { color: #9c27b0; }
+    
+    .log-message {
+      flex: 1;
+      word-break: break-word;
+    }
+    
+    .controls {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    
+    button {
+      background: #0A76D3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #0960b0;
+    }
+    
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 AGV3 Service Manager</h1>
+  
+  <div class="status">
+    <div class="status-item">
+      <span class="service-name">Configuration Service</span>
+      <div class="service-status">
+        <span class="status-indicator initializing" id="config-status"></span>
+        <span id="config-text">Initializing...</span>
+      </div>
+    </div>
+    <div class="status-item">
+      <span class="service-name">Logging Service</span>
+      <div class="service-status">
+        <span class="status-indicator initializing" id="logging-status"></span>
+        <span id="logging-text">Initializing...</span>
+      </div>
+    </div>
+    <div class="status-item">
+      <span class="service-name">App Variables</span>
+      <div class="service-status">
+        <span class="status-indicator initializing" id="appvars-status"></span>
+        <span id="appvars-text">Initializing...</span>
+      </div>
+    </div>
+    <div class="status-item">
+      <span class="service-name">Event Bus</span>
+      <div class="service-status">
+        <span class="status-indicator initializing" id="events-status"></span>
+        <span id="events-text">Initializing...</span>
+      </div>
+    </div>
+    <div class="status-item">
+      <span class="service-name">IAB Channels</span>
+      <div class="service-status">
+        <span class="status-indicator initializing" id="channels-status"></span>
+        <span id="channels-text">Initializing...</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="logs" id="logs">
+    <!-- Logs will be appended here -->
+  </div>
+  
+  <div class="controls">
+    <button onclick="clearLogs()">Clear Logs</button>
+    <button onclick="showStats()">Show Statistics</button>
+    <button onclick="testServices()">Test Services</button>
+  </div>
+  
+  <script>
+    // Simple logging to the UI
+    function addLog(level, message) {
+      const logsContainer = document.getElementById('logs');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      
+      const time = new Date().toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        fractionalSecondDigits: 3 
+      });
+      
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-level ${level}">${level.toUpperCase()}</span>
+        <span class="log-message">${message}</span>
+      `;
+      
+      logsContainer.appendChild(entry);
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+    
+    function updateServiceStatus(service, status, text) {
+      const statusEl = document.getElementById(`${service}-status`);
+      const textEl = document.getElementById(`${service}-text`);
+      
+      if (statusEl) {
+        statusEl.className = `status-indicator ${status}`;
+      }
+      
+      if (textEl) {
+        textEl.textContent = text;
+      }
+    }
+    
+    function clearLogs() {
+      document.getElementById('logs').innerHTML = '';
+      addLog('info', 'Logs cleared');
+    }
+    
+    function showStats() {
+      addLog('info', 'Fetching service statistics...');
+      // This will be implemented by ServiceManager
+      if (window.serviceManager) {
+        window.serviceManager.showStatistics();
+      }
+    }
+    
+    function testServices() {
+      addLog('info', 'Running service tests...');
+      // This will be implemented by ServiceManager
+      if (window.serviceManager) {
+        window.serviceManager.testServices();
+      }
+    }
+    
+    // Override console methods to show in UI
+    const originalConsole = {
+      log: console.log,
+      info: console.info,
+      warn: console.warn,
+      error: console.error,
+      debug: console.debug
+    };
+    
+    console.log = function(...args) {
+      originalConsole.log(...args);
+      addLog('info', args.join(' '));
+    };
+    
+    console.info = function(...args) {
+      originalConsole.info(...args);
+      addLog('info', args.join(' '));
+    };
+    
+    console.warn = function(...args) {
+      originalConsole.warn(...args);
+      addLog('warn', args.join(' '));
+    };
+    
+    console.error = function(...args) {
+      originalConsole.error(...args);
+      addLog('error', args.join(' '));
+    };
+    
+    console.debug = function(...args) {
+      originalConsole.debug(...args);
+      addLog('debug', args.join(' '));
+    };
+    
+    // Initial log
+    addLog('info', 'Service Manager UI initialized');
+    addLog('info', 'Waiting for services to start...');
+  </script>
+  
+  <!-- Load the Service Manager module -->
+  <script type="module" src="/src/windows/service-manager/index.ts"></script>
+</body>
+</html>

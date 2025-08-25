@@ -1,68 +1,53 @@
 import { ColumnGroupDefinition, ColumnGroupConfiguration } from './types';
+import { GridConfigurationStorage } from '../storage/GridConfigurationStorage';
 
 /**
  * Grid-level column group storage service
  * Manages column groups that are shared across all profiles for a specific grid instance
+ * Now uses the centralized Configuration Service via GridConfigurationStorage
  */
-export class GridColumnGroupStorage {
-  private static readonly STORAGE_KEY_PREFIX = 'grid_column_groups_';
-  
-  /**
-   * Get the storage key for a specific grid instance
-   */
-  private static getStorageKey(gridInstanceId: string): string {
-    return `${this.STORAGE_KEY_PREFIX}${gridInstanceId}`;
-  }
+export class GridColumnGroupStorage extends GridConfigurationStorage {
+  private static readonly CONFIG_TYPE = 'column_groups';
   
   /**
    * Load all column groups for a grid instance
    */
-  static loadColumnGroups(gridInstanceId: string): ColumnGroupDefinition[] {
-    try {
-      const storageKey = this.getStorageKey(gridInstanceId);
-      const stored = localStorage.getItem(storageKey);
-      
-      if (!stored) {
-        console.log(`[GridColumnGroupStorage] No column groups found for grid: ${gridInstanceId}`);
-        return [];
-      }
-      
-      const config: ColumnGroupConfiguration = JSON.parse(stored);
-      console.log(`[GridColumnGroupStorage] Loaded ${config.groups.length} column groups for grid: ${gridInstanceId}`);
-      
-      return config.groups || [];
-    } catch (error) {
-      console.error(`[GridColumnGroupStorage] Error loading column groups for grid ${gridInstanceId}:`, error);
-      return [];
-    }
+  static async loadColumnGroups(gridInstanceId: string): Promise<ColumnGroupDefinition[]> {
+    const config = await this.loadConfig<ColumnGroupConfiguration>(
+      gridInstanceId,
+      this.CONFIG_TYPE,
+      { version: '2.0.0', groups: [], timestamp: Date.now() }
+    );
+    
+    console.log(`[GridColumnGroupStorage] Loaded ${config.groups.length} column groups for grid: ${gridInstanceId}`);
+    return config.groups || [];
   }
   
   /**
    * Save all column groups for a grid instance
    */
-  static saveColumnGroups(gridInstanceId: string, groups: ColumnGroupDefinition[]): void {
-    try {
-      const config: ColumnGroupConfiguration = {
-        version: '2.0.0', // Updated version for new architecture
-        groups: groups,
-        timestamp: Date.now()
-      };
-      
-      const storageKey = this.getStorageKey(gridInstanceId);
-      localStorage.setItem(storageKey, JSON.stringify(config, null, 2));
-      
-      console.log(`[GridColumnGroupStorage] Saved ${groups.length} column groups for grid: ${gridInstanceId}`);
-    } catch (error) {
-      console.error(`[GridColumnGroupStorage] Error saving column groups for grid ${gridInstanceId}:`, error);
-      throw error;
-    }
+  static async saveColumnGroups(gridInstanceId: string, groups: ColumnGroupDefinition[]): Promise<void> {
+    const config: ColumnGroupConfiguration = {
+      version: '2.0.0',
+      groups: groups,
+      timestamp: Date.now()
+    };
+    
+    await this.saveConfig(
+      gridInstanceId,
+      this.CONFIG_TYPE,
+      config,
+      `Column Groups for ${gridInstanceId}`
+    );
+    
+    console.log(`[GridColumnGroupStorage] Saved ${groups.length} column groups for grid: ${gridInstanceId}`);
   }
   
   /**
    * Add or update a column group
    */
-  static saveColumnGroup(gridInstanceId: string, group: ColumnGroupDefinition): void {
-    const existingGroups = this.loadColumnGroups(gridInstanceId);
+  static async saveColumnGroup(gridInstanceId: string, group: ColumnGroupDefinition): Promise<void> {
+    const existingGroups = await this.loadColumnGroups(gridInstanceId);
     const existingIndex = existingGroups.findIndex(g => g.groupId === group.groupId);
     
     const updatedGroup = {
@@ -81,18 +66,18 @@ export class GridColumnGroupStorage {
       console.log(`[GridColumnGroupStorage] Added new column group: ${group.groupId}`);
     }
     
-    this.saveColumnGroups(gridInstanceId, existingGroups);
+    await this.saveColumnGroups(gridInstanceId, existingGroups);
   }
   
   /**
    * Delete a column group
    */
-  static deleteColumnGroup(gridInstanceId: string, groupId: string): void {
-    const existingGroups = this.loadColumnGroups(gridInstanceId);
+  static async deleteColumnGroup(gridInstanceId: string, groupId: string): Promise<void> {
+    const existingGroups = await this.loadColumnGroups(gridInstanceId);
     const filteredGroups = existingGroups.filter(g => g.groupId !== groupId);
     
     if (filteredGroups.length !== existingGroups.length) {
-      this.saveColumnGroups(gridInstanceId, filteredGroups);
+      await this.saveColumnGroups(gridInstanceId, filteredGroups);
       console.log(`[GridColumnGroupStorage] Deleted column group: ${groupId}`);
     } else {
       console.warn(`[GridColumnGroupStorage] Column group not found for deletion: ${groupId}`);
@@ -102,16 +87,16 @@ export class GridColumnGroupStorage {
   /**
    * Get a specific column group by ID
    */
-  static getColumnGroup(gridInstanceId: string, groupId: string): ColumnGroupDefinition | null {
-    const groups = this.loadColumnGroups(gridInstanceId);
+  static async getColumnGroup(gridInstanceId: string, groupId: string): Promise<ColumnGroupDefinition | null> {
+    const groups = await this.loadColumnGroups(gridInstanceId);
     return groups.find(g => g.groupId === groupId) || null;
   }
   
   /**
    * Get multiple column groups by IDs
    */
-  static getColumnGroups(gridInstanceId: string, groupIds: string[]): ColumnGroupDefinition[] {
-    const allGroups = this.loadColumnGroups(gridInstanceId);
+  static async getColumnGroups(gridInstanceId: string, groupIds: string[]): Promise<ColumnGroupDefinition[]> {
+    const allGroups = await this.loadColumnGroups(gridInstanceId);
     return groupIds
       .map(id => allGroups.find(g => g.groupId === id))
       .filter((group): group is ColumnGroupDefinition => group !== undefined);
@@ -120,47 +105,47 @@ export class GridColumnGroupStorage {
   /**
    * Check if a column group exists
    */
-  static hasColumnGroup(gridInstanceId: string, groupId: string): boolean {
-    return this.getColumnGroup(gridInstanceId, groupId) !== null;
+  static async hasColumnGroup(gridInstanceId: string, groupId: string): Promise<boolean> {
+    const group = await this.getColumnGroup(gridInstanceId, groupId);
+    return group !== null;
   }
   
   /**
    * Get all column group IDs
    */
-  static getAllGroupIds(gridInstanceId: string): string[] {
-    const groups = this.loadColumnGroups(gridInstanceId);
+  static async getAllGroupIds(gridInstanceId: string): Promise<string[]> {
+    const groups = await this.loadColumnGroups(gridInstanceId);
     return groups.map(g => g.groupId);
   }
   
   /**
    * Clear all column groups for a grid instance
    */
-  static clearColumnGroups(gridInstanceId: string): void {
-    const storageKey = this.getStorageKey(gridInstanceId);
-    localStorage.removeItem(storageKey);
+  static async clearColumnGroups(gridInstanceId: string): Promise<void> {
+    await this.deleteConfig(gridInstanceId, this.CONFIG_TYPE);
     console.log(`[GridColumnGroupStorage] Cleared all column groups for grid: ${gridInstanceId}`);
   }
   
   /**
    * Migrate old profile-based column groups to grid-level storage
    */
-  static migrateFromProfileGroups(
+  static async migrateFromProfileGroups(
     gridInstanceId: string, 
     profileGroups: any[]
-  ): string[] {
+  ): Promise<string[]> {
     if (!profileGroups || profileGroups.length === 0) {
       return [];
     }
     
     console.log(`[GridColumnGroupStorage] Migrating ${profileGroups.length} column groups from profile to grid level`);
     
-    const existingGroups = this.loadColumnGroups(gridInstanceId);
+    const existingGroups = await this.loadColumnGroups(gridInstanceId);
     const migratedGroupIds: string[] = [];
     
     profileGroups.forEach(profileGroup => {
       // Convert old format to new format
       const migratedGroup: ColumnGroupDefinition = {
-        groupId: profileGroup.groupId || `migrated_${Date.now()}_${Math.random()}`,
+        groupId: profileGroup.groupId || `migrated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         headerName: profileGroup.headerName || 'Migrated Group',
         children: profileGroup.children || [],
         openByDefault: profileGroup.openByDefault ?? true,
@@ -182,7 +167,7 @@ export class GridColumnGroupStorage {
     });
     
     if (migratedGroupIds.length > 0) {
-      this.saveColumnGroups(gridInstanceId, existingGroups);
+      await this.saveColumnGroups(gridInstanceId, existingGroups);
       console.log(`[GridColumnGroupStorage] Migration complete. Migrated group IDs:`, migratedGroupIds);
     }
     

@@ -13,6 +13,7 @@ import { ConditionalFormattingApp } from './windows/conditional-formatting/Condi
 import { CalculatedColumnsApp } from './windows/calculated-columns/CalculatedColumnsApp';
 import { GridOptionsApp } from './windows/grid-options/GridOptionsApp';
 import { ColumnGroupsApp } from './windows/column-groups/ColumnGroupsApp';
+import { ServiceManagerApp } from './windows/service-manager/ServiceManagerApp';
 
 // Register AG-Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -43,6 +44,7 @@ function App() {
         <Route path="/datasource-config" element={<DatasourceConfigApp />} />
         <Route path="/provider-status" element={<ProviderStatusApp />} />
         <Route path="/rename-dialog" element={<RenameDialogApp />} />
+        <Route path="/service-manager" element={<ServiceManagerApp />} />
         
         {/* Expression Editor Demo */}
         <Route path="/expression-editor" element={<DialogDemo />} />

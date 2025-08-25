@@ -1,4 +1,5 @@
 import { CalculatedColumnDefinition } from '../types';
+import { GridConfigurationStorage } from '../storage/GridConfigurationStorage';
 
 /**
  * Configuration structure for calculated columns storage
@@ -12,66 +13,50 @@ interface CalculatedColumnsConfiguration {
 /**
  * Grid-level calculated columns storage service
  * Manages calculated column definitions that are shared across all profiles for a specific grid instance
+ * Now uses the centralized Configuration Service via GridConfigurationStorage
  */
-export class GridCalculatedColumnsStorage {
-  private static readonly STORAGE_KEY_PREFIX = 'grid_calculated_columns_';
-  
-  /**
-   * Get the storage key for a specific grid instance
-   */
-  private static getStorageKey(gridInstanceId: string): string {
-    return `${this.STORAGE_KEY_PREFIX}${gridInstanceId}`;
-  }
+export class GridCalculatedColumnsStorage extends GridConfigurationStorage {
+  private static readonly CONFIG_TYPE = 'calculated_columns';
   
   /**
    * Load all calculated columns for a grid instance
    */
-  static loadColumns(gridInstanceId: string): CalculatedColumnDefinition[] {
-    try {
-      const storageKey = this.getStorageKey(gridInstanceId);
-      const stored = localStorage.getItem(storageKey);
-      
-      if (!stored) {
-        console.log(`[GridCalculatedColumnsStorage] No columns found for grid: ${gridInstanceId}`);
-        return [];
-      }
-      
-      const config: CalculatedColumnsConfiguration = JSON.parse(stored);
-      console.log(`[GridCalculatedColumnsStorage] Loaded ${config.columns.length} columns for grid: ${gridInstanceId}`);
-      
-      return config.columns || [];
-    } catch (error) {
-      console.error(`[GridCalculatedColumnsStorage] Error loading columns for grid ${gridInstanceId}:`, error);
-      return [];
-    }
+  static async loadColumns(gridInstanceId: string): Promise<CalculatedColumnDefinition[]> {
+    const config = await this.loadConfig<CalculatedColumnsConfiguration>(
+      gridInstanceId,
+      this.CONFIG_TYPE,
+      { version: '2.0.0', columns: [], timestamp: Date.now() }
+    );
+    
+    console.log(`[GridCalculatedColumnsStorage] Loaded ${config.columns.length} columns for grid: ${gridInstanceId}`);
+    return config.columns || [];
   }
   
   /**
    * Save all calculated columns for a grid instance
    */
-  static saveColumns(gridInstanceId: string, columns: CalculatedColumnDefinition[]): void {
-    try {
-      const config: CalculatedColumnsConfiguration = {
-        version: '2.0.0', // Updated version for new architecture
-        columns: columns,
-        timestamp: Date.now()
-      };
-      
-      const storageKey = this.getStorageKey(gridInstanceId);
-      localStorage.setItem(storageKey, JSON.stringify(config, null, 2));
-      
-      console.log(`[GridCalculatedColumnsStorage] Saved ${columns.length} columns for grid: ${gridInstanceId}`);
-    } catch (error) {
-      console.error(`[GridCalculatedColumnsStorage] Error saving columns for grid ${gridInstanceId}:`, error);
-      throw error;
-    }
+  static async saveColumns(gridInstanceId: string, columns: CalculatedColumnDefinition[]): Promise<void> {
+    const config: CalculatedColumnsConfiguration = {
+      version: '2.0.0',
+      columns: columns,
+      timestamp: Date.now()
+    };
+    
+    await this.saveConfig(
+      gridInstanceId,
+      this.CONFIG_TYPE,
+      config,
+      `Calculated Columns for ${gridInstanceId}`
+    );
+    
+    console.log(`[GridCalculatedColumnsStorage] Saved ${columns.length} columns for grid: ${gridInstanceId}`);
   }
   
   /**
    * Add or update a calculated column
    */
-  static saveColumn(gridInstanceId: string, column: CalculatedColumnDefinition): void {
-    const existingColumns = this.loadColumns(gridInstanceId);
+  static async saveColumn(gridInstanceId: string, column: CalculatedColumnDefinition): Promise<void> {
+    const existingColumns = await this.loadColumns(gridInstanceId);
     const existingIndex = existingColumns.findIndex(c => c.id === column.id);
     
     const updatedColumn = {
@@ -90,18 +75,18 @@ export class GridCalculatedColumnsStorage {
       console.log(`[GridCalculatedColumnsStorage] Added new column: ${column.id}`);
     }
     
-    this.saveColumns(gridInstanceId, existingColumns);
+    await this.saveColumns(gridInstanceId, existingColumns);
   }
   
   /**
    * Delete a calculated column
    */
-  static deleteColumn(gridInstanceId: string, columnId: string): void {
-    const existingColumns = this.loadColumns(gridInstanceId);
+  static async deleteColumn(gridInstanceId: string, columnId: string): Promise<void> {
+    const existingColumns = await this.loadColumns(gridInstanceId);
     const filteredColumns = existingColumns.filter(c => c.id !== columnId);
     
     if (filteredColumns.length !== existingColumns.length) {
-      this.saveColumns(gridInstanceId, filteredColumns);
+      await this.saveColumns(gridInstanceId, filteredColumns);
       console.log(`[GridCalculatedColumnsStorage] Deleted column: ${columnId}`);
     } else {
       console.warn(`[GridCalculatedColumnsStorage] Column not found for deletion: ${columnId}`);
@@ -111,16 +96,16 @@ export class GridCalculatedColumnsStorage {
   /**
    * Get a specific column by ID
    */
-  static getColumn(gridInstanceId: string, columnId: string): CalculatedColumnDefinition | null {
-    const columns = this.loadColumns(gridInstanceId);
+  static async getColumn(gridInstanceId: string, columnId: string): Promise<CalculatedColumnDefinition | null> {
+    const columns = await this.loadColumns(gridInstanceId);
     return columns.find(c => c.id === columnId) || null;
   }
   
   /**
    * Get multiple columns by IDs
    */
-  static getColumns(gridInstanceId: string, columnIds: string[]): CalculatedColumnDefinition[] {
-    const allColumns = this.loadColumns(gridInstanceId);
+  static async getColumns(gridInstanceId: string, columnIds: string[]): Promise<CalculatedColumnDefinition[]> {
+    const allColumns = await this.loadColumns(gridInstanceId);
     return columnIds
       .map(id => allColumns.find(c => c.id === id))
       .filter((column): column is CalculatedColumnDefinition => column !== undefined);
@@ -129,41 +114,41 @@ export class GridCalculatedColumnsStorage {
   /**
    * Check if a column exists
    */
-  static hasColumn(gridInstanceId: string, columnId: string): boolean {
-    return this.getColumn(gridInstanceId, columnId) !== null;
+  static async hasColumn(gridInstanceId: string, columnId: string): Promise<boolean> {
+    const column = await this.getColumn(gridInstanceId, columnId);
+    return column !== null;
   }
   
   /**
    * Get all column IDs
    */
-  static getAllColumnIds(gridInstanceId: string): string[] {
-    const columns = this.loadColumns(gridInstanceId);
+  static async getAllColumnIds(gridInstanceId: string): Promise<string[]> {
+    const columns = await this.loadColumns(gridInstanceId);
     return columns.map(c => c.id);
   }
   
   /**
    * Clear all columns for a grid instance
    */
-  static clearColumns(gridInstanceId: string): void {
-    const storageKey = this.getStorageKey(gridInstanceId);
-    localStorage.removeItem(storageKey);
+  static async clearColumns(gridInstanceId: string): Promise<void> {
+    await this.deleteConfig(gridInstanceId, this.CONFIG_TYPE);
     console.log(`[GridCalculatedColumnsStorage] Cleared all columns for grid: ${gridInstanceId}`);
   }
   
   /**
    * Migrate old profile-based columns to grid-level storage
    */
-  static migrateFromProfileColumns(
+  static async migrateFromProfileColumns(
     gridInstanceId: string, 
     profileColumns: CalculatedColumnDefinition[]
-  ): string[] {
+  ): Promise<string[]> {
     if (!profileColumns || profileColumns.length === 0) {
       return [];
     }
     
     console.log(`[GridCalculatedColumnsStorage] Migrating ${profileColumns.length} columns from profile to grid level`);
     
-    const existingColumns = this.loadColumns(gridInstanceId);
+    const existingColumns = await this.loadColumns(gridInstanceId);
     const migratedColumnIds: string[] = [];
     
     profileColumns.forEach(profileColumn => {
@@ -186,7 +171,7 @@ export class GridCalculatedColumnsStorage {
     });
     
     if (migratedColumnIds.length > 0) {
-      this.saveColumns(gridInstanceId, existingColumns);
+      await this.saveColumns(gridInstanceId, existingColumns);
       console.log(`[GridCalculatedColumnsStorage] Migration complete. Migrated column IDs:`, migratedColumnIds);
     }
     
