@@ -1,7 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getViewUrl } from '@/utils/urlUtils';
-import { StorageClient } from '@/services/storage/storageClient';
+import { ConfigStorage } from '@/services/storage/storageClient';
+import { CentralizedStorageClient } from '@/services/configuration/ConfigurationClientAdapter';
 import { UnifiedConfig } from '@/services/storage/types';
+
+// Use centralized storage if available, fallback to local storage
+const ConfigStorage = CentralizedStorageClient || StorageClient;
 
 interface ViewInstance {
   id: string;
@@ -494,7 +498,7 @@ export class WindowManager {
     
     try {
       // Try to load from Configuration Service
-      const config = await StorageClient.get(this.CONFIG_ID);
+      const config = await ConfigStorage.get(this.CONFIG_ID);
       
       if (config && config.config) {
         const instancesConfig = config.config as ViewInstancesConfig;
@@ -503,39 +507,10 @@ export class WindowManager {
           this.viewInstances.set(instance.id, instance);
         });
         console.log('[WindowManager] Loaded view instances from Configuration Service');
-      } else {
-        // Try localStorage as fallback for migration
-        const stored = localStorage.getItem(this.VIEW_INSTANCES_KEY);
-        if (stored) {
-          const instances = JSON.parse(stored) as ViewInstance[];
-          this.viewInstances.clear();
-          instances.forEach(instance => {
-            this.viewInstances.set(instance.id, instance);
-          });
-          
-          // Migrate to Configuration Service
-          console.log('[WindowManager] Migrating view instances from localStorage to Configuration Service');
-          await this.saveViewInstancesToConfig();
-          
-          // Remove from localStorage after migration
-          localStorage.removeItem(this.VIEW_INSTANCES_KEY);
-        }
       }
     } catch (error) {
       console.error('[WindowManager] Failed to load view instances:', error);
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem(this.VIEW_INSTANCES_KEY);
-        if (stored) {
-          const instances = JSON.parse(stored) as ViewInstance[];
-          this.viewInstances.clear();
-          instances.forEach(instance => {
-            this.viewInstances.set(instance.id, instance);
-          });
-        }
-      } catch (fallbackError) {
-        console.error('[WindowManager] Failed to load from localStorage fallback:', fallbackError);
-      }
+      // Use empty instances on error
     } finally {
       this.isLoadingInstances = false;
       this.hasLoadedInstances = true;
@@ -551,11 +526,11 @@ export class WindowManager {
       };
       
       // Check if config exists
-      const existing = await StorageClient.get(this.CONFIG_ID);
+      const existing = await ConfigStorage.get(this.CONFIG_ID);
       
       if (existing) {
         // Update existing
-        await StorageClient.update(this.CONFIG_ID, {
+        await ConfigStorage.update(this.CONFIG_ID, {
           config: instancesConfig,
           lastUpdated: new Date(),
           lastUpdatedBy: 'system'
@@ -579,15 +554,13 @@ export class WindowManager {
           lastUpdated: new Date()
         };
         
-        await StorageClient.save(unifiedConfig);
+        await ConfigStorage.save(unifiedConfig);
       }
       
       console.log('[WindowManager] Saved view instances to Configuration Service');
     } catch (error) {
       console.error('[WindowManager] Failed to save view instances to Configuration Service:', error);
-      // Fallback to localStorage
-      const instances = Array.from(this.viewInstances.values());
-      localStorage.setItem(this.VIEW_INSTANCES_KEY, JSON.stringify(instances));
+      // No fallback - handle error appropriately
     }
   }
   

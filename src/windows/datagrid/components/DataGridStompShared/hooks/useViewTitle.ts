@@ -68,8 +68,7 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
       console.log('[useViewTitle] Saved title to Configuration Service:', title);
     } catch (error) {
       console.error('[useViewTitle] Failed to save title to Configuration Service:', error);
-      // Fallback to localStorage
-      localStorage.setItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId), title);
+      // No fallback - handle error appropriately
     }
     
     // Try to update view options (may not work in all cases)
@@ -123,24 +122,10 @@ export function useViewTitle(viewInstanceId: string): UseViewTitleResult {
         }
         
         console.log('[useViewTitle] Restored title from Configuration Service:', savedTitle);
-      } else {
-        // Try localStorage as fallback for migration
-        const legacyTitle = localStorage.getItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId));
-        if (legacyTitle) {
-          console.log('[useViewTitle] Migrating title from localStorage to Configuration Service');
-          await saveViewTitle(legacyTitle);
-          // Remove from localStorage after migration
-          localStorage.removeItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId));
-        }
       }
     } catch (error) {
       console.error('[useViewTitle] Failed to restore title from Configuration Service:', error);
-      // Fallback to localStorage
-      const savedTitle = localStorage.getItem(STORAGE_KEYS.VIEW_TITLE(viewInstanceId));
-      if (savedTitle) {
-        document.title = savedTitle;
-        setCurrentViewTitle(savedTitle);
-      }
+      // Use default title on error
     }
   }, [viewInstanceId, saveViewTitle]);
   

@@ -114,7 +114,13 @@ class OpenFinDialogService {
         }
       };
 
-      console.log(`[DialogService] Opening dialog: ${config.name}`, finalOptions);
+      console.log(`[DialogService] Opening dialog: ${config.name}`, {
+        url: finalOptions.url,
+        hasData: !!config.data,
+        dataKeys: config.data ? Object.keys(config.data) : [],
+        currentRulesCount: config.data?.currentRules?.length || 0,
+        activeRuleIdsCount: config.data?.activeRuleIds?.length || 0
+      });
 
       // Create the window
       const dialogWindow = await fin.Window.create(finalOptions);

@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useProfileManagement } from "@/hooks/useProfileManagement";
-import { ProfileManagementDialog } from "@/components/ProfileManagementDialog";
-import { SaveProfileDialog } from "@/components/SaveProfileDialog";
-import { RenameViewDialog } from "@/components/RenameViewDialog";
-import { ExpressionEditorDialogControlled } from '@/components/expression-editor/ExpressionEditorDialogControlled';
+// Dialog imports moved to DialogsContainer component
 import { WindowManager } from "@/services/window/windowManager";
 import { debugStorage } from "@/utils/storageDebug";
 import { getViewInstanceId } from "@/utils/viewUtils";
@@ -33,6 +30,7 @@ import { useProfileApplication } from './hooks/useProfileApplication';
 import { Toolbar } from './components/Toolbar';
 import { BusyIndicator } from './components/BusyIndicator';
 import { DataGrid } from './components/DataGrid';
+import { DialogsContainer } from './components/DialogsContainer';
 
 
 import { DataGridStompSharedProfile, CalculatedColumnDefinition } from './types';
@@ -135,7 +133,9 @@ const DataGridStompSharedComponent = () => {
   const gridInstanceId = useMemo(() => `grid-${viewInstanceId}`, [viewInstanceId]);
   
   useEffect(() => {
-    initializeConditionalFormatting(gridInstanceId, conditionalFormattingRules);
+    // Ensure conditionalFormattingRules is always an array
+    const rules = Array.isArray(conditionalFormattingRules) ? conditionalFormattingRules : [];
+    initializeConditionalFormatting(gridInstanceId, rules);
     
     return () => {
       cleanupConditionalFormatting(gridInstanceId);
@@ -166,6 +166,7 @@ const DataGridStompSharedComponent = () => {
       if (e.key === 'conditionalFormattingRules' && e.newValue) {
         try {
           const newRules = JSON.parse(e.newValue);
+          console.log('[🔴 CF-SET-001] Setting rules from storage event:', { count: newRules.length });
           setConditionalFormattingRules(newRules);
           initializeConditionalFormatting(gridInstanceId, newRules);
         } catch (error) {
@@ -180,7 +181,9 @@ const DataGridStompSharedComponent = () => {
 
   const [tempActiveProfileData, setTempActiveProfileData] = useState<DataGridStompSharedProfile | null>(null);
   const rowClassRules = useMemo(() => {
-    return getRowClassRules(conditionalFormattingRules, gridInstanceId);
+    // Ensure conditionalFormattingRules is always an array
+    const rules = Array.isArray(conditionalFormattingRules) ? conditionalFormattingRules : [];
+    return getRowClassRules(rules, gridInstanceId);
   }, [conditionalFormattingRules, gridInstanceId]);
   
   const { currentViewTitle, saveViewTitle } = useViewTitle(viewInstanceId);
@@ -226,14 +229,45 @@ const DataGridStompSharedComponent = () => {
     setTempActiveProfileData(activeProfileData);
   }, [activeProfileData]);
 
+  // Track if conditional formatting rules have been loaded for the current profile
+  const [conditionalRulesLoaded, setConditionalRulesLoaded] = useState(false);
+  
   // Update conditional formatting rules when profile changes
   useEffect(() => {
-    if (activeProfileData?.conditionalFormattingRules) {
-      // Load active rules from grid-level storage based on profile IDs
-      const activeRules = GridConditionalFormattingStorage.getRules(gridInstanceId, activeProfileData.conditionalFormattingRules);
-      setConditionalFormattingRules(activeRules);
-      console.log('[DataGridStompShared] Updated conditional formatting rules from profile:', activeRules.length);
-    }
+    console.log('[🔴 CF-LOAD-001] Conditional formatting effect triggered:', {
+      hasActiveProfileData: !!activeProfileData,
+      hasConditionalFormattingRules: !!activeProfileData?.conditionalFormattingRules,
+      rulesCount: activeProfileData?.conditionalFormattingRules?.length || 0,
+      ruleIds: activeProfileData?.conditionalFormattingRules
+    });
+    
+    const loadRules = async () => {
+      setConditionalRulesLoaded(false);
+      
+      if (activeProfileData?.conditionalFormattingRules && activeProfileData.conditionalFormattingRules.length > 0) {
+        // Load active rules from grid-level storage based on profile IDs
+        const activeRules = await GridConditionalFormattingStorage.getRules(gridInstanceId, activeProfileData.conditionalFormattingRules);
+        console.log('[🔴 CF-SET-002] Setting rules from profile load:', { 
+          count: activeRules.length,
+          profileRuleIds: activeProfileData.conditionalFormattingRules,
+          actualRules: activeRules.map(r => ({ id: r.id, name: r.name }))
+        });
+        setConditionalFormattingRules(activeRules);
+        console.log('[DataGridStompShared] Updated conditional formatting rules from profile:', activeRules.length);
+        
+        // Re-initialize conditional formatting with the loaded rules
+        initializeConditionalFormatting(gridInstanceId, activeRules);
+      } else {
+        // No conditional formatting rules in profile, clear them
+        console.log('[🔴 CF-SET-003] Clearing rules (no rules in profile)');
+        setConditionalFormattingRules([]);
+        initializeConditionalFormatting(gridInstanceId, []);
+        console.log('[DataGridStompShared] Cleared conditional formatting rules (no rules in profile)');
+      }
+      
+      setConditionalRulesLoaded(true);
+    };
+    loadRules();
   }, [activeProfileData?.conditionalFormattingRules, gridInstanceId]);
 
   // Profile-specific migration effect - runs when activeProfileData is available
@@ -324,6 +358,14 @@ const DataGridStompSharedComponent = () => {
     conditionalFormattingRules,
     gridInstanceId
   });
+  
+  // Reapply profile when conditional formatting rules are loaded
+  useEffect(() => {
+    if (conditionalRulesLoaded && gridApiRef.current && activeProfileData) {
+      console.log('[DataGridStompShared] Conditional formatting rules loaded, reapplying profile');
+      applyProfile(activeProfileData);
+    }
+  }, [conditionalRulesLoaded, activeProfileData, applyProfile]);
   
   // Simple ref-based profile change tracking
   const pendingProfileRef = useRef<DataGridStompSharedProfile | null>(null);
@@ -499,13 +541,13 @@ const DataGridStompSharedComponent = () => {
 
     try {
       // Save all rules to grid-level storage
-      allRules.forEach(rule => {
-        GridConditionalFormattingStorage.saveRule(gridInstanceId, rule);
-      });
+      await Promise.all(allRules.map(rule => 
+        GridConditionalFormattingStorage.saveRule(gridInstanceId, rule)
+      ));
       console.log('[DataGridStompShared] All rules saved to grid-level storage');
 
       // Get active rules for application
-      const activeRules = GridConditionalFormattingStorage.getRules(gridInstanceId, activeRuleIds);
+      const activeRules = await GridConditionalFormattingStorage.getRules(gridInstanceId, activeRuleIds);
       console.log('[DataGridStompShared] Retrieved active rules:', activeRules.length);
 
       // Update the profile with the active rule IDs
@@ -519,6 +561,11 @@ const DataGridStompSharedComponent = () => {
       console.log('[DataGridStompShared] Profile updated with conditional formatting rule IDs');
 
       // Update local state for immediate application
+      console.log('[🔴 CF-SET-004] Setting rules after saving from dialog:', { 
+        count: activeRules.length,
+        activeRuleIds: activeRuleIds,
+        actualRules: activeRules.map(r => ({ id: r.id, name: r.name }))
+      });
       setConditionalFormattingRules(activeRules);
       
       // Re-initialize formatting with active rules
@@ -895,55 +942,30 @@ const DataGridStompSharedComponent = () => {
         />
       </div>
       
-      {/* Dialogs */}
-      <ProfileManagementDialog
-        open={showProfileDialog}
-        onOpenChange={setShowProfileDialog}
+      {/* All Dialogs - extracted to DialogsContainer */}
+      <DialogsContainer
+        showProfileDialog={showProfileDialog}
+        setShowProfileDialog={setShowProfileDialog}
+        showSaveDialog={showSaveDialog}
+        setShowSaveDialog={setShowSaveDialog}
         profiles={profiles}
-        activeProfileId={activeProfile?.versionId}
-        onSave={async (profile: any, name: string) => {
-          const fullProfile: DataGridStompSharedProfile = {
-            ...activeProfileData!,
-            ...profile,
-            name
-          };
-          await saveProfile(fullProfile, false, name);
-        }}
-        onDelete={deleteProfile}
-        onRename={handleProfileRename}
-        onSetDefault={handleSetDefault}
-        onImport={handleProfileImport}
-        onExport={handleProfileExport}
-      />
-      
-      <SaveProfileDialog
-        open={showSaveDialog}
-        onOpenChange={setShowSaveDialog}
-        onSave={handleSaveNewProfile}
-        title='Create New Profile'
-        initialName=''
-      />
-      
-      <RenameViewDialog
-        open={showRenameDialog}
-        onOpenChange={(open) => {
-          setShowRenameDialog(open);
-          // If closing and called from context menu, resolve with cancel
-          if (!open && (window as any).__renameDialogResolve) {
-            (window as any).__renameDialogResolve({ success: false });
-            delete (window as any).__renameDialogResolve;
-          }
-        }}
-        currentTitle={currentViewTitle}
-        onRename={handleRenameView}
-      />
-      
-      <ExpressionEditorDialogControlled 
-        open={showExpressionEditor}
-        onOpenChange={setShowExpressionEditor}
-        mode="conditional"
-        availableColumns={baseColumnDefs || []}
-        onSave={handleExpressionSave}
+        activeProfile={activeProfile}
+        activeProfileData={activeProfileData}
+        saveProfile={saveProfile}
+        deleteProfile={deleteProfile}
+        handleProfileRename={handleProfileRename}
+        handleSetDefault={handleSetDefault}
+        handleProfileImport={handleProfileImport}
+        handleProfileExport={handleProfileExport}
+        handleSaveNewProfile={handleSaveNewProfile}
+        showRenameDialog={showRenameDialog}
+        setShowRenameDialog={setShowRenameDialog}
+        currentViewTitle={currentViewTitle}
+        handleRenameView={handleRenameView}
+        showExpressionEditor={showExpressionEditor}
+        setShowExpressionEditor={setShowExpressionEditor}
+        baseColumnDefs={baseColumnDefs}
+        handleExpressionSave={handleExpressionSave}
       />
     </div>
   );

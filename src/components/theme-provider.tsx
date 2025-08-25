@@ -79,8 +79,8 @@ export function ThemeProvider({
       console.log('[ThemeProvider] Saved theme to Configuration Service:', newTheme);
     } catch (error) {
       console.error('[ThemeProvider] Failed to save theme to Configuration Service:', error);
-      // Fallback to localStorage
-      localStorage.setItem(storageKey, newTheme);
+      // No fallback - handle error appropriately
+      throw error;
     }
   };
 
@@ -95,25 +95,10 @@ export function ThemeProvider({
           const themeConfig = config.config as ThemeConfig;
           setThemeState(themeConfig.theme);
           console.log('[ThemeProvider] Loaded theme from Configuration Service:', themeConfig.theme);
-        } else {
-          // Try localStorage as fallback for migration
-          const legacyTheme = localStorage.getItem(storageKey) as Theme;
-          if (legacyTheme) {
-            console.log('[ThemeProvider] Migrating theme from localStorage to Configuration Service');
-            setThemeState(legacyTheme);
-            // Save to Configuration Service
-            await saveThemeToConfig(legacyTheme);
-            // Remove from localStorage after migration
-            localStorage.removeItem(storageKey);
-          }
         }
       } catch (error) {
         console.error('[ThemeProvider] Failed to load theme from Configuration Service:', error);
-        // Fallback to localStorage
-        const savedTheme = localStorage.getItem(storageKey) as Theme;
-        if (savedTheme) {
-          setThemeState(savedTheme);
-        }
+        // Use default theme on error
       } finally {
         setIsLoading(false);
       }

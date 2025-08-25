@@ -149,9 +149,13 @@ export const OpenFinServiceProvider: React.FC<OpenFinServiceProviderProps> = ({
           // Connect in background without blocking initialization
           configClient.connect().then(() => {
             updateServiceStatus('configuration', 'connected');
-            logger.info('Configuration service connected');
+            if (servicesRef.current.logger) {
+              servicesRef.current.logger.info('Configuration service connected');
+            }
           }).catch((error) => {
-            logger.warn('Configuration service connection failed (will retry in background):', error);
+            if (servicesRef.current.logger) {
+              servicesRef.current.logger.warn('Configuration service connection failed (will retry in background):', error);
+            }
             updateServiceStatus('configuration', 'error');
           });
           

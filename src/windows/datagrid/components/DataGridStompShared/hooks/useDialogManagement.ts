@@ -133,8 +133,18 @@ export function useDialogManagement({
   // Open Conditional Formatting dialog
   const handleOpenConditionalFormatting = useCallback(async () => {
     // Load all available rules from grid-level storage
-    const allRules = GridConditionalFormattingStorage.loadRules(gridInstanceId);
-    const activeRuleIds = conditionalFormattingRules.map(rule => rule.id);
+    const allRules = await GridConditionalFormattingStorage.loadRules(gridInstanceId);
+    
+    // Get active rule IDs - conditionalFormattingRules contains the actual rules that are active
+    const activeRuleIds = Array.isArray(conditionalFormattingRules) 
+      ? conditionalFormattingRules.map(rule => rule.id)
+      : [];
+    
+    console.log('[useDialogManagement] Opening conditional formatting dialog with:', {
+      allRulesCount: allRules.length,
+      activeRuleIdsCount: activeRuleIds.length,
+      gridInstanceId
+    });
     
     await dialogService.openDialog({
       name: `conditional-formatting-${viewInstanceId}`,

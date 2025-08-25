@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { themeQuartz, ColDef, GridApi, GridReadyEvent } from "ag-grid-community";
-// import { AllEnterpriseModule } from "ag-grid-enterprise";
 import { AgGridReact } from "ag-grid-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +11,6 @@ import { StorageClient } from "../../../services/storage/storageClient";
 import { StompClient, StompClientConfig } from "../../../services/stomp/StompClient";
 import { useToast } from "@/hooks/use-toast";
 import { useProfileManagement, BaseProfile } from "@/hooks/useProfileManagement";
-// import { ProfileSelectorSimple } from "@/components/ProfileSelectorSimple";
 import { ProfileManagementDialog } from "@/components/ProfileManagementDialog";
 import { ConfigVersion } from "@/services/storage/types";
 import { SaveProfileDialog } from "@/components/SaveProfileDialog";

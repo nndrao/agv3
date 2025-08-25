@@ -8,7 +8,6 @@ import type { CustomActionsMap, WorkspacePlatformProvider } from '@openfin/works
 import { DockProvider } from './dock/dockProvider';
 import { setDeveloperMode, refreshDockButtons } from './dock/dockButtons';
 import { getDockCustomActions } from './dock/dockActions';
-// import { createThemingOverride } from './theming';
 import { StorageService } from '../services/storage/storageService';
 import { ChannelService } from '../services/channels/channelService';
 import { AppVariablesService } from '../services/appVariables/appVariablesService';
@@ -35,13 +34,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 async function initializeWorkspacePlatform() {
   console.log('🚀 Initializing AGV3 Workspace Platform...');
   
-  // Clear developer mode on startup to ensure buttons are hidden
-  try {
-    localStorage.removeItem('agv3_developer_mode');
-    console.log('[Main] Cleared developer mode from localStorage');
-  } catch (e) {
-    console.error('[Main] Error clearing developer mode:', e);
-  }
+  // Developer mode is now managed in memory only, no persistence
   
   // Set up keyboard shortcut listener for developer mode
   setupDeveloperModeShortcut();
@@ -202,17 +195,7 @@ async function initializeWorkspaceComponents() {
     // Continue without dock - don't break the entire app
   }
   
-  // Temporarily disable color scheme initialization
-  // try {
-  //   // Initialize color scheme
-  //   await initColorScheme();
-  //   console.log('✅ Color scheme initialized');
-    
-  //   // Create interop for theme messaging
-  //   fin.me.interop = fin.Interop.connectSync(fin.me.uuid, {});
-  // } catch (error) {
-  //   console.error('❌ Failed to initialize theming:', error);
-  // }
+  // Color scheme initialization removed - using single theme mechanism
   
   // Force dock refresh to ensure theme toggle button is visible
   setTimeout(async () => {
@@ -356,8 +339,6 @@ function getAllCustomActions(): CustomActionsMap {
 function overrideCallback(
   WorkspacePlatformProvider: OpenFin.Constructor<WorkspacePlatformProvider>
 ): WorkspacePlatformProvider {
-  // Temporarily disable theming override to test
-  // const ThemingProvider = createThemingOverride(WorkspacePlatformProvider);
   
   class Override extends WorkspacePlatformProvider {
     // Override openViewTabContextMenuInternal to inject rename option
@@ -462,6 +443,11 @@ async function startConfigurationServiceChannel(): Promise<void> {
   console.log('[Main] Starting Configuration Service channel...');
   
   try {
+    // Run migration first (if needed)
+    const { runConfigurationMigration } = await import('../services/configuration/migrationUtility');
+    await runConfigurationMigration();
+    console.log('[Main] Configuration migration check completed');
+    
     // Check if channel already exists
     const existingChannels = await fin.InterApplicationBus.Channel.getAllChannels();
     const channelExists = existingChannels.some(ch => ch.name === 'agv3-configuration-service');
@@ -471,16 +457,16 @@ async function startConfigurationServiceChannel(): Promise<void> {
       return;
     }
     
-    // Import and initialize IndexedDB adapter
-    const { IndexedDBAdapter } = await import('../services/storage/adapters/IndexedDBAdapter');
-    const dbAdapter = new IndexedDBAdapter();
+    // Import and initialize Configuration Service adapter for centralized storage
+    const { ConfigurationServiceAdapter } = await import('../services/configuration/ConfigurationServiceAdapter');
+    const dbAdapter = new ConfigurationServiceAdapter();
     await dbAdapter.initialize();
-    console.log('[Main] IndexedDB adapter initialized for Configuration Service');
+    console.log('[Main] Configuration Service adapter initialized with centralized database');
     
     // Create the Configuration Service channel
     const channel = await fin.InterApplicationBus.Channel.create('agv3-configuration-service');
     
-    // Set up handlers using IndexedDB adapter
+    // Set up handlers using Configuration Service adapter
     channel.register('create', async (payload) => {
       console.log('[ConfigService] Create:', payload);
       try {
@@ -490,46 +476,12 @@ async function startConfigurationServiceChannel(): Promise<void> {
         if (existing) {
           // Update existing instead of creating new
           console.log('[ConfigService] Config already exists, updating instead:', payload.record.id);
-          await dbAdapter.update(payload.record.id, {
-            name: payload.record.name,
-            description: payload.record.description,
-            config: payload.record.config,
-            settings: payload.record.settings,
-            activeSetting: payload.record.metadata?.activeSetting || 'default',
-            tags: payload.record.metadata?.tags,
-            category: payload.record.metadata?.category,
-            isShared: payload.record.metadata?.isShared,
-            isDefault: payload.record.metadata?.isDefault,
-            isLocked: payload.record.metadata?.isLocked,
-            lastUpdated: new Date(),
-            lastUpdatedBy: payload.record.userId || 'current-user'
-          });
+          await dbAdapter.update(payload.record.id, payload.record);
           return { id: payload.record.id };
         }
         
-        // Convert the payload to UnifiedConfig format for new config
-        const config = {
-          configId: payload.record.id,
-          appId: payload.record.appId || 'agv3',
-          userId: payload.record.userId || 'current-user',
-          componentType: payload.record.componentType,
-          componentSubType: payload.record.componentSubType,
-          name: payload.record.name,
-          description: payload.record.description,
-          config: payload.record.config,
-          settings: payload.record.settings || [],
-          activeSetting: payload.record.metadata?.activeSetting || 'default',
-          tags: payload.record.metadata?.tags,
-          category: payload.record.metadata?.category,
-          isShared: payload.record.metadata?.isShared,
-          isDefault: payload.record.metadata?.isDefault,
-          isLocked: payload.record.metadata?.isLocked,
-          createdBy: payload.record.userId || 'current-user',
-          lastUpdatedBy: payload.record.userId || 'current-user',
-          creationTime: new Date(),
-          lastUpdated: new Date()
-        };
-        const id = await dbAdapter.create(config);
+        // Create new configuration record
+        const id = await dbAdapter.create(payload.record);
         return { id };
       } catch (error) {
         console.error('[ConfigService] Create error:', error);
@@ -537,37 +489,13 @@ async function startConfigurationServiceChannel(): Promise<void> {
       }
     });
     
-    channel.register('get', async (payload) => {
-      console.log('[ConfigService] Get:', payload);
+    channel.register('read', async (payload) => {
+      console.log('[ConfigService] Read:', payload);
       try {
         const result = await dbAdapter.read(payload.id);
-        if (!result) return null;
-        
-        // Convert UnifiedConfig back to expected format
-        return {
-          id: result.configId,
-          appId: result.appId,
-          userId: result.userId,
-          componentType: result.componentType,
-          componentSubType: result.componentSubType,
-          componentId: result.configId,
-          name: result.name,
-          description: result.description,
-          config: result.config,
-          settings: result.settings,
-          metadata: {
-            tags: result.tags,
-            category: result.category,
-            isShared: result.isShared,
-            isDefault: result.isDefault,
-            isLocked: result.isLocked,
-            activeSetting: result.activeSetting
-          },
-          createdAt: result.creationTime,
-          updatedAt: result.lastUpdated
-        };
+        return result;
       } catch (error) {
-        console.error('[ConfigService] Get error:', error);
+        console.error('[ConfigService] Read error:', error);
         return null;
       }
     });
@@ -575,11 +503,7 @@ async function startConfigurationServiceChannel(): Promise<void> {
     channel.register('update', async (payload) => {
       console.log('[ConfigService] Update:', payload);
       try {
-        await dbAdapter.update(payload.id, {
-          ...payload.updates,
-          lastUpdated: new Date(),
-          lastUpdatedBy: 'current-user'
-        });
+        await dbAdapter.update(payload.id, payload.updates);
         return { success: true };
       } catch (error) {
         console.error('[ConfigService] Update error:', error);
@@ -602,36 +526,14 @@ async function startConfigurationServiceChannel(): Promise<void> {
       console.log('[ConfigService] Query:', payload);
       try {
         const results = await dbAdapter.query(payload.filter || {});
-        // Convert results to expected format
-        return results.map(r => ({
-          id: r.configId,
-          appId: r.appId,
-          userId: r.userId,
-          componentType: r.componentType,
-          componentSubType: r.componentSubType,
-          componentId: r.configId,
-          name: r.name,
-          description: r.description,
-          config: r.config,
-          settings: r.settings,
-          metadata: {
-            tags: r.tags,
-            category: r.category,
-            isShared: r.isShared,
-            isDefault: r.isDefault,
-            isLocked: r.isLocked,
-            activeSetting: r.activeSetting
-          },
-          createdAt: r.creationTime,
-          updatedAt: r.lastUpdated
-        }));
+        return results;
       } catch (error) {
         console.error('[ConfigService] Query error:', error);
         return [];
       }
     });
     
-    console.log('[Main] Configuration Service channel created successfully with IndexedDB');
+    console.log('[Main] Configuration Service channel created with centralized storage (agv3-configuration)');
   } catch (error) {
     console.error('[Main] Failed to create Configuration Service channel:', error);
     // Don't throw - allow platform to continue

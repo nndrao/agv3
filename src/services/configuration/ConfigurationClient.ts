@@ -187,7 +187,11 @@ export class ConfigurationClient implements IConfigurationClient {
 
   async get(id: string): Promise<ConfigurationRecord | null> {
     console.log(`[ConfigurationClient] Getting configuration: ${id}`);
-    return this.request<ConfigurationRecord | null>('get', { id });
+    return this.request<ConfigurationRecord | null>('read', { id });
+  }
+  
+  async read(id: string): Promise<ConfigurationRecord | null> {
+    return this.get(id);
   }
 
   async create(record: Omit<ConfigurationRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<ConfigurationRecord> {

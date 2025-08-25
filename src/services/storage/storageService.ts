@@ -1,13 +1,14 @@
 import { UnifiedConfig, StorageAdapter, ConfigQuery } from './types';
-import { LocalStorageAdapter } from './adapters/localStorageAdapter';
+import { IndexedDBAdapter } from './adapters/IndexedDBAdapter';
 
 export class StorageService {
   private static adapter: StorageAdapter;
   
   static async initialize(): Promise<void> {
-    // Use localStorage adapter for now
-    this.adapter = new LocalStorageAdapter();
-    console.log('Storage service initialized with LocalStorage adapter');
+    // Use IndexedDB adapter as the single storage mechanism
+    this.adapter = new IndexedDBAdapter();
+    await this.adapter.initialize();
+    console.log('Storage service initialized with IndexedDB adapter');
   }
   
   static async save(config: UnifiedConfig): Promise<string> {

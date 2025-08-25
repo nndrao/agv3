@@ -1,6 +1,10 @@
 import { AppVariablesProvider } from '../../providers/AppVariablesProvider';
-import { StorageClient } from '../storage/storageClient';
+import { ConfigStorage } from '../storage/storageClient';
+import { CentralizedStorageClient } from '../configuration/ConfigurationClientAdapter';
 import { TemplateResolver } from '../template/templateResolver';
+
+// Use centralized storage if available, fallback to local storage
+const ConfigStorage = CentralizedStorageClient || StorageClient;
 
 /**
  * Service to manage AppVariables providers
@@ -22,7 +26,7 @@ export class AppVariablesService {
     
     try {
       // Query all variables datasources
-      const configs = await StorageClient.query({
+      const configs = await ConfigStorage.query({
         componentType: 'datasource',
         componentSubType: 'variables',
         appId: 'agv3'

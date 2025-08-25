@@ -55,8 +55,7 @@ async function saveHistoryToConfig(allHistory: ExpressionHistory[]) {
     console.log('[useExpressionHistory] Saved history to Configuration Service');
   } catch (error) {
     console.error('[useExpressionHistory] Failed to save history to Configuration Service:', error);
-    // Fallback to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allHistory));
+    // No fallback - handle error appropriately
   }
 }
 
@@ -81,42 +80,10 @@ export function useExpressionHistory(mode: ExpressionMode) {
             .slice(0, MAX_HISTORY_ITEMS);
           setHistory(modeHistory);
           console.log('[useExpressionHistory] Loaded history from Configuration Service');
-        } else {
-          // Try localStorage as fallback for migration
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            const allHistory = JSON.parse(stored) as ExpressionHistory[];
-            // Filter by mode and sort by timestamp
-            const modeHistory = allHistory
-              .filter(item => item.mode === mode)
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, MAX_HISTORY_ITEMS);
-            setHistory(modeHistory);
-            
-            // Migrate to Configuration Service
-            console.log('[useExpressionHistory] Migrating history from localStorage to Configuration Service');
-            await saveHistoryToConfig(allHistory);
-            
-            // Remove from localStorage after migration
-            localStorage.removeItem(STORAGE_KEY);
-          }
         }
       } catch (error) {
         console.error('[useExpressionHistory] Failed to load history:', error);
-        // Fallback to localStorage
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            const allHistory = JSON.parse(stored) as ExpressionHistory[];
-            const modeHistory = allHistory
-              .filter(item => item.mode === mode)
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, MAX_HISTORY_ITEMS);
-            setHistory(modeHistory);
-          }
-        } catch (fallbackError) {
-          console.error('[useExpressionHistory] Failed to load from localStorage fallback:', fallbackError);
-        }
+        // Use empty history on error
       } finally {
         setIsLoading(false);
       }
@@ -135,11 +102,6 @@ export function useExpressionHistory(mode: ExpressionMode) {
       if (config && config.config) {
         const historyConfig = config.config as ExpressionHistoryConfig;
         otherModeHistory = historyConfig.history.filter(item => item.mode !== mode);
-      } else {
-        // Try localStorage as fallback
-        const stored = localStorage.getItem(STORAGE_KEY);
-        const allHistory = stored ? JSON.parse(stored) as ExpressionHistory[] : [];
-        otherModeHistory = allHistory.filter(item => item.mode !== mode);
       }
       
       // Combine and save
@@ -147,16 +109,7 @@ export function useExpressionHistory(mode: ExpressionMode) {
       await saveHistoryToConfig(combined);
     } catch (error) {
       console.error('[useExpressionHistory] Failed to save history:', error);
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        const allHistory = stored ? JSON.parse(stored) as ExpressionHistory[] : [];
-        const otherModeHistory = allHistory.filter(item => item.mode !== mode);
-        const combined = [...newHistory, ...otherModeHistory];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(combined));
-      } catch (fallbackError) {
-        console.error('[useExpressionHistory] Failed to save to localStorage fallback:', fallbackError);
-      }
+      // No fallback - handle error appropriately
     }
   }, [mode]);
 
@@ -202,30 +155,13 @@ export function useExpressionHistory(mode: ExpressionMode) {
       if (config && config.config) {
         const historyConfig = config.config as ExpressionHistoryConfig;
         otherModeHistory = historyConfig.history.filter(item => item.mode !== mode);
-      } else {
-        // Try localStorage as fallback
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const allHistory = JSON.parse(stored) as ExpressionHistory[];
-          otherModeHistory = allHistory.filter(item => item.mode !== mode);
-        }
       }
       
       // Save with cleared mode history
       await saveHistoryToConfig(otherModeHistory);
     } catch (error) {
       console.error('[useExpressionHistory] Failed to clear history:', error);
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const allHistory = JSON.parse(stored) as ExpressionHistory[];
-          const otherModeHistory = allHistory.filter(item => item.mode !== mode);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(otherModeHistory));
-        }
-      } catch (fallbackError) {
-        console.error('[useExpressionHistory] Failed to clear from localStorage fallback:', fallbackError);
-      }
+      // No fallback - handle error appropriately
     }
   }, [mode]);
 

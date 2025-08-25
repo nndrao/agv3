@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Service Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        .success { color: #4fc3f7; }
+        .error { color: #f44336; }
+        .warning { color: #ffb74d; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #1976d2; }
+        pre {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        h2 { color: #4fc3f7; }
+    </style>
+</head>
+<body>
+    <h1>Configuration Service Test Suite</h1>
+    
+    <div class="section">
+        <h2>1. Database Check</h2>
+        <button onclick="checkDatabases()">Check Databases</button>
+        <pre id="db-status"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>2. Migration Status</h2>
+        <button onclick="checkMigration()">Check Migration</button>
+        <pre id="migration-status"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>3. Configuration Service Test</h2>
+        <button onclick="testConfigService()">Test Configuration Service</button>
+        <pre id="service-status"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>4. Cross-Window Test</h2>
+        <button onclick="testCrossWindow()">Test Cross-Window Access</button>
+        <pre id="cross-window-status"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>5. Performance Test</h2>
+        <button onclick="runPerformanceTest()">Run Performance Test</button>
+        <pre id="performance-status"></pre>
+    </div>
+
+    <script type="module">
+        import { CentralizedStorageClient } from './src/services/configuration/ConfigurationClientAdapter.js';
+        import { ConfigurationMigrationUtility } from './src/services/configuration/migrationUtility.js';
+        
+        window.CentralizedStorageClient = CentralizedStorageClient;
+        window.ConfigurationMigrationUtility = ConfigurationMigrationUtility;
+        
+        // 1. Check Databases
+        window.checkDatabases = async function() {
+            const status = document.getElementById('db-status');
+            try {
+                status.innerHTML = 'Checking databases...\n';
+                
+                // Check agv3-storage (old)
+                const storageDb = await openDatabase('agv3-storage');
+                const storageCount = await countRecords(storageDb, 'configurations');
+                status.innerHTML += `<span class="success">✓ agv3-storage: ${storageCount} records</span>\n`;
+                
+                // Check agv3-configuration (new)
+                const configDb = await openDatabase('agv3-configuration');
+                const configCount = await countRecords(configDb, 'configurations');
+                status.innerHTML += `<span class="success">✓ agv3-configuration: ${configCount} records</span>\n`;
+                
+                // Compare
+                if (configCount >= storageCount) {
+                    status.innerHTML += `<span class="success">✓ Migration appears complete</span>\n`;
+                } else {
+                    status.innerHTML += `<span class="warning">⚠ Configuration DB has fewer records than storage DB</span>\n`;
+                }
+                
+            } catch (error) {
+                status.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+            }
+        };
+        
+        // 2. Check Migration
+        window.checkMigration = async function() {
+            const status = document.getElementById('migration-status');
+            try {
+                status.innerHTML = 'Checking migration status...\n';
+                
+                // Check migration flag
+                const migrationFlag = localStorage.getItem('agv3-config-migration-v1');
+                if (migrationFlag === 'completed') {
+                    status.innerHTML += `<span class="success">✓ Migration completed</span>\n`;
+                } else {
+                    status.innerHTML += `<span class="warning">⚠ Migration not completed</span>\n`;
+                    status.innerHTML += 'Running migration now...\n';
+                    
+                    const result = await ConfigurationMigrationUtility.migrate();
+                    status.innerHTML += `Migration result: ${result.success ? 'SUCCESS' : 'FAILED'}\n`;
+                    status.innerHTML += `Migrated: ${result.migratedCount} configs\n`;
+                    if (result.errors.length > 0) {
+                        status.innerHTML += `Errors: ${result.errors.join(', ')}\n`;
+                    }
+                }
+                
+                // Verify migration
+                const verification = await ConfigurationMigrationUtility.verify();
+                status.innerHTML += `\nVerification:\n`;
+                status.innerHTML += `  Source count: ${verification.sourceCount}\n`;
+                status.innerHTML += `  Destination count: ${verification.destCount}\n`;
+                status.innerHTML += `  Valid: ${verification.isValid ? 'YES' : 'NO'}\n`;
+                
+            } catch (error) {
+                status.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+            }
+        };
+        
+        // 3. Test Configuration Service
+        window.testConfigService = async function() {
+            const status = document.getElementById('service-status');
+            try {
+                status.innerHTML = 'Testing Configuration Service...\n';
+                
+                // Test CRUD operations
+                const testConfig = {
+                    configId: 'test-config-' + Date.now(),
+                    appId: 'agv3',
+                    userId: 'test-user',
+                    componentType: 'test',
+                    name: 'Test Configuration',
+                    config: { test: true, timestamp: Date.now() },
+                    settings: [],
+                    activeSetting: 'default',
+                    createdBy: 'test',
+                    lastUpdatedBy: 'test',
+                    creationTime: new Date(),
+                    lastUpdated: new Date()
+                };
+                
+                // Create
+                const id = await CentralizedStorageClient.save(testConfig);
+                status.innerHTML += `<span class="success">✓ Created config: ${id}</span>\n`;
+                
+                // Read
+                const retrieved = await CentralizedStorageClient.get(id);
+                if (retrieved && retrieved.name === testConfig.name) {
+                    status.innerHTML += `<span class="success">✓ Retrieved config successfully</span>\n`;
+                } else {
+                    status.innerHTML += `<span class="error">✗ Failed to retrieve config</span>\n`;
+                }
+                
+                // Update
+                await CentralizedStorageClient.update(id, { name: 'Updated Test' });
+                const updated = await CentralizedStorageClient.get(id);
+                if (updated && updated.name === 'Updated Test') {
+                    status.innerHTML += `<span class="success">✓ Updated config successfully</span>\n`;
+                } else {
+                    status.innerHTML += `<span class="error">✗ Failed to update config</span>\n`;
+                }
+                
+                // Query
+                const results = await CentralizedStorageClient.query({ componentType: 'test' });
+                status.innerHTML += `<span class="success">✓ Query returned ${results.length} results</span>\n`;
+                
+                // Delete
+                await CentralizedStorageClient.delete(id);
+                const deleted = await CentralizedStorageClient.get(id);
+                if (!deleted) {
+                    status.innerHTML += `<span class="success">✓ Deleted config successfully</span>\n`;
+                } else {
+                    status.innerHTML += `<span class="error">✗ Failed to delete config</span>\n`;
+                }
+                
+            } catch (error) {
+                status.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+            }
+        };
+        
+        // 4. Cross-Window Test
+        window.testCrossWindow = async function() {
+            const status = document.getElementById('cross-window-status');
+            try {
+                status.innerHTML = 'Testing cross-window access...\n';
+                
+                // Create a config in this window
+                const testConfig = {
+                    configId: 'cross-window-test-' + Date.now(),
+                    appId: 'agv3',
+                    userId: 'test-user',
+                    componentType: 'cross-window-test',
+                    name: 'Cross Window Test',
+                    config: { createdAt: Date.now(), window: 'test' },
+                    settings: [],
+                    activeSetting: 'default',
+                    createdBy: 'test',
+                    lastUpdatedBy: 'test',
+                    creationTime: new Date(),
+                    lastUpdated: new Date()
+                };
+                
+                const id = await CentralizedStorageClient.save(testConfig);
+                status.innerHTML += `<span class="success">✓ Created config in this window: ${id}</span>\n`;
+                status.innerHTML += '\nTo test cross-window access:\n';
+                status.innerHTML += '1. Open another window/tab of this application\n';
+                status.innerHTML += '2. Open DevTools console\n';
+                status.innerHTML += '3. Run this code:\n';
+                status.innerHTML += `<code>
+const client = new CentralizedStorageClient();
+const config = await client.get('${id}');
+console.log('Config from other window:', config);
+</code>\n`;
+                status.innerHTML += '4. You should see the config created here\n';
+                
+            } catch (error) {
+                status.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+            }
+        };
+        
+        // 5. Performance Test
+        window.runPerformanceTest = async function() {
+            const status = document.getElementById('performance-status');
+            try {
+                status.innerHTML = 'Running performance test...\n';
+                
+                const iterations = 100;
+                const configs = [];
+                
+                // Create test configs
+                const createStart = performance.now();
+                for (let i = 0; i < iterations; i++) {
+                    const config = {
+                        configId: `perf-test-${Date.now()}-${i}`,
+                        appId: 'agv3',
+                        userId: 'perf-test',
+                        componentType: 'performance-test',
+                        name: `Performance Test ${i}`,
+                        config: { index: i, data: 'x'.repeat(1000) },
+                        settings: [],
+                        activeSetting: 'default',
+                        createdBy: 'test',
+                        lastUpdatedBy: 'test',
+                        creationTime: new Date(),
+                        lastUpdated: new Date()
+                    };
+                    const id = await CentralizedStorageClient.save(config);
+                    configs.push(id);
+                }
+                const createTime = performance.now() - createStart;
+                status.innerHTML += `✓ Created ${iterations} configs in ${createTime.toFixed(2)}ms\n`;
+                status.innerHTML += `  Average: ${(createTime / iterations).toFixed(2)}ms per create\n\n`;
+                
+                // Read test
+                const readStart = performance.now();
+                for (const id of configs) {
+                    await CentralizedStorageClient.get(id);
+                }
+                const readTime = performance.now() - readStart;
+                status.innerHTML += `✓ Read ${iterations} configs in ${readTime.toFixed(2)}ms\n`;
+                status.innerHTML += `  Average: ${(readTime / iterations).toFixed(2)}ms per read\n\n`;
+                
+                // Query test
+                const queryStart = performance.now();
+                const results = await CentralizedStorageClient.query({ componentType: 'performance-test' });
+                const queryTime = performance.now() - queryStart;
+                status.innerHTML += `✓ Query returned ${results.length} configs in ${queryTime.toFixed(2)}ms\n\n`;
+                
+                // Cleanup
+                const deleteStart = performance.now();
+                for (const id of configs) {
+                    await CentralizedStorageClient.delete(id);
+                }
+                const deleteTime = performance.now() - deleteStart;
+                status.innerHTML += `✓ Deleted ${iterations} configs in ${deleteTime.toFixed(2)}ms\n`;
+                status.innerHTML += `  Average: ${(deleteTime / iterations).toFixed(2)}ms per delete\n\n`;
+                
+                // Summary
+                status.innerHTML += `<span class="success">Performance Summary:</span>\n`;
+                status.innerHTML += `  Total operations: ${iterations * 3 + 1}\n`;
+                status.innerHTML += `  Total time: ${(createTime + readTime + queryTime + deleteTime).toFixed(2)}ms\n`;
+                
+            } catch (error) {
+                status.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+            }
+        };
+        
+        // Helper functions
+        async function openDatabase(name) {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(name);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        async function countRecords(db, storeName) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const transaction = db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.count();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                } catch (error) {
+                    resolve(0); // Store might not exist
+                }
+            });
+        }
+        
+        // Auto-run database check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkDatabases, 500);
+        });
+    </script>
+</body>
+</html>

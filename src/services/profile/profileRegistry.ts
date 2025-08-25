@@ -97,25 +97,6 @@ export class ProfileRegistry {
         return this.registryCache;
       }
       
-      // Migrate from localStorage if exists
-      const legacyData = localStorage.getItem('agv3-profile-registry');
-      if (legacyData) {
-        try {
-          const legacyRegistry = JSON.parse(legacyData);
-          console.log('[ProfileRegistry] Migrating from localStorage to Configuration Service');
-          
-          // Save to Configuration Service
-          await this.saveRegistry(legacyRegistry);
-          
-          // Remove from localStorage
-          localStorage.removeItem('agv3-profile-registry');
-          
-          return legacyRegistry;
-        } catch (error) {
-          console.error('[ProfileRegistry] Failed to migrate legacy data:', error);
-        }
-      }
-      
       return [];
     } catch (error) {
       console.error('[ProfileRegistry] Failed to load registry:', error);

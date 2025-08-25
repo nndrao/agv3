@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageClient } from '@/services/storage/storageClient';
+import { ConfigStorage } from '@/services/storage/storageClient';
+import { CentralizedStorageClient } from '@/services/configuration/ConfigurationClientAdapter';
 import { UnifiedConfig, ConfigVersion, ComponentType } from '@/services/storage/types';
 import { useToast } from '@/hooks/use-toast';
+
+// Use centralized storage if available, fallback to local storage
+const ConfigStorage = CentralizedStorageClient || StorageClient;
 
 // Base profile interface that all component profiles must extend
 export interface BaseProfile {
@@ -172,7 +176,7 @@ export function useProfileManagement<T extends BaseProfile>({
       // Try to load existing configuration
       console.log('[🔍][APP_STARTUP] Attempting to load config for ID:', viewInstanceId);
       log('Attempting to load config for ID:', viewInstanceId);
-      const existingConfig = await StorageClient.get(viewInstanceId);
+      const existingConfig = await ConfigStorage.get(viewInstanceId);
       console.log('[🔍][APP_STARTUP] Loaded config from storage:', existingConfig);
       log('Loaded config from storage:', existingConfig);
       
@@ -239,7 +243,7 @@ export function useProfileManagement<T extends BaseProfile>({
           lastUpdated: new Date()
         };
 
-        await StorageClient.save(newConfig);
+        await ConfigStorage.save(newConfig);
         setConfig(newConfig);
         setProfiles([defaultVersion]);
         setActiveProfile(defaultVersion);
@@ -323,7 +327,7 @@ export function useProfileManagement<T extends BaseProfile>({
         setActiveProfileData(data);
         
         // For new profiles, we need to update the existing config with new settings
-        await StorageClient.update(config.configId, {
+        await ConfigStorage.update(config.configId, {
           settings: updatedSettings,
           activeSetting: newVersion.versionId,
           lastUpdated: new Date(),
@@ -343,7 +347,7 @@ export function useProfileManagement<T extends BaseProfile>({
         );
 
         // Use update method for partial updates instead of full save
-        await StorageClient.update(config.configId, {
+        await ConfigStorage.update(config.configId, {
           settings: updatedSettings,
           lastUpdated: new Date(),
           lastUpdatedBy: 'user'
@@ -382,11 +386,20 @@ export function useProfileManagement<T extends BaseProfile>({
             hasColumnGroups: !!data.columnGroups,
             columnGroupsCount: data.columnGroups?.length || 0
           });
+          console.log('[🔴 CF-PROFILE-001] Profile data being saved:', {
+            hasConditionalFormattingRules: !!(data as any).conditionalFormattingRules,
+            conditionalFormattingRulesCount: (data as any).conditionalFormattingRules?.length || 0,
+            conditionalFormattingRuleIds: (data as any).conditionalFormattingRules
+          });
           setConfig(updatedConfig);
           setProfiles(updatedProfiles);
           setActiveProfile(updatedActiveProfile); // This will trigger the effect with the new config
           setActiveProfileData(data);
           console.log('[🔍 PROFILE-SAVE-002] Profile state updated');
+          console.log('[🔴 CF-PROFILE-002] ActiveProfileData set with:', {
+            hasConditionalFormattingRules: !!(data as any).conditionalFormattingRules,
+            conditionalFormattingRuleIds: (data as any).conditionalFormattingRules
+          });
         }
       }
       
@@ -439,7 +452,7 @@ export function useProfileManagement<T extends BaseProfile>({
         modifiedBy: 'user'
       };
 
-      await StorageClient.save(updatedConfig);
+      await ConfigStorage.save(updatedConfig);
       setConfig(updatedConfig);
       setActiveProfile(profile);
       setActiveProfileData(profile.config as T);
@@ -489,7 +502,7 @@ export function useProfileManagement<T extends BaseProfile>({
         lastUpdatedBy: 'user'
       };
 
-      await StorageClient.update(config.configId, {
+      await ConfigStorage.update(config.configId, {
         settings: updatedSettings,
         activeSetting: newActiveId,
         lastUpdated: new Date(),
@@ -595,8 +608,8 @@ export function useProfileManagement<T extends BaseProfile>({
           : p
       );
       
-      // Use StorageClient.update for partial update - much faster
-      await StorageClient.update(config.configId, {
+      // Use ConfigStorage.update for partial update - much faster
+      await ConfigStorage.update(config.configId, {
         settings: updatedSettings,
         lastUpdated: new Date(),
         lastUpdatedBy: 'user'

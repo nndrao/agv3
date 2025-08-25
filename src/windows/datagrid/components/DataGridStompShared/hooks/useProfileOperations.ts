@@ -98,6 +98,12 @@ export function useProfileOperations({
     saveAsNew = false,
     name?: string
   ) => {
+    console.log('[🔴 CF-SAVE-001] Starting saveCurrentState', {
+      hasActiveProfileData: !!activeProfileData,
+      existingConditionalRules: activeProfileData?.conditionalFormattingRules,
+      existingConditionalRulesCount: activeProfileData?.conditionalFormattingRules?.length || 0
+    });
+
     // Extract full grid state for comprehensive persistence
     const fullGridState = extractFullGridState();
     
@@ -146,6 +152,17 @@ export function useProfileOperations({
     
     // Preserve calculated columns from the current profile
     const calculatedColumnsToSave = activeProfileData?.calculatedColumns || [];
+    console.log('[🔴 CF-SAVE-002] Preserving calculated columns:', {
+      count: calculatedColumnsToSave.length,
+      columnIds: calculatedColumnsToSave
+    });
+    
+    // IMPORTANT: Preserve conditional formatting rules from the current profile
+    const conditionalFormattingRulesToSave = activeProfileData?.conditionalFormattingRules || [];
+    console.log('[🔴 CF-SAVE-003] Preserving conditional formatting rules:', {
+      count: conditionalFormattingRulesToSave.length,
+      ruleIds: conditionalFormattingRulesToSave
+    });
     
     const currentState: DataGridStompSharedProfile = {
       name: name || activeProfileData?.name || 'Profile',
@@ -166,12 +183,16 @@ export function useProfileOperations({
       gridOptions: gridOptionsToSave,
       columnGroups: columnGroupsToSave,
       // Include calculated columns in the saved profile
-      calculatedColumns: calculatedColumnsToSave
+      calculatedColumns: calculatedColumnsToSave,
+      // CRITICAL: Include conditional formatting rules in the saved profile
+      conditionalFormattingRules: conditionalFormattingRulesToSave
     };
     
-    console.log('[🔍 SAVE-PROFILE-002] Calling saveProfile with currentState:', {
-      columnGroups: currentState.columnGroups,
-      calculatedColumns: currentState.calculatedColumns?.length || 0
+    console.log('[🔴 CF-SAVE-004] Profile object prepared for saving:', {
+      columnGroups: currentState.columnGroups?.length || 0,
+      calculatedColumns: currentState.calculatedColumns?.length || 0,
+      conditionalFormattingRules: currentState.conditionalFormattingRules?.length || 0,
+      conditionalFormattingRuleIds: currentState.conditionalFormattingRules
     });
     
     try {

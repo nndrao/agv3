@@ -1,6 +1,10 @@
 import { StompDatasourceProviderSimplified } from '../../providers/StompDatasourceProviderSimplified';
 import { ChannelPublisher } from '../../services/channels/channelPublisher';
-import { StorageClient } from '../../services/storage/storageClient';
+import { ConfigStorage } from '../../services/storage/storageClient';
+import { CentralizedStorageClient } from '../../services/configuration/ConfigurationClientAdapter';
+
+// Use centralized storage if available, fallback to local storage
+const ConfigStorage = CentralizedStorageClient || StorageClient;
 
 class HeadlessProvider {
   private provider!: StompDatasourceProviderSimplified;
@@ -407,9 +411,9 @@ class HeadlessProvider {
     try {
       const configId = this.config.configId || this.config.id;
       if (configId) {
-        const existingConfig = await StorageClient.get(configId as string);
+        const existingConfig = await ConfigStorage.get(configId as string);
         if (existingConfig) {
-          await StorageClient.update(configId as string, {
+          await ConfigStorage.update(configId as string, {
             config: {
               ...existingConfig.config,
               status: status,
